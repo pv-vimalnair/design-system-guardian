@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/coverage.schema.json",
+  "title": "Design System Guardian audit coverage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "adapter",
+    "supported",
+    "configDigest",
+    "complete",
+    "status",
+    "categories",
+    "assessedFiles",
+    "totalFiles"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "adapter": {"type": "string", "pattern": "^[a-z][a-z0-9._-]*$"},
+    "supported": {"type": "boolean"},
+    "configDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "complete": {"type": "boolean"},
+    "status": {"enum": ["allowed", "unsupported", "not_assessed"]},
+    "categories": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "components",
+        "icons",
+        "colors",
+        "typography",
+        "spacing",
+        "radii",
+        "effects",
+        "motion"
+      ],
+      "properties": {
+        "components": {"$ref": "#/$defs/category"},
+        "icons": {"$ref": "#/$defs/category"},
+        "colors": {"$ref": "#/$defs/category"},
+        "typography": {"$ref": "#/$defs/category"},
+        "spacing": {"$ref": "#/$defs/category"},
+        "radii": {"$ref": "#/$defs/category"},
+        "effects": {"$ref": "#/$defs/category"},
+        "motion": {"$ref": "#/$defs/category"}
+      }
+    },
+    "assessedFiles": {"type": "integer", "minimum": 0},
+    "totalFiles": {"type": "integer", "minimum": 0}
+  },
+  "$defs": {
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "assessedItems", "totalItems"],
+      "properties": {
+        "status": {"enum": ["allowed", "unsupported", "not_assessed"]},
+        "assessedItems": {"type": "integer", "minimum": 0},
+        "totalItems": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

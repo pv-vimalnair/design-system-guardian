@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.invalid/schemas/flutter-adapter-config-v1.json",
+  "title": "Design System Guardian Flutter adapter configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "adapter",
+    "adapterVersion",
+    "profileId",
+    "policyDigest",
+    "snapshotId",
+    "sourceCutDigest",
+    "configDigest",
+    "toolchain",
+    "requiredPackages",
+    "approvedPackages",
+    "approvedIdentities",
+    "componentVariants"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "adapter": {"const": "flutter"},
+    "adapterVersion": {"const": "0.1.0"},
+    "profileId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "policyDigest": {"$ref": "#/$defs/digest"},
+    "snapshotId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "sourceCutDigest": {"$ref": "#/$defs/digest"},
+    "configDigest": {"$ref": "#/$defs/digest"},
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platformId", "dartSdk"],
+      "properties": {
+        "platformId": {
+          "enum": [
+            "windows-x64", "windows-arm64", "linux-x64", "linux-arm64",
+            "macos-x64", "macos-arm64"
+          ]
+        },
+        "dartSdk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["contentDigest", "executableRelativePath"],
+          "properties": {
+            "contentDigest": {"$ref": "#/$defs/digest"},
+            "executableRelativePath": {
+              "enum": ["bin/dart.exe", "bin/dart"]
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "platformId": {"pattern": "^windows-"}
+            }
+          },
+          "then": {
+            "properties": {
+              "dartSdk": {
+                "properties": {"executableRelativePath": {"const": "bin/dart.exe"}}
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "dartSdk": {
+                "properties": {"executableRelativePath": {"const": "bin/dart"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "requiredPackages": {
+      "type": "object",
+      "required": ["flutter"],
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^(?!design_system_guardian_flutter$)[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["contentDigest", "repositoryCommit"],
+        "properties": {
+          "contentDigest": {"$ref": "#/$defs/digest"},
+          "repositoryCommit": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+          }
+        }
+      }
+    },
+    "approvedPackages": {
+      "type": "object",
+      "propertyNames": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["contentDigest", "repositoryCommit"],
+        "properties": {
+          "contentDigest": {"$ref": "#/$defs/digest"},
+          "repositoryCommit": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+          }
+        }
+      }
+    },
+    "approvedIdentities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "colors",
+        "textStyles",
+        "icons",
+        "dimensions",
+        "effects",
+        "motion",
+        "widgets"
+      ],
+      "properties": {
+        "colors": {"$ref": "#/$defs/identityList"},
+        "textStyles": {"$ref": "#/$defs/identityList"},
+        "icons": {"$ref": "#/$defs/identityList"},
+        "dimensions": {"$ref": "#/$defs/identityList"},
+        "effects": {"$ref": "#/$defs/identityList"},
+        "motion": {"$ref": "#/$defs/identityList"},
+        "widgets": {"$ref": "#/$defs/identityList"}
+      }
+    },
+    "componentVariants": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/identity"},
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": {"$ref": "#/$defs/identityListNonEmpty"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "string",
+      "pattern": "^(dart|package):[^#]+#[A-Za-z_$][A-Za-z0-9_$.]*$"
+    },
+    "identityList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identity"}
+    },
+    "identityListNonEmpty": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identity"}
+    }
+  }
+}

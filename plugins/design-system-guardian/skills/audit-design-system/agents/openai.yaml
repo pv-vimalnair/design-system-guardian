@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Design System"
+  short_description: "Audit exact design-system compliance"
+  default_prompt: "Use $audit-design-system to run a read-only compliance and UX audit against the pinned design-system snapshot."

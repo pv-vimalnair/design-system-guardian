@@ -1,0 +1,325 @@
+"""Authority-sealed run evidence and deterministic human-readable projections."""
+
+from __future__ import annotations
+
+import copy
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+from .audit import AUDIT_CATEGORIES
+from .authority import AuthorityIntegrityError, authority_seal, verify_authority_seal
+from .canonical import canonical_json_bytes, read_canonical_json, sha256_digest
+from .enforcement_authority import (
+    EnforcementAuthorityIntegrityError,
+    canonicalize_enforcement_authority_lane,
+)
+from .paths import GuardianPaths, PathIntegrityError, assert_guardian_storage_path
+from .policy import verify_policy_anchor
+from .project_binding import ProjectBindingError, validate_project_evidence
+from .storage import exclusive_write_json
+
+
+_ARTIFACT_TYPES = {"analysis-attestation", "audit-result", "coverage", "build-plan", "run-manifest"}
+_ENVELOPE_KEYS = {
+    "schemaVersion",
+    "artifactType",
+    "profileId",
+    "runId",
+    "policyDigest",
+    "payloadDigest",
+    "payload",
+    "authoritySeal",
+}
+_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+class RunArtifactIntegrityError(ValueError):
+    """Raised when sealed run evidence or its isolated storage is invalid."""
+
+
+def _validate_identity(artifact_type: Any, profile_id: Any, run_id: Any) -> tuple[str, str, str]:
+    if artifact_type not in _ARTIFACT_TYPES:
+        raise RunArtifactIntegrityError("Run artifact type is not part of the sealed contract.")
+    if not isinstance(profile_id, str) or not profile_id:
+        raise RunArtifactIntegrityError("Run artifact profileId must be a non-empty string.")
+    if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
+        raise RunArtifactIntegrityError("Run artifact runId is not an exact safe identifier.")
+    return artifact_type, profile_id, run_id
+
+
+def _unsigned_envelope(envelope: dict[str, Any]) -> dict[str, Any]:
+    return {key: copy.deepcopy(value) for key, value in envelope.items() if key != "authoritySeal"}
+
+
+def _artifact_path(home: Path, *, profile_id: str, run_id: str, artifact_type: str) -> Path:
+    _validate_identity(artifact_type, profile_id, run_id)
+    path = GuardianPaths(home).audits(profile_id) / run_id / f"{artifact_type}.sealed.json"
+    try:
+        return assert_guardian_storage_path(home, path)
+    except (PathIntegrityError, ValueError) as error:
+        raise RunArtifactIntegrityError(f"Run artifact path is unsafe: {error}") from error
+
+
+def _report_path(home: Path, *, profile_id: str, run_id: str) -> Path:
+    _validate_identity("audit-result", profile_id, run_id)
+    path = GuardianPaths(home).audits(profile_id) / run_id / "audit-report.md"
+    try:
+        return assert_guardian_storage_path(home, path)
+    except (PathIntegrityError, ValueError) as error:
+        raise RunArtifactIntegrityError(f"Readable report path is unsafe: {error}") from error
+
+
+def seal_run_artifact(
+    home: Path,
+    *,
+    artifact_type: str,
+    profile_id: str,
+    run_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Bind a canonical payload to one profile, run, policy, and artifact purpose."""
+
+    normalized_home = home.expanduser().absolute()
+    _validate_identity(artifact_type, profile_id, run_id)
+    if not isinstance(payload, dict):
+        raise RunArtifactIntegrityError("Run artifact payload must be an object.")
+    if payload.get("profileId") != profile_id or payload.get("runId") != run_id:
+        raise RunArtifactIntegrityError("Run artifact payload identity differs from its sealed path.")
+    policy_digest = verify_policy_anchor(normalized_home)
+    if payload.get("policyDigest") != policy_digest:
+        raise RunArtifactIntegrityError("Run artifact payload is not bound to the immutable policy.")
+    unsigned = {
+        "schemaVersion": 1,
+        "artifactType": artifact_type,
+        "profileId": profile_id,
+        "runId": run_id,
+        "policyDigest": policy_digest,
+        "payloadDigest": sha256_digest(payload),
+        "payload": copy.deepcopy(payload),
+    }
+    try:
+        seal = authority_seal(
+            normalized_home,
+            f"run-artifact:{profile_id}:{run_id}:{artifact_type}",
+            unsigned,
+        )
+    except AuthorityIntegrityError as error:
+        raise RunArtifactIntegrityError(str(error)) from error
+    return {**unsigned, "authoritySeal": seal}
+
+
+def verify_run_artifact(home: Path, envelope: Any) -> dict[str, Any]:
+    """Return a deep copy of a payload only after all bindings and seals verify."""
+
+    normalized_home = home.expanduser().absolute()
+    if not isinstance(envelope, dict) or set(envelope) != _ENVELOPE_KEYS:
+        raise RunArtifactIntegrityError("Sealed run artifact has unknown or missing fields.")
+    if envelope.get("schemaVersion") != 1:
+        raise RunArtifactIntegrityError("Sealed run artifact schemaVersion must be 1.")
+    artifact_type, profile_id, run_id = _validate_identity(
+        envelope.get("artifactType"), envelope.get("profileId"), envelope.get("runId")
+    )
+    policy_digest = verify_policy_anchor(normalized_home)
+    if envelope.get("policyDigest") != policy_digest:
+        raise RunArtifactIntegrityError("Sealed run artifact policy digest has changed.")
+    payload = envelope.get("payload")
+    if not isinstance(payload, dict):
+        raise RunArtifactIntegrityError("Sealed run artifact payload must be an object.")
+    if payload.get("profileId") != profile_id or payload.get("runId") != run_id:
+        raise RunArtifactIntegrityError("Sealed payload identity conflicts with its envelope.")
+    if payload.get("policyDigest") != policy_digest:
+        raise RunArtifactIntegrityError("Sealed payload policy binding is invalid.")
+    claimed_digest = envelope.get("payloadDigest")
+    if not isinstance(claimed_digest, str) or not _HEX_64.fullmatch(claimed_digest):
+        raise RunArtifactIntegrityError("Sealed run artifact payloadDigest is malformed.")
+    if sha256_digest(payload) != claimed_digest:
+        raise RunArtifactIntegrityError("Sealed run artifact payload digest does not match.")
+    try:
+        verify_authority_seal(
+            normalized_home,
+            f"run-artifact:{profile_id}:{run_id}:{artifact_type}",
+            _unsigned_envelope(envelope),
+            envelope.get("authoritySeal"),
+        )
+    except AuthorityIntegrityError as error:
+        raise RunArtifactIntegrityError(f"Run artifact authority seal is invalid: {error}") from error
+    return copy.deepcopy(payload)
+
+
+def write_run_artifact(home: Path, envelope: dict[str, Any]) -> Path:
+    """Create sealed evidence once; identical retries are idempotent, conflicts fail."""
+
+    normalized_home = home.expanduser().absolute()
+    verify_run_artifact(normalized_home, envelope)
+    path = _artifact_path(
+        normalized_home,
+        profile_id=envelope["profileId"],
+        run_id=envelope["runId"],
+        artifact_type=envelope["artifactType"],
+    )
+    try:
+        exclusive_write_json(normalized_home, path, envelope)
+    except FileExistsError:
+        try:
+            existing = read_canonical_json(path)
+        except (OSError, ValueError, UnicodeError) as error:
+            raise RunArtifactIntegrityError(f"Existing run artifact cannot be verified: {error}") from error
+        if existing != envelope:
+            raise RunArtifactIntegrityError("Append-only run evidence cannot be replaced or rewritten.")
+    verify_run_artifact(normalized_home, read_canonical_json(path))
+    return path
+
+
+def read_run_artifact(
+    home: Path,
+    *,
+    profile_id: str,
+    run_id: str,
+    artifact_type: str,
+) -> dict[str, Any]:
+    """Read one canonical append-only artifact and verify its host authority seal."""
+
+    normalized_home = home.expanduser().absolute()
+    path = _artifact_path(
+        normalized_home,
+        profile_id=profile_id,
+        run_id=run_id,
+        artifact_type=artifact_type,
+    )
+    try:
+        envelope = read_canonical_json(path)
+    except (OSError, UnicodeError, ValueError) as error:
+        raise RunArtifactIntegrityError(
+            f"Sealed {artifact_type} artifact is missing or unreadable: {error}"
+        ) from error
+    verify_run_artifact(normalized_home, envelope)
+    return copy.deepcopy(envelope)
+
+
+def _one_line(value: Any) -> str:
+    return str(value).replace("\r", " ").replace("\n", " ")
+
+
+def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
+    """Render a readable projection only from verified canonical audit evidence."""
+
+    if not isinstance(envelope, dict) or envelope.get("artifactType") != "audit-result":
+        raise RunArtifactIntegrityError("Readable audit reports require sealed audit-result evidence.")
+    audit = verify_run_artifact(home, envelope)
+    design_lane = audit.get("designSystemLane")
+    ux_lane = audit.get("uxAccessibilityLane")
+    coverage = audit.get("coverage")
+    if not isinstance(design_lane, dict) or not isinstance(ux_lane, dict) or not isinstance(coverage, dict):
+        raise RunArtifactIntegrityError("Audit lanes and coverage must be objects.")
+    categories = coverage.get("categories")
+    if not isinstance(categories, dict) or set(categories) != set(AUDIT_CATEGORIES):
+        raise RunArtifactIntegrityError("Readable report requires all exact audit categories.")
+    try:
+        project = validate_project_evidence(audit.get("projectEvidence"))
+    except ProjectBindingError as error:
+        raise RunArtifactIntegrityError(f"Readable report project evidence is invalid: {error}") from error
+    try:
+        authority_lane = canonicalize_enforcement_authority_lane(
+            audit.get("enforcementAuthorityLane")
+        )
+    except EnforcementAuthorityIntegrityError as error:
+        raise RunArtifactIntegrityError(f"Readable report authority lane is invalid: {error}") from error
+    lines = [
+        "# Design System Guardian Audit",
+        "",
+        f"Run: {_one_line(audit.get('runId'))}",
+        f"Profile: {_one_line(audit.get('profileId'))}",
+        f"Snapshot: {_one_line(audit.get('snapshotId'))}",
+        f"Policy: {_one_line(audit.get('policyDigest'))}",
+        f"Intended project: {_one_line(project['canonicalRoot'])}",
+        f"Project root identity: {_one_line(project['rootIdentity'])}",
+        f"Assessed tree: {_one_line(project['assessedTreeDigest'])}",
+        f"Analysis inputs: {_one_line(project['analysisInputsDigest'])}",
+        f"Git commit (local observation): {_one_line(project['gitCommit'])}",
+        f"Source cut: {_one_line(design_lane.get('sourceCutDigest'))}",
+        f"Adapter config: {_one_line(coverage.get('configDigest'))}",
+        f"Protected enforcement authority: {_one_line(authority_lane['status'])}",
+        f"Authority provider: {_one_line(authority_lane['provider'])}",
+        f"Authority attestation: {_one_line(authority_lane['attestation'])}",
+        f"Design-system compliance: {_one_line(design_lane.get('status'))}",
+        f"UX/accessibility: {_one_line(ux_lane.get('status'))}",
+        f"Production ready: {'yes' if audit.get('productionReady') is True else 'no'}",
+        "",
+        "## Coverage",
+        "",
+    ]
+    for category in AUDIT_CATEGORIES:
+        item = categories[category]
+        if not isinstance(item, dict):
+            raise RunArtifactIntegrityError(f"Coverage for {category} must be an object.")
+        lines.append(
+            f"- {category}: {_one_line(item.get('status'))} "
+            f"({_one_line(item.get('assessedItems'))}/{_one_line(item.get('totalItems'))})"
+        )
+    for title, key in (("Violations", "violations"), ("Design-system gaps", "gaps")):
+        values = design_lane.get(key)
+        if not isinstance(values, list):
+            raise RunArtifactIntegrityError(f"Audit {key} must be an array.")
+        lines.extend(["", f"## {title}", ""])
+        if not values:
+            lines.append("None.")
+        else:
+            for item in values:
+                if not isinstance(item, dict):
+                    raise RunArtifactIntegrityError(f"Audit {key} entries must be objects.")
+                lines.append(
+                    f"- [{_one_line(item.get('category'))}] "
+                    f"{_one_line(item.get('diagnosticId'))}: {_one_line(item.get('message'))}"
+                )
+    lines.extend(["", "## UX/accessibility checks", ""])
+    checks = ux_lane.get("checks")
+    if not isinstance(checks, list):
+        raise RunArtifactIntegrityError("UX/accessibility checks must be an array.")
+    if not checks:
+        lines.append("Not assessed.")
+    else:
+        for item in checks:
+            if not isinstance(item, dict):
+                raise RunArtifactIntegrityError("UX/accessibility check entries must be objects.")
+            lines.append(
+                f"- [{_one_line(item.get('status'))}] {_one_line(item.get('checkId'))}: "
+                f"{_one_line(item.get('message'))}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def write_readable_report(home: Path, *, profile_id: str, run_id: str, report: str) -> Path:
+    """Create a deterministic derived report once without rewriting history."""
+
+    if not isinstance(report, str):
+        raise RunArtifactIntegrityError("Readable report must be text.")
+    normalized_home = home.expanduser().absolute()
+    path = _report_path(normalized_home, profile_id=profile_id, run_id=run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    assert_guardian_storage_path(normalized_home, path)
+    payload = report.encode("utf-8")
+    try:
+        descriptor = os.open(
+            path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+            0o600,
+        )
+        try:
+            view = memoryview(payload)
+            while view:
+                written = os.write(descriptor, view)
+                if written <= 0:
+                    raise OSError("Readable report write did not make progress.")
+                view = view[written:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except FileExistsError:
+        if path.read_bytes() != payload:
+            raise RunArtifactIntegrityError("Derived report history cannot be replaced or rewritten.")
+    if path.read_bytes() != payload:
+        raise RunArtifactIntegrityError("Derived report bytes changed during creation.")
+    return path

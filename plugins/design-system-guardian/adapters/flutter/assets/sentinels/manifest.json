@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "namespace": "design_system_guardian.sentinel.v1",
+  "productionReady": false,
+  "automaticPromotion": false,
+  "kinds": {
+    "icon": "MISSING ICON",
+    "color": "MISSING COLOR",
+    "textStyle": "MISSING TEXT STYLE",
+    "component": "MISSING COMPONENT",
+    "token": "MISSING TOKEN"
+  },
+  "style": {
+    "background": "#FF00FF",
+    "border": "#00FFFF",
+    "foreground": "#000000",
+    "pattern": "diagonal-stripes"
+  },
+  "implementation": {
+    "dartType": "GuardianMissingSentinel",
+    "asset": "assets/sentinels/diagonal-stripes.svg",
+    "requiredFields": ["requestId", "policyDigest"]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "adapter": "flutter",
+  "adapterVersion": "0.1.0",
+  "profileId": "example-company",
+  "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+  "snapshotId": "4444444444444444444444444444444444444444444444444444444444444444",
+  "sourceCutDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+  "configDigest": "4d25041264e9ccba7cdd99d273bf9c9ab04d15c5659efde804d04cac4c157b6a",
+  "toolchain": {
+    "platformId": "windows-x64",
+    "dartSdk": {
+      "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "executableRelativePath": "bin/dart.exe"
+    }
+  },
+  "requiredPackages": {
+    "flutter": {
+      "contentDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "repositoryCommit": "cccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "approvedPackages": {
+    "example_company_design_system": {
+      "contentDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "repositoryCommit": "cccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "approvedIdentities": {
+    "colors": ["package:example_company_design_system/example_company_design_system.dart#AppColors.primary"],
+    "textStyles": ["package:example_company_design_system/example_company_design_system.dart#AppTypography.body"],
+    "icons": ["package:example_company_design_system/example_company_design_system.dart#AppIcons.add"],
+    "dimensions": ["package:example_company_design_system/example_company_design_system.dart#AppSpacing.medium"],
+    "effects": ["package:example_company_design_system/example_company_design_system.dart#AppEffects.card"],
+    "motion": ["package:example_company_design_system/example_company_design_system.dart#AppMotion.standard"],
+    "widgets": ["package:example_company_design_system/example_company_design_system.dart#ApprovedCard"]
+  },
+  "componentVariants": {
+    "package:example_company_design_system/example_company_design_system.dart#ApprovedCard": {
+      "variant": ["package:example_company_design_system/example_company_design_system.dart#ApprovedCardVariant.primary"]
+    }
+  }
+}

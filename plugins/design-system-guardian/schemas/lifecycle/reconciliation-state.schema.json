@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/lifecycle/reconciliation-state.schema.json",
+  "title": "Design System Guardian reconciliation state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profileId", "pending", "pendingHints", "firstHintReceivedAt", "lastHintReceivedAt", "lastReconciledAt", "lastReconciledHintDigest"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "pending": {"type": "boolean"},
+    "pendingHints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hintDigest", "eventId", "fileKey", "assetType", "eventTime"],
+        "properties": {
+          "hintDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "eventId": {"type": "string", "minLength": 1},
+          "fileKey": {"type": "string", "minLength": 1},
+          "assetType": {"type": "string", "minLength": 1},
+          "eventTime": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "firstHintReceivedAt": {"type": ["string", "null"], "format": "date-time"},
+    "lastHintReceivedAt": {"type": ["string", "null"], "format": "date-time"},
+    "lastReconciledAt": {"type": ["string", "null"], "format": "date-time"},
+    "lastReconciledHintDigest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {"if": {"properties": {"pending": {"const": false}}}, "then": {"properties": {"pendingHints": {"maxItems": 0}, "firstHintReceivedAt": {"type": "null"}, "lastHintReceivedAt": {"type": "null"}}}},
+    {"if": {"properties": {"pending": {"const": true}}}, "then": {"properties": {"pendingHints": {"minItems": 1}, "firstHintReceivedAt": {"type": "string"}, "lastHintReceivedAt": {"type": "string"}}}}
+  ]
+}

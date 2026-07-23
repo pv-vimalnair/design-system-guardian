@@ -1,0 +1,3 @@
+WARNING|STATIC_WARNING|design_system_guardian_flutter/guardian_unapproved_color|lib/example.dart|8|12|17|Color must resolve to an exact approved design-system identity.
+WARNING|STATIC_WARNING|design_system_guardian_flutter/guardian_unapproved_icon|lib/example.dart|9|12|9|Icon must resolve to an exact approved design-system identity.
+WARNING|STATIC_WARNING|design_system_guardian_flutter/guardian_unapproved_component_variant|lib/example.dart|10|12|12|Component variant property is not an exact approved identity.

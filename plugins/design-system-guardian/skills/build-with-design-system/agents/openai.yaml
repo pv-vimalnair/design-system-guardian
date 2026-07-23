@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build with Design System"
+  short_description: "Build only with approved design assets"
+  default_prompt: "Use $build-with-design-system to implement this interface using only exact approved design-system identities."

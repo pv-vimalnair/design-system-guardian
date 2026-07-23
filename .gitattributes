@@ -1,0 +1,5 @@
+plugins/design-system-guardian/scripts/guardian text eol=lf
+plugins/design-system-guardian/adapters/flutter/assets/sentinels/manifest.json text eol=lf
+plugins/design-system-guardian/assets/brand/*.svg text eol=lf
+plugins/design-system-guardian/assets/brand/manifest.json text eol=lf
+plugins/design-system-guardian/assets/brand/*.png binary

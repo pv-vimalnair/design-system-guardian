@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.superpowers/sdd/replacements/
+.superpowers/sdd/patches/
+.venv/
+node_modules/
+.dart_tool/
+build/
+dist/
+coverage/
+*.log
+.superpowers/brainstorm/
+.superpowers/sdd/
+docs/superpowers/

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/lifecycle/sealed-run-artifact.schema.json",
+  "title": "Design System Guardian sealed run artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "artifactType", "profileId", "runId", "policyDigest", "payloadDigest", "payload", "authoritySeal"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "artifactType": {"enum": ["audit-result", "coverage", "build-plan", "run-manifest"]},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "runId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "payloadDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "payload": {"type": "object"},
+    "authoritySeal": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

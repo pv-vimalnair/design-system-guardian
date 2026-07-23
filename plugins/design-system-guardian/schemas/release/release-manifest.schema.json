@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/release/release-manifest.schema.json",
+  "title": "Design System Guardian signed release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "manifestType",
+    "pluginName",
+    "pluginVersion",
+    "channel",
+    "channelSequence",
+    "sourceCommit",
+    "artifactDigest",
+    "policyDigest",
+    "stateSchemaVersion",
+    "runtimeCompatibility",
+    "issuedAt",
+    "targetManifestDigest",
+    "reason",
+    "authority"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "manifestType": { "enum": ["release", "restoration"] },
+    "pluginName": { "const": "design-system-guardian" },
+    "pluginVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+    },
+    "channel": { "enum": ["canary", "stable"] },
+    "channelSequence": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "sourceCommit": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
+    "artifactDigest": { "$ref": "#/$defs/sha256" },
+    "policyDigest": { "const": "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f" },
+    "stateSchemaVersion": { "const": 1 },
+    "runtimeCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumVersion", "maximumVersionExclusive"],
+      "properties": {
+        "minimumVersion": { "$ref": "#/$defs/semver" },
+        "maximumVersionExclusive": { "$ref": "#/$defs/semver" }
+      }
+    },
+    "issuedAt": { "$ref": "#/$defs/timestamp" },
+    "targetManifestDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "reason": { "oneOf": [{ "type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$" }, { "type": "null" }] },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "algorithm", "keyId", "signature"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "algorithm": { "const": "ed25519" },
+        "keyId": { "$ref": "#/$defs/sha256" },
+        "signature": { "type": "string", "pattern": "^[A-Za-z0-9+/]{85}[AQgw]==$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "manifestType": { "const": "release" } } },
+      "then": {
+        "properties": {
+          "targetManifestDigest": { "type": "null" },
+          "reason": { "type": "null" }
+        }
+      },
+      "else": {
+        "properties": {
+          "targetManifestDigest": { "$ref": "#/$defs/sha256" },
+          "reason": { "type": "string", "pattern": "^\\S(?:[\\s\\S]*\\S)?$" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "channel": { "const": "stable" } } },
+      "then": {
+        "properties": {
+          "pluginVersion": { "$ref": "#/$defs/stableSemver" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+    },
+    "stableSemver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
+    }
+  }
+}

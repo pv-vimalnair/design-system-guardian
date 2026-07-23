@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/audit-result.schema.json",
+  "title": "Design System Guardian audit result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "profileId",
+    "snapshotId",
+    "policyDigest",
+    "analysisAttestationDigest",
+    "projectEvidence",
+    "enforcementAuthorityLane",
+    "designSystemLane",
+    "uxAccessibilityLane",
+    "coverage",
+    "resolutions",
+    "productionReady"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "snapshotId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "analysisAttestationDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "projectEvidence": {"$ref": "#/$defs/projectEvidence"},
+    "enforcementAuthorityLane": {"$ref": "#/$defs/enforcementAuthorityLane"},
+    "designSystemLane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "sourceCutDigest", "violations", "gaps", "sentinelCount", "resolutionSummary"],
+      "properties": {
+        "status": {"enum": ["allowed", "invalid", "stale", "source_unavailable", "source_incomplete", "unsupported", "not_assessed", "conflict"]},
+        "sourceCutDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "violations": {
+          "type": "array",
+          "items": {"allOf": [{"$ref": "#/$defs/diagnostic"}, {"properties": {"kind": {"const": "violation"}}}]}
+        },
+        "gaps": {
+          "type": "array",
+          "items": {"allOf": [{"$ref": "#/$defs/diagnostic"}, {"properties": {"kind": {"const": "design_system_gap"}}}]}
+        },
+        "sentinelCount": {"type": "integer", "minimum": 0},
+        "resolutionSummary": {"$ref": "#/$defs/resolutionSummary"}
+      }
+    },
+    "uxAccessibilityLane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "checks"],
+      "properties": {
+        "status": {"enum": ["allowed", "conflict", "not_assessed"]},
+        "checks": {"type": "array", "items": {"$ref": "#/$defs/uxCheck"}}
+      }
+    },
+    "coverage": {"$ref": "coverage.schema.json"},
+    "resolutions": {"type": "array", "items": {"$ref": "resolution.schema.json"}},
+    "productionReady": {"type": "boolean"}
+  },
+  "$defs": {
+    "projectEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonicalRoot", "rootIdentity", "gitCommit", "assessedTreeDigest", "analysisInputsDigest"],
+      "properties": {
+        "canonicalRoot": {"type": "string", "minLength": 1},
+        "rootIdentity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "gitCommit": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"}]},
+        "assessedTreeDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "analysisInputsDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "enforcementAuthorityLane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "status", "provider", "attestation"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "status": {"const": "not_assessed"},
+        "provider": {"type": "null"},
+        "attestation": {"type": "null"}
+      }
+    },
+    "category": {"enum": ["components", "icons", "colors", "typography", "spacing", "radii", "effects", "motion"]},
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diagnosticId", "category", "kind", "message", "evidence"],
+      "properties": {
+        "diagnosticId": {"type": "string", "minLength": 1},
+        "category": {"$ref": "#/$defs/category"},
+        "kind": {"enum": ["violation", "design_system_gap"]},
+        "message": {"type": "string", "minLength": 1},
+        "evidence": {"type": "object"}
+      }
+    },
+    "uxCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkId", "area", "status", "message", "evidence"],
+      "properties": {
+        "checkId": {"type": "string", "minLength": 1},
+        "area": {"type": "string", "minLength": 1},
+        "status": {"enum": ["allowed", "gap", "not_assessed"]},
+        "message": {"type": "string", "minLength": 1},
+        "evidence": {"type": "object"}
+      }
+    },
+    "resolutionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "missing", "ambiguous", "conflict", "invalid", "unsupported", "stale", "source_unavailable", "source_incomplete", "not_assessed"],
+      "properties": {
+        "allowed": {"type": "integer", "minimum": 0},
+        "missing": {"type": "integer", "minimum": 0},
+        "ambiguous": {"type": "integer", "minimum": 0},
+        "conflict": {"type": "integer", "minimum": 0},
+        "invalid": {"type": "integer", "minimum": 0},
+        "unsupported": {"type": "integer", "minimum": 0},
+        "stale": {"type": "integer", "minimum": 0},
+        "source_unavailable": {"type": "integer", "minimum": 0},
+        "source_incomplete": {"type": "integer", "minimum": 0},
+        "not_assessed": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/lifecycle/migration-record.schema.json",
+  "title": "Design System Guardian append-only migration record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "recordType", "profileId", "artifactPath", "policyDigest"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "recordType": {"enum": ["migration_prepare", "migration_commit", "restoration_prepare", "restoration"]},
+    "migrationId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "restorationId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "artifactPath": {"type": "string", "minLength": 1},
+    "fromVersion": {"type": "integer", "minimum": 1},
+    "toVersion": {"type": "integer", "minimum": 2},
+    "inputDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "outputDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "backupPath": {"type": "string", "minLength": 1},
+    "backupDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "restoredDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "previousDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "prepareDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reason": {"type": "string", "minLength": 1},
+    "restoredAt": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {"if": {"properties": {"recordType": {"enum": ["migration_prepare", "migration_commit"]}}}, "then": {"required": ["migrationId", "name", "fromVersion", "toVersion", "inputDigest", "outputDigest", "backupPath"]}},
+    {"if": {"properties": {"recordType": {"const": "migration_commit"}}}, "then": {"required": ["prepareDigest"]}},
+    {"if": {"properties": {"recordType": {"enum": ["restoration_prepare", "restoration"]}}}, "then": {"required": ["restorationId", "backupPath", "backupDigest", "restoredDigest", "previousDigest", "reason", "restoredAt"]}},
+    {"if": {"properties": {"recordType": {"const": "restoration"}}}, "then": {"required": ["prepareDigest"]}}
+  ]
+}

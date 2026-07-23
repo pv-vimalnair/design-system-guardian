@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "policyId": "design-system-guardian/immutable/v1",
+  "rule": "Only exact explicitly approved design-system identities may be selected.",
+  "precedence": [
+    "immutable_policy",
+    "evolving_validators",
+    "company_profile",
+    "catalog"
+  ],
+  "denyWins": true,
+  "conflictBehavior": "stop",
+  "approval": {
+    "required": [
+      "exact_identity",
+      "explicit_approval",
+      "complete_provenance",
+      "selected_profile_match",
+      "pinned_snapshot_match"
+    ],
+    "denied": [
+      "fuzzy_match",
+      "nearest_color",
+      "nearest_spacing",
+      "equal_value_literal",
+      "framework_default",
+      "wrapper_without_approved_mapping",
+      "substitution",
+      "community_asset",
+      "generated_icon",
+      "generated_visual_asset",
+      "manual_recreation",
+      "rounded_value",
+      "name_based_guess",
+      "unpublished_figma_node",
+      "local_figma_component",
+      "inferred_unapproved_mapping",
+      "cross_profile_asset",
+      "suppression_comment"
+    ]
+  },
+  "sentinelException": {
+    "namespace": "design_system_guardian.sentinel.v1",
+    "status": "missing",
+    "requiresSourceAvailable": true,
+    "requiresCompleteSnapshot": true,
+    "requiresFreshSnapshot": true,
+    "productionReady": false,
+    "automaticPromotion": false,
+    "fixedKinds": [
+      "MISSING ICON",
+      "MISSING COLOR",
+      "MISSING TEXT STYLE",
+      "MISSING COMPONENT",
+      "MISSING TOKEN"
+    ]
+  },
+  "updates": {
+    "normalUpdateMayReplacePolicy": false,
+    "normalUpdateMayWeakenPolicy": false,
+    "migrationMustPreserveDigest": true,
+    "rollbackMustPreserveDigest": true
+  }
+}

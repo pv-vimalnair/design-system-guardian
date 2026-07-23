@@ -1,0 +1,4 @@
+#!/bin/sh
+echo "Design System Guardian blocked: no host-pinned interpreter is enrolled." >&2
+echo "Use the explicit absolute-interpreter diagnostic route or a protected host command documented by this plugin." >&2
+exit 4

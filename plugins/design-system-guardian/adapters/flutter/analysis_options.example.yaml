@@ -1,0 +1,7 @@
+plugins:
+  design_system_guardian_flutter:
+    path: ./path/to/design-system-guardian/adapters/flutter
+
+# Guardian rules are warnings and therefore enabled by default. Disabling any
+# Guardian diagnostic is itself a suppression violation found by the external
+# conservative scan and makes coverage incomplete.

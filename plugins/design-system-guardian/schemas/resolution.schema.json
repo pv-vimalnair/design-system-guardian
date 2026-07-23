@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/resolution.schema.json",
+  "title": "Design System Guardian resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "profileId",
+    "snapshotId",
+    "request",
+    "selectedIdentity",
+    "evidence",
+    "sentinel"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "status": {"enum": ["allowed", "missing", "ambiguous", "conflict", "invalid", "unsupported", "stale", "source_unavailable", "source_incomplete", "not_assessed"]},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "snapshotId": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "request": {"type": "object"},
+    "selectedIdentity": {"type": ["string", "null"], "minLength": 1},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "sentinel": {"type": ["object", "null"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "allowed"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "request": {"$ref": "#/$defs/strictRequest"},
+          "selectedIdentity": {"type": "string", "minLength": 1},
+          "sentinel": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "missing"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "request": {"$ref": "#/$defs/strictRequest"},
+          "selectedIdentity": {"const": null},
+          "sentinel": {"$ref": "#/$defs/sentinel"}
+        }
+      },
+      "else": {
+        "properties": {
+          "sentinel": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"not": {"const": "allowed"}}},
+        "required": ["status"]
+      },
+      "then": {"properties": {"selectedIdentity": {"const": null}}}
+    }
+  ],
+  "$defs": {
+    "status": {
+      "enum": [
+        "allowed",
+        "missing",
+        "ambiguous",
+        "conflict",
+        "invalid",
+        "unsupported",
+        "stale",
+        "source_unavailable",
+        "source_incomplete",
+        "not_assessed"
+      ]
+    },
+    "strictRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "identity"],
+      "properties": {
+        "requestId": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["token", "component", "icon"]},
+        "identity": {"type": "string", "minLength": 1},
+        "tokenType": {"type": "string", "minLength": 1},
+        "resolverContext": {"type": "object"},
+        "variant": {"type": "string", "minLength": 1},
+        "properties": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "minLength": 1}
+        },
+        "codeMapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["framework", "symbol"],
+          "properties": {
+            "framework": {"type": "string", "minLength": 1},
+            "symbol": {"type": "string", "minLength": 1}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "token"}}, "required": ["kind"]},
+          "then": {"not": {"anyOf": [{"required": ["variant"]}, {"required": ["properties"]}, {"required": ["codeMapping"]}]}},
+          "else": {"not": {"anyOf": [{"required": ["tokenType"]}, {"required": ["resolverContext"]}]}}
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {"type": "string", "minLength": 1},
+        "denyWins": {"type": "boolean"},
+        "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "productionReady": {"type": "boolean"},
+        "candidateCount": {"type": "integer", "minimum": 2},
+        "match": {"const": "exact_identity"},
+        "sourceState": {"enum": ["fresh", "offline_grace"]},
+        "degraded": {"type": "boolean"},
+        "provenance": {"type": "object"},
+        "tokenType": {"type": ["string", "null"]},
+        "resolverContext": {"type": ["object", "null"]},
+        "variant": {"type": ["string", "null"]},
+        "properties": {"type": "object"},
+        "codeMapping": {"type": ["object", "null"]}
+      }
+    },
+    "sentinel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "namespace",
+        "manifestDigest",
+        "assetId",
+        "kind",
+        "label",
+        "requestId",
+        "policyDigest",
+        "diagnosticStyle",
+        "productionReady",
+        "automaticPromotion"
+      ],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "namespace": {"const": "design_system_guardian.sentinel.v1"},
+        "manifestDigest": {"const": "1d3b85234caa4478879733b74f1bde2cf1d6aed195737e575b826b06867cf69c"},
+        "assetId": {
+          "enum": [
+            "design_system_guardian.sentinel.icon.v1",
+            "design_system_guardian.sentinel.color.v1",
+            "design_system_guardian.sentinel.textStyle.v1",
+            "design_system_guardian.sentinel.component.v1",
+            "design_system_guardian.sentinel.token.v1"
+          ]
+        },
+        "kind": {"enum": ["icon", "color", "textStyle", "component", "token"]},
+        "label": {"enum": ["MISSING ICON", "MISSING COLOR", "MISSING TEXT STYLE", "MISSING COMPONENT", "MISSING TOKEN"]},
+        "requestId": {"type": "string", "minLength": 1},
+        "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "diagnosticStyle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["background", "foreground", "border", "pattern"],
+          "properties": {
+            "background": {"const": "#FF00FF"},
+            "foreground": {"const": "#000000"},
+            "border": {"const": "#00FFFF"},
+            "pattern": {"const": "diagonal-stripes"}
+          }
+        },
+        "productionReady": {"const": false},
+        "automaticPromotion": {"const": false}
+      }
+    }
+  }
+}

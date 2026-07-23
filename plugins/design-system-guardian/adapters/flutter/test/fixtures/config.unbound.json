@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "adapter": "flutter",
+  "adapterVersion": "0.1.0",
+  "profileId": "example-company",
+  "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+  "sourceCutDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+  "configDigest": "7777777777777777777777777777777777777777777777777777777777777777",
+  "approvedIdentities": {},
+  "componentVariants": {}
+}

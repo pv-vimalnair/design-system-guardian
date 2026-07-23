@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/release/external-release-head.schema.json",
+  "title": "Design System Guardian externally preserved release head",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "pluginName",
+    "channel",
+    "channelSequence",
+    "actionManifestDigest",
+    "activeManifestDigest",
+    "historyEventDigest",
+    "previousCheckpointDigest",
+    "canaryCheckpointDigest",
+    "policyDigest",
+    "issuedAt",
+    "authority"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "pluginName": { "const": "design-system-guardian" },
+    "channel": { "enum": ["canary", "stable"] },
+    "channelSequence": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "actionManifestDigest": { "$ref": "#/$defs/sha256" },
+    "activeManifestDigest": { "$ref": "#/$defs/sha256" },
+    "historyEventDigest": { "$ref": "#/$defs/sha256" },
+    "previousCheckpointDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "canaryCheckpointDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "policyDigest": { "const": "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f" },
+    "issuedAt": { "$ref": "#/$defs/timestamp" },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "algorithm", "keyId", "signature"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "algorithm": { "const": "ed25519" },
+        "keyId": { "$ref": "#/$defs/sha256" },
+        "signature": { "type": "string", "pattern": "^[A-Za-z0-9+/]{85}[AQgw]==$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "channel": { "const": "canary" } } },
+      "then": { "properties": { "canaryCheckpointDigest": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "channel": { "const": "stable" } } },
+      "then": { "properties": { "canaryCheckpointDigest": { "$ref": "#/$defs/sha256" } } }
+    },
+    {
+      "if": { "properties": { "channelSequence": { "const": 1 } } },
+      "then": { "properties": { "previousCheckpointDigest": { "type": "null" } } },
+      "else": { "properties": { "previousCheckpointDigest": { "$ref": "#/$defs/sha256" } } }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
+    }
+  }
+}

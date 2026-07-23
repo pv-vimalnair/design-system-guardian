@@ -1,0 +1,20 @@
+{
+  "name": "pv-vimalnair-design-system-guardian",
+  "interface": {
+    "displayName": "Design System Guardian"
+  },
+  "plugins": [
+    {
+      "name": "design-system-guardian",
+      "source": {
+        "source": "local",
+        "path": "./plugins/design-system-guardian"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -1,0 +1,404 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/snapshot.schema.json",
+  "title": "Design System Guardian immutable authority-sealed catalog snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "profileId",
+    "profileDigest",
+    "policyDigest",
+    "snapshotId",
+    "authoritySeal",
+    "assessedAt",
+    "createdAt",
+    "refreshAttemptedAt",
+    "lastSuccessfulRefreshAt",
+    "sourceState",
+    "sourceAvailable",
+    "sourceComplete",
+    "sourceEvidence",
+    "freshnessEvidence",
+    "immutable",
+    "sourceCut",
+    "tokenProvenance",
+    "tokens",
+    "resolver",
+    "registry",
+    "catalogDigest",
+    "catalogEvidence",
+    "approvalSequence",
+    "approvalKeyId",
+    "approvalIssuedAt",
+    "approvalDigest"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "profileId": {"$ref": "#/$defs/profileId"},
+    "profileDigest": {"$ref": "#/$defs/digest"},
+    "policyDigest": {"$ref": "#/$defs/digest"},
+    "snapshotId": {"$ref": "#/$defs/digest"},
+    "authoritySeal": {"$ref": "#/$defs/digest"},
+    "assessedAt": {"$ref": "#/$defs/timestamp"},
+    "createdAt": {"$ref": "#/$defs/timestamp"},
+    "refreshAttemptedAt": {"$ref": "#/$defs/timestamp"},
+    "lastSuccessfulRefreshAt": {"$ref": "#/$defs/timestamp"},
+    "sourceState": {"$ref": "#/$defs/sourceState"},
+    "sourceAvailable": {"type": "boolean"},
+    "sourceComplete": {"type": "boolean"},
+    "sourceEvidence": {"$ref": "#/$defs/sourceEvidence"},
+    "freshnessEvidence": {"$ref": "#/$defs/freshnessEvidence"},
+    "immutable": {"const": true},
+    "sourceCut": {"$ref": "#/$defs/sourceCut"},
+    "tokenProvenance": {"$ref": "#/$defs/tokenProvenance"},
+    "tokens": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"$ref": "#/$defs/normalizedToken"}
+    },
+    "resolver": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/normalizedResolver"}
+      ]
+    },
+    "registry": {"$ref": "#/$defs/normalizedRegistry"},
+    "catalogDigest": {"$ref": "#/$defs/digest"},
+    "catalogEvidence": {"$ref": "#/$defs/catalogEvidence"},
+    "approvalSequence": {"$ref": "#/$defs/approvalSequence"},
+    "approvalKeyId": {"$ref": "#/$defs/digest"},
+    "approvalIssuedAt": {"$ref": "#/$defs/timestamp"},
+    "approvalDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "approvalSequence": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+    "sourceState": {
+      "enum": ["fresh", "offline_grace", "stale", "source_unavailable", "source_incomplete"]
+    },
+    "figmaVariablesEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["used", "valuesPresent", "modesPresent"],
+      "properties": {
+        "used": {"type": "boolean"},
+        "valuesPresent": {"type": "boolean"},
+        "modesPresent": {"type": "boolean"}
+      }
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["refreshAttempted"],
+      "properties": {
+        "refreshAttempted": {"const": true},
+        "figmaVariables": {"$ref": "#/$defs/figmaVariablesEvidence"}
+      }
+    },
+    "freshnessEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "ageHours", "degraded"],
+      "properties": {
+        "state": {"$ref": "#/$defs/sourceState"},
+        "ageHours": {"type": ["number", "null"], "minimum": 0},
+        "degraded": {"type": "boolean"},
+        "dailyRefreshDue": {"type": "boolean"}
+      }
+    },
+    "figmaFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileKey", "version"],
+      "properties": {
+        "fileKey": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "sourceCut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "figmaFiles",
+        "catalogDigest",
+        "codeConnectParseDigest",
+        "repositoryCommit",
+        "componentCatalogBuild"
+      ],
+      "properties": {
+        "figmaFiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/figmaFile"}
+        },
+        "catalogDigest": {"$ref": "#/$defs/digest"},
+        "codeConnectParseDigest": {
+          "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        },
+        "repositoryCommit": {"type": ["string", "null"], "minLength": 1},
+        "componentCatalogBuild": {"type": ["string", "null"], "minLength": 1}
+      }
+    },
+    "sourceCutInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "figmaFiles",
+        "codeConnectParseDigest",
+        "repositoryCommit",
+        "componentCatalogBuild"
+      ],
+      "properties": {
+        "figmaFiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/figmaFile"}
+        },
+        "catalogDigest": {"$ref": "#/$defs/digest"},
+        "codeConnectParseDigest": {
+          "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        },
+        "repositoryCommit": {"type": ["string", "null"], "minLength": 1},
+        "componentCatalogBuild": {"type": ["string", "null"], "minLength": 1}
+      }
+    },
+    "tokenProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval", "source", "sourceVersion", "published"],
+      "properties": {
+        "approval": {"const": "explicit"},
+        "source": {"type": "string", "minLength": 1},
+        "sourceVersion": {"type": "string", "minLength": 1},
+        "published": {"const": true}
+      }
+    },
+    "normalizedToken": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity", "type", "value", "alias", "deprecated", "deprecationReason",
+        "description", "extensions", "sourcePath", "approved", "provenance"
+      ],
+      "properties": {
+        "identity": {"type": "string", "minLength": 1},
+        "type": {
+          "enum": [
+            "color", "dimension", "fontFamily", "fontWeight", "duration",
+            "cubicBezier", "number", "strokeStyle", "border", "transition",
+            "shadow", "gradient", "typography"
+          ]
+        },
+        "value": {},
+        "alias": {"type": ["string", "null"]},
+        "deprecated": {"type": "boolean"},
+        "deprecationReason": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "extensions": {"type": "object"},
+        "sourcePath": {"type": "string", "pattern": "^#/"},
+        "approved": {"const": true},
+        "provenance": {"$ref": "#/$defs/tokenProvenance"}
+      }
+    },
+    "figmaIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileKey", "nodeId", "assetKey", "published"],
+      "properties": {
+        "fileKey": {"type": "string", "minLength": 1},
+        "nodeId": {"type": "string", "minLength": 1},
+        "assetKey": {"type": "string", "minLength": 1},
+        "published": {"type": "boolean"}
+      }
+    },
+    "codeMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["framework", "symbol", "approved", "inferred", "sourceDigest"],
+      "properties": {
+        "framework": {"type": "string", "minLength": 1},
+        "symbol": {"type": "string", "minLength": 1},
+        "approved": {"type": "boolean"},
+        "inferred": {"type": "boolean"},
+        "sourceDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "assetProperties": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {"type": "string", "minLength": 1}
+      }
+    },
+    "assetProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileKey", "nodeId", "assetKey", "published", "sourceVersion"],
+      "properties": {
+        "fileKey": {"type": "string", "minLength": 1},
+        "nodeId": {"type": "string", "minLength": 1},
+        "assetKey": {"type": "string", "minLength": 1},
+        "published": {"type": "boolean"},
+        "sourceVersion": {"type": "string", "minLength": 1}
+      }
+    },
+    "normalizedAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "identity", "status", "approved", "deprecated", "sourceVersion",
+        "figma", "variants", "properties", "codeMappings", "provenance"
+      ],
+      "properties": {
+        "kind": {"enum": ["component", "icon"]},
+        "identity": {"type": "string", "minLength": 1},
+        "status": {"enum": ["approved", "deprecated", "candidate", "removed"]},
+        "approved": {"type": "boolean"},
+        "deprecated": {"type": "boolean"},
+        "sourceVersion": {"type": "string", "minLength": 1},
+        "figma": {"$ref": "#/$defs/figmaIdentity"},
+        "variants": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "properties": {"$ref": "#/$defs/assetProperties"},
+        "codeMappings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/codeMapping"}
+        },
+        "provenance": {"$ref": "#/$defs/assetProvenance"}
+      }
+    },
+    "normalizedRegistry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["components", "icons"],
+      "properties": {
+        "components": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {"$ref": "#/$defs/normalizedAsset"},
+              {"properties": {"kind": {"const": "component"}}}
+            ]
+          }
+        },
+        "icons": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {"$ref": "#/$defs/normalizedAsset"},
+              {"properties": {"kind": {"const": "icon"}}}
+            ]
+          }
+        }
+      }
+    },
+    "normalizedResolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document", "evidence"],
+      "properties": {
+        "document": {"type": "object"},
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "contexts", "resolutionOrder"],
+          "properties": {
+            "version": {"const": "2025.10"},
+            "contexts": {
+              "type": "object",
+              "propertyNames": {"type": "string", "minLength": 1},
+              "additionalProperties": {"type": "string", "minLength": 1}
+            },
+            "resolutionOrder": {"type": "array", "items": {"type": "object"}}
+          }
+        }
+      }
+    },
+    "registryInputAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity", "status", "sourceVersion", "figma", "variants", "properties", "codeMappings"
+      ],
+      "properties": {
+        "identity": {"type": "string", "minLength": 1},
+        "status": {"enum": ["approved", "deprecated", "candidate", "removed"]},
+        "sourceVersion": {"type": "string", "minLength": 1},
+        "figma": {"$ref": "#/$defs/figmaIdentity"},
+        "variants": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "properties": {"$ref": "#/$defs/assetProperties"},
+        "codeMappings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/codeMapping"}
+        }
+      }
+    },
+    "registryInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["components", "icons"],
+      "properties": {
+        "components": {"type": "array", "items": {"$ref": "#/$defs/registryInputAsset"}},
+        "icons": {"type": "array", "items": {"$ref": "#/$defs/registryInputAsset"}}
+      }
+    },
+    "approvalAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "algorithm", "keyId", "sequence", "issuedAt", "signature"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "algorithm": {"const": "ed25519"},
+        "keyId": {"$ref": "#/$defs/digest"},
+        "sequence": {"$ref": "#/$defs/approvalSequence"},
+        "issuedAt": {"$ref": "#/$defs/timestamp"},
+        "signature": {"type": "string", "pattern": "^[A-Za-z0-9+/]{86}==$"}
+      }
+    },
+    "catalogEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "profileId", "createdAt", "refreshAttemptedAt",
+        "lastSuccessfulRefreshAt", "sourceAvailable", "sourceComplete",
+        "sourceEvidence", "sourceCut", "tokenProvenance", "tokens", "registry",
+        "approvalAttestation"
+      ],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "profileId": {"$ref": "#/$defs/profileId"},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "refreshAttemptedAt": {"$ref": "#/$defs/timestamp"},
+        "lastSuccessfulRefreshAt": {"$ref": "#/$defs/timestamp"},
+        "sourceAvailable": {"type": "boolean"},
+        "sourceComplete": {"type": "boolean"},
+        "sourceEvidence": {"$ref": "#/$defs/sourceEvidence"},
+        "sourceCut": {"$ref": "#/$defs/sourceCutInput"},
+        "tokenProvenance": {"$ref": "#/$defs/tokenProvenance"},
+        "tokens": {"type": "object", "minProperties": 1},
+        "resolver": {"type": "object"},
+        "resolverContext": {
+          "type": "object",
+          "propertyNames": {"type": "string", "minLength": 1},
+          "additionalProperties": {"type": "string", "minLength": 1}
+        },
+        "registry": {"$ref": "#/$defs/registryInput"},
+        "approvalAttestation": {"$ref": "#/$defs/approvalAttestation"}
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "assets": {
+    "guardian-mark.svg": "9cc57894bda432fdaa15896bf52a3f9b4ed57dc07636761e9d1967eae632aea1",
+    "guardian-mark-dark.svg": "8853af3591713e251b76e74a4ec62fcc2fb8fc57daca393427b47c33da8fa447",
+    "guardian-lockup.svg": "1de562a9f9222bfd3e6fb9b21d14b19bf8f0f0e076df10aefac653a583ad150c",
+    "guardian-avatar.png": "1ed2e0d250037300d44d5530843a5cf289ca9307fdfe20ada9730aad537ee82e",
+    "guardian-social-preview.png": "db6f5a8726855b690b7bdc43a2a590dd57ca0fd930337124634b1e9e4ab42657"
+  }
+}

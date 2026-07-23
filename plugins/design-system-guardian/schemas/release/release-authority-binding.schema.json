@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/release/release-authority-binding.schema.json",
+  "title": "Design System Guardian create-once release authority binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "algorithm",
+    "keyId",
+    "publicKeyDigest",
+    "policyDigest",
+    "purpose",
+    "authoritySeal"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "algorithm": { "const": "ed25519" },
+    "keyId": { "$ref": "#/$defs/sha256" },
+    "publicKeyDigest": { "$ref": "#/$defs/sha256" },
+    "policyDigest": { "const": "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f" },
+    "purpose": { "const": "canonical-release-authority" },
+    "authoritySeal": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
