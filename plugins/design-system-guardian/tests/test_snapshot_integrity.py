@@ -60,7 +60,7 @@ class SnapshotIntegrityTest(unittest.TestCase):
 
 
     def test_approved_code_mappings_require_exact_parse_and_repository_provenance(self) -> None:
-        with tempfile.TemporaryDirectory(dir="C:/tmp") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             profile = sample_profile()
 
