@@ -124,7 +124,11 @@ class PublicationContractTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertIn("source publication is not a trusted stable release", readme.lower())
         self.assertIn(POLICY_DIGEST, readme)
-        self.assertIn("plugins/design-system-guardian/assets/brand/guardian-lockup.svg", readme)
+        self.assertIn("<picture>", readme)
+        self.assertIn('media="(prefers-color-scheme: dark)"', readme)
+        self.assertIn("plugins/design-system-guardian/assets/brand/guardian-mark-dark.svg", readme)
+        self.assertIn("plugins/design-system-guardian/assets/brand/guardian-mark.svg", readme)
+        self.assertIn('width="180"', readme)
 
         license_text = (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8")
         self.assertTrue(license_text.startswith("MIT License\n\nCopyright (c) 2026 Pv Vimal Nair"))

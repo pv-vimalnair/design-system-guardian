@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="plugins/design-system-guardian/assets/brand/guardian-lockup.svg" width="560" alt="Design System Guardian">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="plugins/design-system-guardian/assets/brand/guardian-mark-dark.svg">
+    <img src="plugins/design-system-guardian/assets/brand/guardian-mark.svg" width="180" alt="Design System Guardian">
+  </picture>
 </p>
 
 <p align="center"><strong>Build and audit product UI using exact approved design-system identities—never silent substitutes.</strong></p>
