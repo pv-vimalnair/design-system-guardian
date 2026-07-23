@@ -10,22 +10,22 @@ Guardian evolves in three separate layers:
 
 ## Local development refresh is not a release
 
-Codex may require a build-metadata cachebuster to reload an edited local plugin. Use the plugin-creator `update_plugin_cachebuster.py` helper and reinstall from the configured personal marketplace. That cachebuster is only a local pickup mechanism. It does not advance SemVer precedence, sign an artifact, create channel history, or authorize production.
+Codex may require a build-metadata cachebuster to reload an edited local plugin. Use the plugin-creator `update_plugin_cachebuster.py` helper and reinstall from the configured personal marketplace. That cachebuster is only a local pickup mechanism. It does not advance SemVer precedence, sign an artifact, create channel history, or authorize production. Claude Code, OpenClaw, Kimi Code, and generic Agent Skills installations use their documented host refresh paths instead.
 
-Start a new Codex task after reinstall so skill discovery is refreshed. Validate that exactly `design-system-guardian:build-with-design-system` and `design-system-guardian:audit-design-system` appear.
+Keep the Codex, Claude Code, and Kimi Code manifest versions equal to `guardian_core.release.RUNTIME_VERSION`. Start a new task or session after reinstall so skill discovery is refreshed. Validate that exactly `build-with-design-system` and `audit-design-system` appear under the host's normal namespace.
 
 ## Release preparation
 
-This section records the intended future production flow. Version 0.1.1 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
+This section records the intended future production flow. Version 0.2.0 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
 
 1. Review the entire change and select the next strict SemVer. Normal promotion must be greater than every normal version previously promoted in that channel, including versions followed by a restoration.
 2. Run the complete unit/adversarial suite, plugin validator, skill validators, Python compilation, schema validation, and whitespace checks.
-3. Validate installation in the actual target Codex runtime. A plugin-validator pass does not substitute for this runtime check.
+3. Validate installation in every host claimed by the release. A manifest or skill-validator pass does not substitute for a real runtime check; unavailable hosts remain explicitly unverified.
 4. Build one immutable plugin artifact outside the replaceable cache and compute its SHA-256.
 5. Record one full lowercase Git object ID: 40 characters for SHA-1 repositories or 64 for SHA-256 repositories. Abbreviated commits are forbidden.
 6. Create a release manifest conforming to `schemas/release/release-manifest.schema.json`. The signed policy digest must remain `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`.
 7. Have the designated external release authority sign the exact bytes returned by `guardian_core.release.release_signing_payload`. Guardian does not sign and never receives the private key.
-8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.1.1 this call always blocks and accepts no configuration workaround.
+8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.2.0 this call always blocks and accepts no configuration workaround.
 
 The first production enrollment supplies only the external authority's public PEM to `enroll_release_authority`. Enrollment is create-once, and the release key must differ from the pinned catalog approval key. A different key is an integrity failure, not an automatic rotation.
 
@@ -33,7 +33,7 @@ The first production enrollment supplies only the external authority's public PE
 
 Canary and stable have independent contiguous `channelSequence` values starting at 1.
 
-After a future reviewed provider integration, promote to canary first. Exercise the installed package in a new Codex task, run both skills, confirm deterministic evidence, and record any target-runtime limitation. Stable promotion then requires a separately signed stable manifest whose release coordinates exactly match a normal release already preserved in canary history:
+After a future reviewed provider integration, promote to canary first. Exercise the installed package in a fresh session on every claimed host, run both skills, confirm deterministic evidence, and record any target-runtime limitation. Stable promotion then requires a separately signed stable manifest whose release coordinates exactly match a normal release already preserved in canary history:
 
 - plugin version
 - full source commit
@@ -56,7 +56,7 @@ Never edit migration history or a backup in place. Restoration creates a new app
 
 ## Rollback
 
-The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.1.1 always blocks the public rollback call.
+The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.2.0 always blocks the public rollback call.
 
 Rollback is an externally authorized release action, not a file copy or version decrement.
 
@@ -69,7 +69,7 @@ Guardian logs a new restoration event and points the channel to the preserved ar
 
 ## Operator blockers
 
-Stop instead of improvising when the external public authority is not enrolled, a signer is unavailable, the fixed external/WORM head provider is unavailable, a signature or sequence is missing, the artifact was rebuilt, the source commit is abbreviated, target Codex validation is unavailable, or the policy digest differs. None of these states authorizes a local key, test signer, unsigned promotion, local/in-memory head substitute, or nearest substitute.
+Stop instead of improvising when the external public authority is not enrolled, a signer is unavailable, the fixed external/WORM head provider is unavailable, a signature or sequence is missing, the artifact was rebuilt, the source commit is abbreviated, a claimed target-host validation is unavailable, or the policy digest differs. None of these states authorizes a local key, test signer, unsigned promotion, local/in-memory head substitute, or nearest substitute.
 
 ## Private-pilot blocker
 

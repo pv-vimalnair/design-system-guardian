@@ -33,6 +33,10 @@ The sentinel namespace is the sole styling exception. Use the exact returned `MI
 
 ## Required workflow
 
+Locate the one Guardian package before invoking a command. Use the nearest ancestor of this skill that contains `scripts/guardian.py`, `policy/policy-v1.json`, and `guardian_core/`. A generic install instead carries `references/guardian-install.json` plus `scripts/guardian.py`; that launcher must verify its exact absolute package, immutable policy, Guardian CLI, and Python digests before dispatch. If neither layout resolves uniquely, return `unsupported`. Never accept a project-local lookalike package.
+
+The generic launcher is diagnostic-only and can never authorize production. It is distinct from the package-root convenience wrappers, which remain fail-closed.
+
 Use the host-provided, authority-bound Guardian command for protected gating. For private-pilot diagnostics only, when no protected command exists, a host-supplied absolute Python executable may invoke `<installed-plugin>/scripts/guardian.py <command>` after recording the executable path and SHA-256; that route can never authorize production. Never invoke a convenience wrapper or discover Python from `PATH`; those wrappers deliberately fail closed. Do not redirect host state because the canonical trust root is fixed by the runtime. In the steps below, `guardian` denotes the selected protected or explicitly recorded diagnostic invocation.
 
 On another compatible Agent Skills host, catalog refresh means using that host's existing Figma connector to collect exact allowlisted source identities, producing the canonical snapshot input, and passing it to `guardian snapshot ingest`. If the host cannot provide the CLI, existing Figma connector, or complete source evidence, report `unsupported` or the exact source state and stop; never add credentials or invent a fallback.
@@ -49,7 +53,7 @@ On another compatible Agent Skills host, catalog refresh means using that host's
 10. Read back every changed file. Reject raw values, framework icons, new visual wrappers, unapproved variants, suppression comments, and any identity not present in the recorded resolutions.
 11. Run `guardian audit` with a canonical request containing only `schemaVersion`, the exact `projectRoot`, catalog resolution requests, and contextual `uxChecks`. Do not supply an analyzer result. Guardian regenerates the pinned config; verifies and stages the complete profile-bound Dart SDK; verifies and stages the complete Dart package-config closure; executes the analyzer over an external staged copy with a minimal environment; proves complete compilation-unit coverage; scans suppressions; and seals the toolchain, package, and analysis evidence. Then run `guardian finalize` with the same pin and exact audit result; finalization rechecks the sealed source evidence, package artifacts, and Dart SDK evidence. Never report production readiness from an implementation alone.
 
-The build is complete only when finalization exits 0. Exit 1 means a violation or sentinel remains; exit 2 means policy/configuration/integrity failure; exit 3 means unavailable, stale, or incomplete source; exit 4 means unsupported adapter or incomplete/not-assessed coverage. Version 0.1.1 has no trusted UX/accessibility evaluator, so that lane is always canonicalized to `not_assessed` and the private pilot cannot exit 0.
+The build is complete only when finalization exits 0. Exit 1 means a violation or sentinel remains; exit 2 means policy/configuration/integrity failure; exit 3 means unavailable, stale, or incomplete source; exit 4 means unsupported adapter or incomplete/not-assessed coverage. Version 0.2.0 has no trusted UX/accessibility evaluator, so that lane is always canonicalized to `not_assessed` and the private pilot cannot exit 0.
 
 ## UX and accessibility boundary
 

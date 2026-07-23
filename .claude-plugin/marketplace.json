@@ -1,0 +1,24 @@
+{
+  "name": "pv-vimalnair-design-system-guardian",
+  "owner": {
+    "name": "Pv Vimal Nair"
+  },
+  "description": "Cross-agent design-system enforcement with exact approved identities only.",
+  "plugins": [
+    {
+      "name": "design-system-guardian",
+      "source": "./plugins/design-system-guardian",
+      "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
+      "version": "0.2.0",
+      "author": {
+        "name": "Pv Vimal Nair"
+      },
+      "homepage": "https://github.com/pv-vimalnair/design-system-guardian#readme",
+      "repository": "https://github.com/pv-vimalnair/design-system-guardian",
+      "license": "MIT",
+      "category": "Developer Tools",
+      "tags": ["design-system", "figma", "flutter", "audit", "ux"],
+      "strict": true
+    }
+  ]
+}

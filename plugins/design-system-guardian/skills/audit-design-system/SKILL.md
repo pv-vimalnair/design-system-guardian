@@ -25,6 +25,10 @@ If the user asks for fixes during this invocation, finish and report the audit o
 
 ## Required workflow
 
+Locate the one Guardian package before invoking a command. Use the nearest ancestor of this skill that contains `scripts/guardian.py`, `policy/policy-v1.json`, and `guardian_core/`. A generic install instead carries `references/guardian-install.json` plus `scripts/guardian.py`; that launcher must verify its exact absolute package, immutable policy, Guardian CLI, and Python digests before dispatch. If neither layout resolves uniquely, return `unsupported`. Never accept a project-local lookalike package.
+
+The generic launcher is diagnostic-only and can never authorize production. It is distinct from the package-root convenience wrappers, which remain fail-closed.
+
 Use the host-provided, authority-bound Guardian command for protected gating. For private-pilot diagnostics only, when no protected command exists, a host-supplied absolute Python executable may invoke `<installed-plugin>/scripts/guardian.py <command>` after recording the executable path and SHA-256; that route can never authorize production. Never invoke a convenience wrapper or discover Python from `PATH`; those wrappers deliberately fail closed. Do not redirect host state because the canonical trust root is fixed by the runtime. In the steps below, `guardian` denotes the selected protected or explicitly recorded diagnostic invocation.
 
 On another compatible Agent Skills host, catalog refresh means using that host's existing Figma connector to collect exact allowlisted source identities, producing the canonical snapshot input, and passing it to `guardian snapshot ingest`. If the host cannot provide the CLI, existing Figma connector, or complete source evidence, report `unsupported` or the exact source state and stop; never add credentials or invent a fallback.
@@ -55,7 +59,7 @@ Report UX/accessibility separately from design-system compliance. Review hierarc
 
 Keep these as separate lanes: neither design-system compliance nor UX/accessibility may conceal failure in the other.
 
-Version 0.1.1 does not ship a trusted UX/accessibility evaluator. Request-supplied checks are context, not proof; Guardian canonicalizes this lane to `not_assessed`, exit `4`, and `productionReady=false`. Never convert those assertions into a pass manually.
+Version 0.2.0 does not ship a trusted UX/accessibility evaluator. Request-supplied checks are context, not proof; Guardian canonicalizes this lane to `not_assessed`, exit `4`, and `productionReady=false`. Never convert those assertions into a pass manually.
 
 When an approved asset itself is inaccessible, report the exact asset as a design-system gap with required action `request_design_system_change`. Do not change its color, size, motion, or behavior and do not recommend an unauthorized replacement.
 

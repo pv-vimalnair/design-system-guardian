@@ -2,6 +2,21 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.2.0 - 2026-07-23 - Cross-agent distribution candidate
+
+### Added
+
+- Added Claude Code plugin and marketplace manifests over the canonical two-skill package.
+- Added a Kimi Code manifest that points to the same nested canonical skills.
+- Added compatible-bundle installation for OpenClaw without a duplicated native runtime.
+- Added an integrity-bound generic installer for Deep Code and other Agent Skills-compatible hosts.
+
+### Promotion status
+
+- Codex and Claude packaging is locally validated. OpenClaw bundle structure is validated but its runtime smoke remains unverified; Kimi Code and Deep Code remain structurally validated until those CLIs are available.
+- Cross-agent source publication does not create a trusted canary or stable release.
+- The immutable policy digest and fail-closed production blockers are unchanged.
+
 ## 0.1.1 - 2026-07-23 - Private marketplace publication candidate
 
 ### Changed

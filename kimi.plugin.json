@@ -1,0 +1,17 @@
+{
+  "name": "design-system-guardian",
+  "version": "0.2.0",
+  "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
+  "keywords": ["design-system", "figma", "flutter", "audit", "ux"],
+  "homepage": "https://github.com/pv-vimalnair/design-system-guardian#readme",
+  "license": "MIT",
+  "skills": "./plugins/design-system-guardian/skills/",
+  "skillInstructions": "Use the one Guardian package at ./plugins/design-system-guardian. Never copy or replace its policy, CLI, schemas, adapters, or sentinels.",
+  "interface": {
+    "displayName": "Design System Guardian",
+    "shortDescription": "Exact approved identities only, with fail-closed auditing.",
+    "longDescription": "Build with approved design-system identities, independently audit pinned evidence, and expose proven gaps through conspicuous sentinels that can never pass production readiness.",
+    "developerName": "Pv Vimal Nair",
+    "websiteURL": "https://github.com/pv-vimalnair/design-system-guardian"
+  }
+}

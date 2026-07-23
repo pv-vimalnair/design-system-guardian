@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "design-system-guardian",
+  "displayName": "Design System Guardian",
+  "version": "0.2.0",
+  "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
+  "author": {
+    "name": "Pv Vimal Nair"
+  },
+  "homepage": "https://github.com/pv-vimalnair/design-system-guardian#readme",
+  "repository": "https://github.com/pv-vimalnair/design-system-guardian",
+  "license": "MIT",
+  "keywords": ["design-system", "figma", "flutter", "audit", "ux"],
+  "skills": "./skills/"
+}

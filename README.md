@@ -9,7 +9,7 @@
 
 # Design System Guardian
 
-Design System Guardian is one private, updateable Codex marketplace plugin for teams whose design system is the source of truth. It combines strict provenance enforcement with UX reasoning, then audits the result independently.
+Design System Guardian is one public, updatable cross-agent package for teams whose design system is the source of truth. Codex, Claude Code, OpenClaw, Kimi Code, Deep Code, and other Agent Skills-compatible hosts use the same two skills and the same deterministic Guardian core.
 
 ## The rule that cannot be overwritten
 
@@ -48,26 +48,34 @@ Guardian reuses the existing Figma connection for discovery and refresh. Search 
 
 ## Flutter-first support
 
-Version 0.1.1 deeply audits Flutter through Dart analyzer evidence. It detects raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Projects without a supported adapter return `unsupported`; incomplete coverage never receives a green result.
+Version 0.2.0 deeply audits Flutter through Dart analyzer evidence. It detects raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Projects without a supported adapter return `unsupported`; incomplete coverage never receives a green result.
 
 The current source has no trusted host-attested UX/accessibility evaluator, so that lane remains `not_assessed` and blocks production readiness. Inaccessible approved assets are reported as design-system gaps; Guardian does not silently change them.
 
-## Install and update from the private marketplace
+## Install on Codex and other agents
+
+| Host | Distribution path |
+| --- | --- |
+| Codex | `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json` |
+| Claude Code | `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json` |
+| OpenClaw | The same compatible Codex/Claude bundle; no duplicated native runtime |
+| Kimi Code | Repository-root `kimi.plugin.json` |
+| Deep Code and other compatible agents | The two standard Agent Skills plus the integrity-bound generic installer |
+
+Codex installation:
 
 ```powershell
 codex plugin marketplace add pv-vimalnair/design-system-guardian --ref main --json
 codex plugin add design-system-guardian@pv-vimalnair-design-system-guardian --json
 ```
 
-Before installing, compare the marketplace snapshot's full Git commit with the reviewed remote commit. A movable `main` reference alone is not release authority.
+See the [cross-agent installation guide](plugins/design-system-guardian/docs/INSTALLING.md) for Claude Code, OpenClaw, Kimi Code, Deep Code, generic Agent Skills hosts, and update commands.
 
-To refresh source later:
+Before installing or updating, compare the fetched full Git commit with the reviewed remote commit. A movable `main` reference alone is not release authority. Codex source refresh remains:
 
 ```powershell
 codex plugin marketplace upgrade pv-vimalnair-design-system-guardian --json
 ```
-
-Re-verify the fetched full commit, plugin version, immutable policy digest, and test evidence before accepting an update.
 
 ## CLI and exit codes
 
@@ -90,7 +98,7 @@ Push-Location plugins\design-system-guardian
 Pop-Location
 ```
 
-The publication candidate is expected to contain 251 core tests and 57 Flutter-adapter tests after the approved regression additions. The acceptance rule is all discovered tests passing; if coverage changes the count, this page must report the new exact result.
+The acceptance rule is every discovered core and Flutter-adapter test passing, both Agent Skills validating, every host manifest parsing, and each claimed host's validation status being reported honestly. An unavailable or unsafe runtime check is not a pass.
 
 ## Security and private data
 
@@ -98,6 +106,6 @@ Never commit profiles, catalog snapshots, Figma credentials, authority private k
 
 ## Versioning and license
 
-The source version is `0.1.1`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
+The source version is `0.2.0`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
 
 Licensed under the [MIT License](LICENSE).
