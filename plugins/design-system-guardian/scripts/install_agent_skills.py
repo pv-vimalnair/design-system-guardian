@@ -328,10 +328,16 @@ def _journal_state(target_root: Path) -> tuple[dict[str, Any], Path, Path]:
         raise InstallError(f"install journal skill set mismatch: {journal_path}")
     if any(not isinstance(skills[name], bool) for name in SKILL_NAMES):
         raise InstallError(f"invalid install journal skill state: {journal_path}")
+    stage_root, backup_root = _transaction_paths(target_root, transaction)
+    return payload, stage_root, backup_root
+
+
+def _transaction_paths(target_root: Path, transaction: str) -> tuple[Path, Path]:
+    """Keep transient skill trees outside the host's watched skill root."""
+    parent = target_root.parent
     return (
-        payload,
-        target_root / f".guardian-stage-{transaction}",
-        target_root / f".guardian-backup-{transaction}",
+        parent / f".design-system-guardian-stage-{transaction}",
+        parent / f".design-system-guardian-backup-{transaction}",
     )
 
 
@@ -406,8 +412,7 @@ def install(target_root: Path, python_path: Path, replace: bool) -> None:
         binding_base = make_binding(python_path, plugin_version)
 
         transaction = uuid.uuid4().hex
-        stage_root = target_root / f".guardian-stage-{transaction}"
-        backup_root = target_root / f".guardian-backup-{transaction}"
+        stage_root, backup_root = _transaction_paths(target_root, transaction)
         had_existing = {
             name: (target_root / name).exists()
             for name in SKILL_NAMES

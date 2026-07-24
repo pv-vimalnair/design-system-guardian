@@ -89,6 +89,7 @@ The binding and launcher are account-owned evidence, not a security boundary aga
 - For a generic install, check out the reviewed new Guardian commit and rerun the installer with `--replace`.
 - The installer replaces only an intact prior install from the same package root. It refuses unknown or locally modified skill folders.
 - An operating-system lock and transaction journal roll back a prepared replacement or finish committed cleanup on the next run after interruption.
+- Transient stage and backup trees stay beside, never inside, the live skill root so host skill watchers cannot lock them during promotion.
 - Re-enroll the absolute Python path by rerunning the installer after a Python upgrade.
 
 Every update must preserve the immutable policy digest. A missing or changed policy, changed package content, stale binding, changed interpreter, modified skill, or modified launcher blocks execution.

@@ -13,7 +13,7 @@ from types import ModuleType
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
-EXPECTED_VERSION = "0.3.1"
+EXPECTED_VERSION = "0.3.2"
 EXPECTED_SKILLS = {"audit-design-system", "build-with-design-system"}
 
 
@@ -329,8 +329,13 @@ class CrossAgentPackagingTests(unittest.TestCase):
                         manifest["version"],
                     )
                     transaction = f"{interruption_after:032x}"
-                    stage_root = target / f".guardian-stage-{transaction}"
-                    backup_root = target / f".guardian-backup-{transaction}"
+                    stage_root, backup_root = module._transaction_paths(
+                        target,
+                        transaction,
+                    )
+                    self.assertEqual(stage_root.parent, target.parent)
+                    self.assertEqual(backup_root.parent, target.parent)
+                    self.assertNotEqual(stage_root.parent, target)
                     stage_root.mkdir()
                     backup_root.mkdir()
                     module.write_journal(

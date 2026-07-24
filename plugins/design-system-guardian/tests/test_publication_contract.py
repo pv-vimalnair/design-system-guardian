@@ -90,7 +90,7 @@ class PublicationContractTests(unittest.TestCase):
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "design-system-guardian")
-        self.assertEqual(manifest["version"], "0.3.1")
+        self.assertEqual(manifest["version"], "0.3.2")
         self.assertEqual(manifest["license"], "MIT")
         self.assertNotIn("hooks", manifest)
         self.assertEqual(manifest["interface"]["brandColor"], "#3157D8")
@@ -103,7 +103,7 @@ class PublicationContractTests(unittest.TestCase):
         self.assertEqual(skills, ["audit-design-system", "build-with-design-system"])
         from guardian_core.release import RUNTIME_VERSION
         self.assertEqual(RUNTIME_VERSION, manifest["version"])
-        self.assertIn("version: 0.3.1", (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8"))
+        self.assertIn("version: 0.3.2", (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8"))
 
     def test_repository_page_and_mit_license(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
