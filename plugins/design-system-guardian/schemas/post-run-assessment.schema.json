@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/post-run-assessment.schema.json",
+  "title": "Design System Guardian post-run assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "profileId", "snapshotId", "policyDigest", "runtimeVersion", "evidenceDigests", "statuses", "counts", "reasonCodes", "evolutionHandoff", "sourceMutationPerformed"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "snapshotId": {"$ref": "#/$defs/digest"},
+    "policyDigest": {"$ref": "#/$defs/digest"},
+    "runtimeVersion": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"},
+    "evidenceDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runManifest", "analysisAttestation", "sourceCut", "assessedTree", "analysisInputs"],
+      "properties": {
+        "runManifest": {"$ref": "#/$defs/digest"},
+        "analysisAttestation": {"$ref": "#/$defs/digest"},
+        "sourceCut": {"$ref": "#/$defs/digest"},
+        "assessedTree": {"$ref": "#/$defs/digest"},
+        "analysisInputs": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "statuses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "designSystem", "uxAccessibility", "coverage", "enforcementAuthority"],
+      "properties": {
+        "run": {"enum": ["passed", "violation", "incomplete", "source_blocked", "invalid"]},
+        "designSystem": {"enum": ["allowed", "invalid", "stale", "source_unavailable", "source_incomplete", "unsupported", "not_assessed", "conflict"]},
+        "uxAccessibility": {"enum": ["allowed", "conflict", "not_assessed"]},
+        "coverage": {"enum": ["allowed", "unsupported", "not_assessed"]},
+        "enforcementAuthority": {"enum": ["allowed", "not_assessed"]}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["violations", "designSystemGaps", "sentinels", "allowedResolutions", "nonAllowedResolutions", "assessedUxChecks", "unassessedUxChecks"],
+      "properties": {
+        "violations": {"type": "integer", "minimum": 0},
+        "designSystemGaps": {"type": "integer", "minimum": 0},
+        "sentinels": {"type": "integer", "minimum": 0},
+        "allowedResolutions": {"type": "integer", "minimum": 0},
+        "nonAllowedResolutions": {"type": "integer", "minimum": 0},
+        "assessedUxChecks": {"type": "integer", "minimum": 0},
+        "unassessedUxChecks": {"type": "integer", "minimum": 0}
+      }
+    },
+    "reasonCodes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reasonCode", "attribution", "count"],
+        "properties": {
+          "reasonCode": {
+            "enum": [
+              "design_system_violation", "design_system_gap", "design_system_identity_missing",
+              "design_system_stale", "design_system_source_unavailable", "design_system_source_incomplete",
+              "design_system_unsupported", "design_system_not_assessed", "design_system_invalid",
+              "design_system_conflict", "resolution_missing", "resolution_ambiguous",
+              "resolution_conflict", "resolution_invalid", "resolution_unsupported", "resolution_stale",
+              "resolution_source_unavailable", "resolution_source_incomplete", "resolution_not_assessed",
+              "unsupported_adapter", "incomplete_coverage", "ux_conflict", "ux_not_assessed",
+              "enforcement_not_assessed"
+            ]
+          },
+          "attribution": {"enum": ["project_implementation", "design_system", "source", "project_configuration", "capability_candidate", "plugin_candidate"]},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "evolutionHandoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "target", "reviewRecommended"],
+      "properties": {
+        "status": {"const": "permission_required"},
+        "target": {"const": "plugin-evolution-manager"},
+        "reviewRecommended": {"type": "boolean"}
+      }
+    },
+    "sourceMutationPerformed": {"const": false}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

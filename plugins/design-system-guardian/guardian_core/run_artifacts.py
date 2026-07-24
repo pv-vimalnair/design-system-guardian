@@ -21,7 +21,14 @@ from .project_binding import ProjectBindingError, validate_project_evidence
 from .storage import exclusive_write_json
 
 
-_ARTIFACT_TYPES = {"analysis-attestation", "audit-result", "coverage", "build-plan", "run-manifest"}
+_ARTIFACT_TYPES = {
+    "analysis-attestation",
+    "audit-result",
+    "coverage",
+    "build-plan",
+    "run-manifest",
+    "post-run-assessment",
+}
 _ENVELOPE_KEYS = {
     "schemaVersion",
     "artifactType",

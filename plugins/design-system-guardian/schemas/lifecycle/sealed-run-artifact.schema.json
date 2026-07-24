@@ -7,7 +7,7 @@
   "required": ["schemaVersion", "artifactType", "profileId", "runId", "policyDigest", "payloadDigest", "payload", "authoritySeal"],
   "properties": {
     "schemaVersion": {"const": 1},
-    "artifactType": {"enum": ["audit-result", "coverage", "build-plan", "run-manifest"]},
+    "artifactType": {"enum": ["analysis-attestation", "audit-result", "coverage", "build-plan", "run-manifest", "post-run-assessment"]},
     "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
     "runId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
     "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

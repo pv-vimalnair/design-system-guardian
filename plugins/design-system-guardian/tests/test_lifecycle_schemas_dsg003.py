@@ -22,7 +22,7 @@ class LifecycleSchemaTest(unittest.TestCase):
 
     def test_sealed_artifact_schema_requires_digest_policy_and_authority_bindings(self) -> None:
         schema = json.loads((ROOT / "sealed-run-artifact.schema.json").read_text(encoding="utf-8"))
-        self.assertEqual(set(schema["properties"]["artifactType"]["enum"]), {"audit-result", "coverage", "build-plan", "run-manifest"})
+        self.assertEqual(set(schema["properties"]["artifactType"]["enum"]), {"analysis-attestation", "audit-result", "coverage", "build-plan", "run-manifest", "post-run-assessment"})
         for field in ("profileId", "runId", "policyDigest", "payloadDigest", "payload", "authoritySeal"):
             self.assertIn(field, schema["required"])
 

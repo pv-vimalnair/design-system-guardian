@@ -166,6 +166,7 @@ class StrictRootSchemasTest(unittest.TestCase):
     def test_all_root_schemas_are_valid_strict_draft_2020_12(self) -> None:
         expected = {
             "audit-result.schema.json",
+            "post-run-assessment.schema.json",
             "build-plan.schema.json",
             "coverage.schema.json",
             "profile.schema.json",
