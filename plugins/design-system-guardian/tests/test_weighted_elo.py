@@ -68,6 +68,13 @@ class WeightedEloContractTest(unittest.TestCase):
         self.assertEqual(current["schemaVersion"], 3)
         self.assertEqual(current["suiteSnapshot"], suite)
         self.assertEqual(current["suiteDigest"], sha256_digest(suite))
+
+        attributes = (ROOT.parents[1] / ".gitattributes").read_text("utf-8")
+        self.assertIn(
+            "plugins/design-system-guardian/benchmarks/*.py text eol=lf",
+            attributes.splitlines(),
+        )
+
     def test_evolution_schemas_are_strict_v2(self) -> None:
         root = ROOT / "schemas" / "evolution"
         expected = {"elo-benchmark-result.schema.json", "elo-ledger-entry.schema.json"}
