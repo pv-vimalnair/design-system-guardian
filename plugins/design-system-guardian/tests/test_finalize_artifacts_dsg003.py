@@ -201,6 +201,124 @@ class SealedRunArtifactTest(unittest.TestCase):
 
 
 class FinalizationTest(unittest.TestCase):
+    def test_finalize_retry_completes_assessment_from_persisted_manifest_time(self) -> None:
+        from datetime import timedelta
+
+        from guardian_core.canonical import read_canonical_json
+        from guardian_core.finalize import FinalizationError, finalize_run
+        from guardian_core.run_artifacts import read_run_artifact
+
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            run_id = "run-assessment-recovery"
+            pin = provision_run(home, run_id=run_id)
+            audit, _ = attested_audit(home, pin, Path(directory))
+
+            with (
+                patch("guardian_core.finalize._utc_now", return_value=NOW),
+                patch(
+                    "guardian_core.finalize.build_post_run_assessment",
+                    side_effect=ValueError("injected assessment failure"),
+                ),
+                self.assertRaisesRegex(FinalizationError, "injected assessment failure"),
+            ):
+                finalize_run(
+                    home,
+                    profile_id="example-company",
+                    run_id=run_id,
+                    audit_result=audit,
+                    build_plan=None,
+                )
+
+            manifest_path = home / "profiles" / "example-company" / "audits" / run_id / "run-manifest.sealed.json"
+            manifest_before = manifest_path.read_bytes()
+            with patch("guardian_core.finalize._utc_now", return_value=NOW + timedelta(minutes=5)):
+                result = finalize_run(
+                    home,
+                    profile_id="example-company",
+                    run_id=run_id,
+                    audit_result=copy.deepcopy(audit),
+                    build_plan=None,
+                )
+
+            self.assertEqual(manifest_path.read_bytes(), manifest_before)
+            persisted_manifest = read_canonical_json(manifest_path)["payload"]
+            self.assertEqual(result.manifest, persisted_manifest)
+            self.assertEqual(result.manifest["completedAt"], NOW.isoformat().replace("+00:00", "Z"))
+            self.assertEqual(
+                read_run_artifact(
+                    home,
+                    profile_id="example-company",
+                    run_id=run_id,
+                    artifact_type="post-run-assessment",
+                )["payload"],
+                result.post_run_assessment,
+            )
+
+    def test_finalize_recovery_rejects_build_plan_presence_mismatch_before_writes(self) -> None:
+        from datetime import timedelta
+
+        from guardian_core.finalize import FinalizationError, finalize_run
+        from tests.test_build_plan_integrity_dsg003 import plan_for
+
+        for first_plan_present in (False, True):
+            with self.subTest(first_plan_present=first_plan_present), tempfile.TemporaryDirectory() as directory:
+                home = Path(directory)
+                run_id = f"run-plan-presence-{first_plan_present}"
+                pin = provision_run(home, run_id=run_id)
+                audit, _ = attested_audit(home, pin, Path(directory))
+                plan = plan_for(pin)
+                first_plan = plan if first_plan_present else None
+                retry_plan = None if first_plan_present else plan
+
+                with (
+                    patch("guardian_core.finalize._utc_now", return_value=NOW),
+                    patch(
+                        "guardian_core.finalize.build_post_run_assessment",
+                        side_effect=ValueError("injected assessment failure"),
+                    ),
+                    self.assertRaisesRegex(FinalizationError, "injected assessment failure"),
+                ):
+                    finalize_run(
+                        home,
+                        profile_id="example-company",
+                        run_id=run_id,
+                        audit_result=audit,
+                        build_plan=first_plan,
+                    )
+
+                run_directory = home / "profiles" / "example-company" / "audits" / run_id
+                before = {
+                    path.relative_to(run_directory).as_posix(): path.read_bytes()
+                    for path in run_directory.rglob("*")
+                    if path.is_file()
+                }
+                with (
+                    patch(
+                        "guardian_core.finalize._utc_now",
+                        return_value=NOW + timedelta(minutes=5),
+                    ),
+                    self.assertRaisesRegex(FinalizationError, "build-plan presence"),
+                ):
+                    finalize_run(
+                        home,
+                        profile_id="example-company",
+                        run_id=run_id,
+                        audit_result=copy.deepcopy(audit),
+                        build_plan=retry_plan,
+                    )
+                after = {
+                    path.relative_to(run_directory).as_posix(): path.read_bytes()
+                    for path in run_directory.rglob("*")
+                    if path.is_file()
+                }
+
+                self.assertEqual(after, before)
+                self.assertEqual(
+                    (run_directory / "build-plan.sealed.json").is_file(),
+                    first_plan_present,
+                )
+
     def test_public_finalize_uses_trusted_clock_and_has_no_time_parameter(self) -> None:
         from guardian_core.finalize import finalize_run
 

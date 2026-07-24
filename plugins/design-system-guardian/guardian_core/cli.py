@@ -28,7 +28,14 @@ from .flutter_config import (
 from .flutter_runner import FlutterRunnerUnsupportedError, run_flutter_analysis
 from .migrations import default_migration_registry, migrate_to_current
 from .paths import GuardianPaths, default_guardian_home
-from .policy import TRUST_SCHEMA_VERSION, install_policy_anchor, verify_policy_anchor
+from .policy import (
+    ELO_ENROLLMENT_NAME,
+    TRUST_SCHEMA_VERSION,
+    install_policy_anchor,
+    migrate_legacy_elo_genesis,
+    verify_elo_enrollment,
+    verify_policy_anchor,
+)
 from .preflight import PreflightError, load_run_pin, preflight_snapshot
 from .project_binding import project_evidence_from_runner, require_requested_project
 from .profile import ProfileValidationError, install_profile, load_profile, validate_profile
@@ -407,6 +414,32 @@ def _migrate_command(args: argparse.Namespace) -> int:
     return int(ExitCode.PASS)
 
 
+def _elo_migrate_legacy_command(args: argparse.Namespace) -> int:
+    del args
+    home = default_guardian_home()
+    changed = migrate_legacy_elo_genesis(home)
+    state = read_elo_state(home)
+    enrollment = verify_elo_enrollment(
+        home,
+        read_canonical_json(GuardianPaths(home).trust / ELO_ENROLLMENT_NAME),
+    )
+    _emit(
+        {
+            "schemaVersion": 1,
+            "status": ResolutionStatus.ALLOWED.value,
+            "policyDigest": verify_policy_anchor(home),
+            "changed": changed,
+            "ledgerId": enrollment["ledgerId"],
+            "continuityReset": True,
+            "continuityFromPriorLedgerProven": False,
+            "newLedger": True,
+            "score": state["score"],
+            "sequence": state["sequence"],
+        }
+    )
+    return int(ExitCode.PASS)
+
+
 def _elo_show_command(args: argparse.Namespace) -> int:
     del args
     _emit(read_elo_state(default_guardian_home()))
@@ -501,6 +534,11 @@ def build_parser() -> argparse.ArgumentParser:
     elo_commands = elo.add_subparsers(dest="elo_command", required=True)
     elo_show = elo_commands.add_parser("show")
     elo_show.set_defaults(handler=_elo_show_command)
+    elo_migrate_legacy = elo_commands.add_parser(
+        "migrate",
+        help="Migrate one exact pre-Elo 0.2 trust home to sealed score-one genesis.",
+    )
+    elo_migrate_legacy.set_defaults(handler=_elo_migrate_legacy_command)
     elo_benchmark = elo_commands.add_parser("benchmark")
     elo_benchmark.add_argument("--target-root", required=True)
     elo_benchmark.add_argument("--output")

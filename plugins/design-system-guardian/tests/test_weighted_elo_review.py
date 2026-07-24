@@ -266,6 +266,153 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 read_elo_state(other)
 
+    def test_legacy_migration_recovers_strict_partial_anchor_writes(self) -> None:
+        from guardian_core import policy
+        from guardian_core.canonical import read_canonical_json
+        from guardian_core.elo import read_elo_state
+
+        anchor_names = (
+            "elo-enrollment.sealed.json",
+            "elo-ledger-init.sealed.json",
+            "elo-head.sealed.json",
+        )
+        legacy_names = (
+            "catalog-authority-ed25519.binding.json",
+            "catalog-authority-ed25519.pem",
+            "policy-v1.json",
+            "policy-v1.sha256",
+            "snapshot-authority-v1.key",
+        )
+        for interrupted_name in anchor_names:
+            with (
+                self.subTest(interrupted_name=interrupted_name),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                home = Path(directory) / "home"
+                _provision(home)
+                trust = home / "trust"
+                for name in anchor_names:
+                    (trust / name).unlink()
+                legacy_before = {
+                    name: (trust / name).read_bytes() for name in legacy_names
+                }
+
+                self.assertTrue(policy.migrate_legacy_elo_genesis(home))
+                original_ledger_id = read_canonical_json(
+                    trust / "elo-enrollment.sealed.json"
+                )["ledgerId"]
+                interrupted_index = anchor_names.index(interrupted_name)
+                for later_name in anchor_names[interrupted_index + 1 :]:
+                    (trust / later_name).unlink()
+                interrupted_path = trust / interrupted_name
+                complete_bytes = interrupted_path.read_bytes()
+                interrupted_path.write_bytes(
+                    complete_bytes[: len(complete_bytes) // 2]
+                )
+
+                self.assertTrue(policy.migrate_legacy_elo_genesis(home))
+                self.assertEqual(read_elo_state(home)["sequence"], 0)
+                recovered_enrollment = read_canonical_json(
+                    trust / "elo-enrollment.sealed.json"
+                )
+                self.assertEqual(recovered_enrollment["ledgerId"], original_ledger_id)
+                for name in anchor_names:
+                    self.assertIsInstance(read_canonical_json(trust / name), dict)
+                self.assertEqual(
+                    {name: (trust / name).read_bytes() for name in legacy_names},
+                    legacy_before,
+                )
+                self.assertFalse(policy.migrate_legacy_elo_genesis(home))
+
+    def test_legacy_migration_rejects_sealed_nondeterministic_enrollment(self) -> None:
+        from guardian_core import policy
+        from guardian_core.canonical import atomic_write_json
+        from guardian_core.errors import PolicyIntegrityError
+        from guardian_core.paths import GuardianPaths
+
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            _provision(home)
+            trust = home / "trust"
+            anchor_names = (
+                "elo-enrollment.sealed.json",
+                "elo-ledger-init.sealed.json",
+                "elo-head.sealed.json",
+            )
+            for name in anchor_names:
+                (trust / name).unlink()
+            deterministic_id = policy._legacy_elo_ledger_id(GuardianPaths(home))
+            first_digit = "0" if deterministic_id[0] != "0" else "1"
+            arbitrary_id = first_digit + deterministic_id[1:]
+            authority_key = (trust / "snapshot-authority-v1.key").read_bytes()
+            marker, head = policy._elo_anchors_with_key(authority_key, arbitrary_id)
+            enrollment = policy._elo_enrollment_with_key(
+                authority_key,
+                arbitrary_id,
+                enrolled_from="legacy-0.2-migration",
+            )
+            for name, value in zip(
+                anchor_names,
+                (enrollment, marker, head),
+                strict=True,
+            ):
+                atomic_write_json(trust / name, value)
+            before = {path.name: path.read_bytes() for path in trust.iterdir()}
+
+            with self.assertRaisesRegex(PolicyIntegrityError, "deterministic"):
+                policy.migrate_legacy_elo_genesis(home)
+
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in trust.iterdir()},
+                before,
+            )
+
+    def test_legacy_migration_rejects_unknown_trust_entries_in_every_state(
+        self,
+    ) -> None:
+        from guardian_core import policy
+        from guardian_core.errors import PolicyIntegrityError
+
+        anchor_names = (
+            "elo-enrollment.sealed.json",
+            "elo-ledger-init.sealed.json",
+            "elo-head.sealed.json",
+        )
+        states = {
+            "five-file": 0,
+            "enrollment": 1,
+            "marker": 2,
+            "complete": 3,
+        }
+        for state, retained_anchors in states.items():
+            with (
+                self.subTest(state=state),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                home = Path(directory) / "home"
+                _provision(home)
+                trust = home / "trust"
+                for name in anchor_names:
+                    (trust / name).unlink()
+                if retained_anchors:
+                    self.assertTrue(policy.migrate_legacy_elo_genesis(home))
+                    for name in anchor_names[retained_anchors:]:
+                        (trust / name).unlink()
+                (trust / "unexpected.txt").write_text(
+                    "unexpected", encoding="utf-8"
+                )
+                before = {
+                    path.name: path.read_bytes() for path in trust.iterdir()
+                }
+
+                with self.assertRaisesRegex(PolicyIntegrityError, "exact|unknown"):
+                    policy.migrate_legacy_elo_genesis(home)
+
+                self.assertEqual(
+                    {path.name: path.read_bytes() for path in trust.iterdir()},
+                    before,
+                )
+
     def test_nonce_lock_serializes_two_writers_and_detects_replacement(self) -> None:
         from guardian_core.elo import benchmark_elo, evaluate_elo, read_elo_state
         from guardian_core.storage import transaction_lock
@@ -285,7 +432,8 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 results = list(executor.map(lambda _: attempt(), range(2)))
             self.assertEqual(read_elo_state(home)["sequence"], 1)
-            self.assertEqual(sum(isinstance(item, Exception) for item in results), 1)
+            self.assertEqual(sum(isinstance(item, Exception) for item in results), 0)
+            self.assertEqual(results[0], results[1])
 
             lock_path = home / "evolution" / "elo" / "replacement.lock"
             with self.assertRaisesRegex(OSError, "changed before release"):

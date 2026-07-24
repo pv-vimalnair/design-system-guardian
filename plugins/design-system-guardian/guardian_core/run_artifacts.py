@@ -206,6 +206,38 @@ def read_run_artifact(
     return copy.deepcopy(envelope)
 
 
+def read_run_artifact_if_present(
+    home: Path,
+    *,
+    profile_id: str,
+    run_id: str,
+    artifact_type: str,
+) -> dict[str, Any] | None:
+    """Return verified append-only evidence, or None only when it does not exist."""
+
+    normalized_home = home.expanduser().absolute()
+    path = _artifact_path(
+        normalized_home,
+        profile_id=profile_id,
+        run_id=run_id,
+        artifact_type=artifact_type,
+    )
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise RunArtifactIntegrityError(
+            f"Sealed {artifact_type} artifact presence cannot be verified: {error}"
+        ) from error
+    return read_run_artifact(
+        normalized_home,
+        profile_id=profile_id,
+        run_id=run_id,
+        artifact_type=artifact_type,
+    )
+
+
 def _one_line(value: Any) -> str:
     return str(value).replace("\r", " ").replace("\n", " ")
 

@@ -47,7 +47,14 @@ The command surface is:
 - `adapter flutter config`
 - `audit`
 - `finalize`
+- `self-check`
 - `migrate`
+- `elo show`
+- `elo migrate`
+- `elo benchmark`
+- `elo evaluate`
+
+`guardian elo migrate` is only for an exact pre-Elo 0.2 trust home. It creates a new local ledger and reports `ledgerId`, `newLedger`, `continuityReset`, and `continuityFromPriorLedgerProven`; these origin fields remain stable on an idempotent rerun, and it does not claim continuity through total local erasure.
 
 Exit codes are deterministic: `0` pass, `1` violations or sentinels, `2` policy/configuration/integrity failure, `3` unavailable/stale/incomplete source, and `4` unsupported adapter or incomplete coverage.
 

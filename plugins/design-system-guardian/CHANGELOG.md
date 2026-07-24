@@ -13,6 +13,8 @@ All notable changes use SemVer. Entries describe source candidates. Local signed
 
 ### Changed
 
+- Added `guardian elo migrate` for exact five-file 0.2 trust homes; it preserves existing authorities, creates sealed score-1 genesis, and reports the new ledger ID and continuity reset. Total local erasure remains indistinguishable from a genuine pre-Elo home.
+- Made an interrupted Elo append recover a one-entry head lag exactly once; an exact retry is idempotent, while different retry evidence recovers the head and then fails closed.
 - Synchronized Codex, Claude Code, Kimi Code, Flutter, generic Agent Skills, and Guardian runtime metadata at version 0.3.0.
 - Kept company profiles, catalogs, snapshots, run evidence, and Elo history local under `~/.design-system-guardian/`; public source remains a clean implementation and synthetic benchmark package.
 

@@ -79,7 +79,7 @@ codex plugin marketplace upgrade pv-vimalnair-design-system-guardian --json
 
 ## CLI and exit codes
 
-The portable `guardian` CLI exposes `doctor`, `profile validate`, `snapshot ingest`, `preflight`, `resolve`, `adapter flutter config`, `audit`, `finalize`, and `migrate`.
+The portable `guardian` CLI exposes `doctor`, `profile validate`, `snapshot ingest`, `preflight`, `resolve`, `adapter flutter config`, `audit`, `finalize`, `self-check`, profile-artifact `migrate`, and the `elo show`, `elo migrate`, `elo benchmark`, and `elo evaluate` commands.
 
 | Exit | Meaning |
 | ---: | --- |

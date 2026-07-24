@@ -18,12 +18,16 @@ from typing import Any, Callable
 from .authority import AuthorityIntegrityError, authority_seal, verify_authority_seal
 from .canonical import (
     atomic_write_json,
+    canonical_json_bytes,
+    decode_json_bytes,
     read_canonical_json,
     read_json,
     sha256_digest,
 )
+from .errors import PolicyIntegrityError
 from .paths import GuardianPaths, assert_guardian_storage_path, is_link_or_reparse
 from .policy import (
+    ELO_ENROLLMENT_NAME,
     ELO_GENESIS_SCORE,
     ELO_LEDGER_HEAD_NAME,
     ELO_LEDGER_HEAD_PURPOSE,
@@ -31,9 +35,10 @@ from .policy import (
     ELO_LEDGER_MARKER_PURPOSE,
     ELO_LEDGER_MODEL,
     EXPECTED_POLICY_SHA256,
+    verify_elo_enrollment,
     verify_policy_anchor,
 )
-from .storage import exclusive_write_json, transaction_lock
+from .storage import advisory_transaction_lock, exclusive_write_json
 
 
 ELO_MODEL = ELO_LEDGER_MODEL
@@ -904,8 +909,32 @@ def _verify_entry(
     return copy.deepcopy(entry)
 
 
-def _read_entries(home: Path) -> tuple[dict[str, Any], ...]:
+def _head_matches_entry(
+    head: dict[str, Any], entry: dict[str, Any] | None
+) -> bool:
+    if entry is None:
+        return (
+            head["sequence"] == 0
+            and head["entryDigest"] is None
+            and head["score"] == ELO_GENESIS_SCORE
+            and head["suiteDigest"] is None
+        )
+    return all(
+        head[field] == entry[field]
+        for field in ("ledgerId", "sequence", "entryDigest", "score", "suiteDigest")
+    )
+
+
+def _read_entries_with_status(
+    home: Path,
+    *,
+    recover_interrupted_head: bool = False,
+    enrollment_value: Any | None = None,
+) -> tuple[tuple[dict[str, Any], ...], bool]:
     history = assert_guardian_storage_path(home, GuardianPaths(home).elo_history)
+    enrollment_path = assert_guardian_storage_path(
+        home, GuardianPaths(home).trust / ELO_ENROLLMENT_NAME
+    )
     head_path = _head_path(home)
     marker_path = _marker_path(home)
     if history.exists() and not history.is_dir():
@@ -915,24 +944,44 @@ def _read_entries(home: Path) -> tuple[dict[str, Any], ...]:
         if history.is_dir()
         else []
     )
+    enrollment_exists = enrollment_path.is_file()
     marker_exists = marker_path.is_file()
     head_exists = head_path.is_file()
-    if not marker_exists or not head_exists:
-        if not marker_exists and not head_exists and not paths:
+    if not enrollment_exists or not marker_exists or not head_exists:
+        if (
+            not enrollment_path.exists()
+            and not marker_path.exists()
+            and not head_path.exists()
+            and not history.exists()
+        ):
             raise EloIntegrityError(
-                "Elo trust anchors are missing; explicit Task 5/manual migration is required."
+                "Elo trust anchors are missing; run the explicit legacy 0.2 genesis migration."
             )
         raise EloIntegrityError(
-            "Elo marker or head deletion is proven by the remaining local anchor."
+            "Elo enrollment, marker, or head deletion is proven by remaining local evidence; legacy migration is blocked."
         )
+    try:
+        enrollment = verify_elo_enrollment(
+            home,
+            read_canonical_json(enrollment_path)
+            if enrollment_value is None
+            else enrollment_value,
+        )
+    except PolicyIntegrityError as error:
+        raise EloIntegrityError(f"Elo enrollment receipt is invalid: {error}") from error
     marker = _verify_marker(home, read_canonical_json(marker_path))
     head = _verify_head(home, read_canonical_json(head_path))
-    if head["ledgerId"] != marker["ledgerId"]:
-        raise EloIntegrityError("Protected Elo marker and head ledger identities differ.")
+    if (
+        head["ledgerId"] != marker["ledgerId"]
+        or enrollment["ledgerId"] != marker["ledgerId"]
+    ):
+        raise EloIntegrityError(
+            "Protected Elo enrollment, marker, and head ledger identities differ."
+        )
     if not paths:
         if head["sequence"] != 0:
             raise EloIntegrityError("Protected Elo head proves whole-history deletion.")
-        return ()
+        return (), False
     entries: list[dict[str, Any]] = []
     for path in paths:
         if not path.is_file() or _HISTORY_NAME.fullmatch(path.name) is None:
@@ -946,16 +995,42 @@ def _read_entries(home: Path) -> tuple[dict[str, Any], ...]:
             )
         )
     latest = entries[-1]
-    if (
-        head["sequence"] == 0
-        or latest["ledgerId"] != marker["ledgerId"]
-        or head["sequence"] != latest["sequence"]
-        or head["entryDigest"] != latest["entryDigest"]
-        or head["score"] != latest["score"]
-        or head["suiteDigest"] != latest["suiteDigest"]
-    ):
-        raise EloIntegrityError("Protected Elo anchors detect deletion, truncation, or rollback.")
-    return tuple(entries)
+    if latest["ledgerId"] != marker["ledgerId"]:
+        raise EloIntegrityError("Protected Elo ledger identity changed.")
+    if _head_matches_entry(head, latest):
+        return tuple(entries), False
+    prior = None if len(entries) == 1 else entries[-2]
+    if recover_interrupted_head and _head_matches_entry(head, prior):
+        _write_head(home, latest)
+        recovered_head = _verify_head(home, read_canonical_json(head_path))
+        if not _head_matches_entry(recovered_head, latest):
+            raise EloIntegrityError(
+                "Interrupted Elo append head recovery failed verification."
+            )
+        return tuple(entries), True
+    raise EloIntegrityError(
+        "Protected Elo anchors detect deletion, truncation, or rollback."
+    )
+
+
+def _read_entries(home: Path) -> tuple[dict[str, Any], ...]:
+    entries, _ = _read_entries_with_status(home)
+    return entries
+
+
+def _preflight_elo_anchor_presence(home: Path) -> None:
+    required = (
+        assert_guardian_storage_path(
+            home, GuardianPaths(home).trust / ELO_ENROLLMENT_NAME
+        ),
+        _marker_path(home),
+        _head_path(home),
+    )
+    if all(path.is_file() for path in required):
+        return
+    _read_entries(home)
+    raise EloIntegrityError("Elo anchor preflight returned without complete anchors.")
+
 
 def read_elo_state(home: Path) -> dict[str, Any]:
     normalized_home = home.expanduser().absolute()
@@ -974,6 +1049,28 @@ def read_elo_state(home: Path) -> dict[str, Any]:
     }
 
 
+def _evaluation_result(entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schemaVersion": 2,
+        "model": ELO_MODEL,
+        "ledgerId": entry["ledgerId"],
+        "sequence": entry["sequence"],
+        "entryDigest": entry["entryDigest"],
+        **{
+            field: copy.deepcopy(entry[field])
+            for field in (
+                "previousScore",
+                "categoryDeltas",
+                "delta",
+                "score",
+                "achievementIds",
+                "newAchievementIds",
+                "confirmedRegressionIds",
+            )
+        },
+    }
+
+
 def evaluate_elo(home: Path, baseline: Any, candidate: Any) -> dict[str, Any]:
     normalized_home = home.expanduser().absolute()
     policy_digest = verify_policy_anchor(normalized_home)
@@ -984,12 +1081,40 @@ def evaluate_elo(home: Path, baseline: Any, candidate: Any) -> dict[str, Any]:
     for field in ("suiteDigest", "policyDigest", "runtimeDigest", "conditionDigest"):
         if baseline_result[field] != candidate_result[field]:
             raise EloIntegrityError(f"Baseline and candidate {field} values must match exactly.")
-    lock_path = GuardianPaths(normalized_home).elo / "transaction.lock"
-    with transaction_lock(
-        normalized_home, lock_path, purpose="guardian-elo-lock-v2"
-    ):
-        entries = _read_entries(normalized_home)
+    _preflight_elo_anchor_presence(normalized_home)
+    lock_path = GuardianPaths(normalized_home).trust / ELO_ENROLLMENT_NAME
+    with advisory_transaction_lock(
+        normalized_home, lock_path, purpose="guardian-elo-lock-v3"
+    ) as enrollment_descriptor:
+        os.lseek(enrollment_descriptor, 0, os.SEEK_SET)
+        enrollment_chunks: list[bytes] = []
+        while True:
+            chunk = os.read(enrollment_descriptor, 65536)
+            if not chunk:
+                break
+            enrollment_chunks.append(chunk)
+        enrollment_payload = b"".join(enrollment_chunks)
+        enrollment_value = decode_json_bytes(enrollment_payload)
+        if canonical_json_bytes(enrollment_value) != enrollment_payload:
+            raise EloIntegrityError(
+                "Locked Elo enrollment receipt is not canonical JSON."
+            )
+        entries, recovered = _read_entries_with_status(
+            normalized_home,
+            recover_interrupted_head=True,
+            enrollment_value=enrollment_value,
+        )
         previous = None if not entries else entries[-1]
+        if (
+            previous is not None
+            and previous["baselineResult"] == baseline_result
+            and previous["candidateResult"] == candidate_result
+        ):
+            return _evaluation_result(previous)
+        if recovered:
+            raise EloIntegrityError(
+                "Interrupted Elo append was recovered; retry evidence differs, so rerun the evaluation."
+            )
         _validate_continuity(previous, current_score, baseline_result, candidate_result)
         marker = _verify_marker(
             normalized_home, read_canonical_json(_marker_path(normalized_home))
@@ -1028,14 +1153,10 @@ def evaluate_elo(home: Path, baseline: Any, candidate: Any) -> dict[str, Any]:
         )
         exclusive_write_json(normalized_home, path, entry)
         _write_head(normalized_home, entry)
-        verified = _read_entries(normalized_home)
+        verified, _ = _read_entries_with_status(
+            normalized_home,
+            enrollment_value=enrollment_value,
+        )
         if verified[-1] != entry:
             raise EloIntegrityError("Elo append failed complete semantic post-write verification.")
-    return {
-        "schemaVersion": 2,
-        "model": ELO_MODEL,
-        "ledgerId": entry["ledgerId"],
-        "sequence": entry["sequence"],
-        "entryDigest": digest,
-        **derived,
-    }
+    return _evaluation_result(entry)

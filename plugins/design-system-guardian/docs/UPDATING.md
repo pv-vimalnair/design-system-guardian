@@ -60,7 +60,17 @@ Stable state and every stable history event retain the SHA-256 of the exact seal
 
 ## Migrations
 
-Migrations are deterministic, idempotent, and exactly one schema version at a time. Before replacement, Guardian preserves a digest-verified canonical backup. Interrupted work fails closed and can recover only from matching evidence. Future schemas are refused.
+A home created by version 0.2 has exactly five verified trust files and no Elo enrollment evidence. After installing version 0.3.0, migrate that home once with:
+
+```powershell
+guardian elo migrate
+```
+
+This explicit command preserves the policy and catalog authorities byte-for-byte and creates a sealed score-1 enrollment receipt, marker, and genesis head. It refuses partial trust, unknown trust files, any existing ledger directory, or evidence of prior Elo enrollment while that local evidence remains.
+
+Total local erasure is indistinguishable from a genuine 0.2 five-file layout because version 0.2 created no Elo anchor. Therefore this command cannot prove continuity with a deleted ledger: it establishes a new local ledger and reports its `ledgerId` with `newLedger=true` and `continuityReset=true`. Invoke it only for a genuine pre-Elo home. An immediate repeat while the sealed enrollment remains is a verified no-op for the same `ledgerId`: `changed=false`, while the stable origin disclosure remains `newLedger=true`, `continuityReset=true`, and `continuityFromPriorLedgerProven=false`.
+
+Profile-artifact schema migrations are deterministic, idempotent, and exactly one schema version at a time. Elo enrollment is separate: fresh installs use a random `ledgerId`, while explicit legacy migration derives a stable ID from the preserved five-file trust evidence so strict partial writes can recover without guessing or replacing conflicting bytes. Its continuity reset is disclosed. Before profile-artifact replacement, Guardian preserves a digest-verified canonical backup. Interrupted work fails closed and can recover only from matching evidence. Future schemas are refused.
 
 Archived releases are verified with their historical supported schema parser and signed compatibility metadata. New activation requires the current release and state schema versions; updating the runtime must retain old verifiers for every still-supported archived version.
 

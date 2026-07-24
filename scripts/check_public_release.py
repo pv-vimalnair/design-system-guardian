@@ -11,6 +11,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -63,7 +64,7 @@ SECRET_PATTERNS = (
     re.compile(rb"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(rb"\bfigd_[A-Za-z0-9_-]{20,}\b"),
 )
-WINDOWS_HOME = re.compile(rb"(?i)\b[A-Z]:\\Users\\([^\\\r\n]+)\\")
+WINDOWS_HOME = re.compile(rb"(?i)\b[A-Z]:\\+Users\\+([^\\\r\n]+?)\\+")
 UNIX_HOME = re.compile(rb"/(?:home|Users)/([^/\s]+)/")
 ROOT_HOME = re.compile(rb"(?<![A-Za-z0-9_])/" + rb"root/")
 SYNTHETIC_HOME_NAMES = {b"example", b"example person", b"fixture", b"test", b"user", b"username"}
@@ -90,9 +91,32 @@ def render_result(result: ReleaseResult) -> str:
     return f"FAIL clean-public-release [{','.join(result.codes)}]"
 
 
+def _trusted_git(root: Path) -> Path:
+    candidate = shutil.which("git")
+    if not candidate:
+        raise PublicReleaseError("A trusted Git executable is unavailable.")
+    candidate_path = Path(candidate)
+    if not candidate_path.is_absolute():
+        raise PublicReleaseError("The Git executable path is not absolute.")
+    try:
+        resolved_root = root.resolve(strict=True)
+        resolved_candidate = candidate_path.resolve(strict=True)
+    except OSError as error:
+        raise PublicReleaseError("The Git executable path is unavailable.") from error
+    if not resolved_candidate.is_file() or not os.access(resolved_candidate, os.X_OK):
+        raise PublicReleaseError("The Git executable is invalid.")
+    if sys.platform == "win32" and resolved_candidate.suffix.lower() != ".exe":
+        raise PublicReleaseError("The Windows Git executable is invalid.")
+    try:
+        resolved_candidate.relative_to(resolved_root)
+    except ValueError:
+        return resolved_candidate
+    raise PublicReleaseError("The checkout controls the selected Git executable.")
+
+
 def _git(root: Path, *arguments: str) -> bytes:
     completed = subprocess.run(
-        ["git", *arguments],
+        [str(_trusted_git(root)), *arguments],
         cwd=root,
         capture_output=True,
         check=False,
@@ -287,11 +311,13 @@ def _scan_local_matches(local_home: Path, public_blobs: dict[str, bytes]) -> set
             codes.add("local_identifier_match")
     return codes
 
-def _batch_blobs(root: Path, object_ids: list[str]) -> dict[str, bytes]:
+def _batch_objects(root: Path, object_ids: list[str]) -> dict[str, tuple[str, bytes]]:
     if not object_ids:
         return {}
+    if len(set(object_ids)) != len(object_ids) or any(not HEX_40.fullmatch(value) for value in object_ids):
+        raise PublicReleaseError("Historical Git object requests are invalid.")
     completed = subprocess.run(
-        ["git", "cat-file", "--batch"],
+        [str(_trusted_git(root)), "cat-file", "--batch"],
         cwd=root,
         input=("\n".join(object_ids) + "\n").encode("ascii"),
         capture_output=True,
@@ -300,25 +326,161 @@ def _batch_blobs(root: Path, object_ids: list[str]) -> dict[str, bytes]:
     if completed.returncode:
         raise PublicReleaseError("Historical Git objects are unavailable.")
     stream = io.BytesIO(completed.stdout)
-    blobs: dict[str, bytes] = {}
+    objects: dict[str, tuple[str, bytes]] = {}
     for requested in object_ids:
-        header = stream.readline().rstrip(b"\n")
-        parts = header.split(b" ")
+        header = stream.readline()
+        if not header.endswith(b"\n"):
+            raise PublicReleaseError("Historical Git object metadata is truncated.")
+        parts = header[:-1].split(b" ")
         if len(parts) != 3:
             raise PublicReleaseError("Historical Git object metadata is invalid.")
-        object_id, object_type, encoded_size = parts
-        if object_id.decode("ascii", "strict") != requested:
-            raise PublicReleaseError("Historical Git object identity changed.")
+        encoded_id, encoded_type, encoded_size = parts
         try:
-            size = int(encoded_size)
-        except ValueError as error:
-            raise PublicReleaseError("Historical Git object size is invalid.") from error
+            object_id = encoded_id.decode("ascii", "strict")
+            object_type = encoded_type.decode("ascii", "strict")
+        except UnicodeError as error:
+            raise PublicReleaseError("Historical Git object metadata is invalid.") from error
+        if object_id != requested or not HEX_40.fullmatch(object_id):
+            raise PublicReleaseError("Historical Git object identity changed.")
+        if object_type not in {"blob", "commit", "tag", "tree"}:
+            raise PublicReleaseError("Historical Git object type is invalid.")
+        if not encoded_size.isdigit():
+            raise PublicReleaseError("Historical Git object size is invalid.")
+        size = int(encoded_size)
         payload = stream.read(size)
         if len(payload) != size or stream.read(1) != b"\n":
             raise PublicReleaseError("Historical Git object is truncated.")
-        if object_type == b"blob":
-            blobs[requested] = payload
-    return blobs
+        objects[requested] = (object_type, payload)
+    if stream.read(1):
+        raise PublicReleaseError("Historical Git object evidence has trailing data.")
+    return objects
+
+
+def _batch_blobs(root: Path, object_ids: list[str]) -> dict[str, bytes]:
+    return {
+        object_id: payload
+        for object_id, (object_type, payload) in _batch_objects(root, object_ids).items()
+        if object_type == "blob"
+    }
+
+
+def _commit_message_and_identities(payload: bytes) -> tuple[bytes, bytes]:
+    header, separator, message = payload.partition(b"\n\n")
+    lines = header.split(b"\n")
+    authors = [line for line in lines if line.startswith(b"author ")]
+    committers = [line for line in lines if line.startswith(b"committer ")]
+    if (
+        not separator
+        or not lines
+        or re.fullmatch(rb"tree [0-9a-f]{40}", lines[0]) is None
+        or len(authors) != 1
+        or len(committers) != 1
+    ):
+        raise PublicReleaseError("Reachable commit metadata is invalid.")
+    return message, b"\n".join((authors[0], committers[0])) + b"\n"
+
+
+def _tag_target_and_message(payload: bytes) -> tuple[str, str, bytes, bytes, bytes]:
+    header, separator, message = payload.partition(b"\n\n")
+    lines = header.split(b"\n")
+    taggers = [line for line in lines if line.startswith(b"tagger ")]
+    if not separator or len(lines) < 4:
+        raise PublicReleaseError("Reachable annotated-tag metadata is invalid.")
+    object_match = re.fullmatch(rb"object ([0-9a-f]{40})", lines[0])
+    type_match = re.fullmatch(rb"type (blob|commit|tag|tree)", lines[1])
+    if (
+        object_match is None
+        or type_match is None
+        or not lines[2].startswith(b"tag ")
+        or len(lines[2]) == 4
+        or len(taggers) != 1
+        or re.fullmatch(rb"tagger .+ <[^<>\r\n]*> -?[0-9]+ [+-][0-9]{4}", taggers[0]) is None
+    ):
+        raise PublicReleaseError("Reachable annotated-tag metadata is invalid.")
+    return (
+        object_match.group(1).decode("ascii", "strict"),
+        type_match.group(1).decode("ascii", "strict"),
+        message,
+        lines[2] + b"\n",
+        taggers[0] + b"\n",
+    )
+
+
+def _reachable_commit_messages(root: Path, commit: str) -> tuple[set[str], dict[str, bytes]]:
+    raw = _git(root, "rev-list", commit)
+    try:
+        commit_ids = [line.decode("ascii", "strict") for line in raw.splitlines() if line]
+    except UnicodeError as error:
+        raise PublicReleaseError("Reachable commit identities are invalid.") from error
+    if (
+        not commit_ids
+        or len(set(commit_ids)) != len(commit_ids)
+        or any(not HEX_40.fullmatch(value) for value in commit_ids)
+        or commit not in commit_ids
+    ):
+        raise PublicReleaseError("Reachable commit identities are invalid.")
+    objects = _batch_objects(root, commit_ids)
+    messages: dict[str, bytes] = {}
+    for object_id in commit_ids:
+        object_type, payload = objects[object_id]
+        if object_type != "commit":
+            raise PublicReleaseError("Reachable commit evidence has the wrong type.")
+        message, identities = _commit_message_and_identities(payload)
+        messages[f"{object_id}:@commit-message"] = message
+        messages[f"{object_id}:@commit-identities"] = identities
+    return set(commit_ids), messages
+
+
+def _reachable_annotated_tag_messages(root: Path, reachable_commits: set[str]) -> dict[str, bytes]:
+    raw = _git(
+        root,
+        "for-each-ref",
+        "--format=%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)",
+        "refs/tags",
+    )
+    messages: dict[str, bytes] = {}
+    for record in raw.splitlines():
+        if not record:
+            continue
+        fields = record.split(b"\0")
+        if len(fields) != 4:
+            raise PublicReleaseError("Annotated-tag reference metadata is invalid.")
+        try:
+            object_id, object_type, peeled_id, peeled_type = (
+                field.decode("ascii", "strict") for field in fields
+            )
+        except UnicodeError as error:
+            raise PublicReleaseError("Annotated-tag reference metadata is invalid.") from error
+        if not HEX_40.fullmatch(object_id) or object_type not in {"blob", "commit", "tag", "tree"}:
+            raise PublicReleaseError("Annotated-tag reference metadata is invalid.")
+        if object_type != "tag":
+            if peeled_id or peeled_type:
+                raise PublicReleaseError("Lightweight-tag reference metadata is invalid.")
+            continue
+        if not HEX_40.fullmatch(peeled_id) or peeled_type not in {"blob", "commit", "tree"}:
+            raise PublicReleaseError("Annotated-tag peel metadata is invalid.")
+        if peeled_type != "commit" or peeled_id not in reachable_commits:
+            continue
+        current = object_id
+        visited: set[str] = set()
+        while True:
+            if current in visited:
+                raise PublicReleaseError("Annotated-tag metadata contains a cycle.")
+            visited.add(current)
+            object_kind, payload = _batch_objects(root, [current])[current]
+            if object_kind != "tag":
+                raise PublicReleaseError("Reachable annotated-tag evidence has the wrong type.")
+            target_id, target_type, message, tag_name, tagger = _tag_target_and_message(payload)
+            messages[f"{current}:@annotated-tag-message"] = message
+            messages[f"{current}:@annotated-tag-name"] = tag_name
+            messages[f"{current}:@annotated-tag-tagger"] = tagger
+            if target_type == "tag":
+                current = target_id
+                continue
+            if target_type != "commit" or target_id != peeled_id:
+                raise PublicReleaseError("Reachable annotated-tag peel evidence is inconsistent.")
+            break
+    return messages
 
 
 def _history_evidence(root: Path, commit: str) -> tuple[set[str], dict[str, bytes]]:
@@ -351,7 +513,10 @@ def _history_evidence(root: Path, commit: str) -> tuple[set[str], dict[str, byte
             path = encoded_path.decode("utf-8", "strict")
         except UnicodeError as error:
             raise PublicReleaseError("Historical Git object identity is invalid.") from error
-        object_paths.setdefault(object_id, set()).add(path)
+        if not HEX_40.fullmatch(object_id):
+            raise PublicReleaseError("Historical Git object identity is invalid.")
+        if path:
+            object_paths.setdefault(object_id, set()).add(path)
     historical_blobs: dict[str, bytes] = {}
     for object_id, payload in _batch_blobs(root, sorted(object_paths)).items():
         for path in object_paths[object_id]:
@@ -364,7 +529,15 @@ def _history_evidence(root: Path, commit: str) -> tuple[set[str], dict[str, byte
                 codes.add("history_violation")
             if any(pattern.search(payload) for pattern in SECRET_PATTERNS):
                 codes.add("history_violation")
+
+    reachable_commits, commit_messages = _reachable_commit_messages(root, commit)
+    tag_messages = _reachable_annotated_tag_messages(root, reachable_commits)
+    for key, payload in {**commit_messages, **tag_messages}.items():
+        historical_blobs[key] = payload
+        if _contains_absolute_home(payload) or any(pattern.search(payload) for pattern in SECRET_PATTERNS):
+            codes.add("history_violation")
     return codes, historical_blobs
+
 
 ELO_MODEL = "guardian-weighted-elo-v1"
 ELO_CATEGORIES = {

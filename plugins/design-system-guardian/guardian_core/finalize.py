@@ -22,7 +22,7 @@ from .preflight import PreflightError, load_run_pin
 from .project_binding import ProjectBindingError, project_evidence_matches_binding
 from .release import RUNTIME_VERSION
 from .resolver import _resolve_verified_snapshot_identity
-from .run_artifacts import RunArtifactIntegrityError, read_run_artifact, render_audit_report, seal_run_artifact, write_readable_report, write_run_artifact
+from .run_artifacts import RunArtifactIntegrityError, read_run_artifact, read_run_artifact_if_present, render_audit_report, seal_run_artifact, write_readable_report, write_run_artifact
 from .sentinels import SentinelIntegrityError, validate_sentinel
 from .snapshot import SnapshotValidationError, classify_source_state
 
@@ -280,6 +280,45 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
 
 def finalize_run(home: Path, *, profile_id: str, run_id: str, audit_result: dict[str, Any], build_plan: dict[str, Any] | None) -> FinalizationResult:
     """Finalize at trusted host time; public callers cannot inject freshness time."""
+    try:
+        persisted_manifest_envelope = read_run_artifact_if_present(
+            home,
+            profile_id=profile_id,
+            run_id=run_id,
+            artifact_type="run-manifest",
+        )
+    except RunArtifactIntegrityError as error:
+        raise FinalizationError(
+            f"Persisted run manifest cannot be verified for recovery: {error}"
+        ) from error
+    if persisted_manifest_envelope is not None:
+        persisted_manifest = persisted_manifest_envelope["payload"]
+        outputs = persisted_manifest.get("outputs")
+        output_types = (
+            [item.get("artifactType") for item in outputs]
+            if isinstance(outputs, list) and all(isinstance(item, dict) for item in outputs)
+            else []
+        )
+        expected_outputs = {"audit-result", "coverage", "readable-report"}
+        if (
+            len(output_types) != len(set(output_types))
+            or set(output_types) not in {frozenset(expected_outputs), frozenset(expected_outputs | {"build-plan"})}
+        ):
+            raise FinalizationError("Persisted run manifest output set is invalid for recovery.")
+        if (("build-plan" in output_types) != (build_plan is not None)):
+            raise FinalizationError(
+                "Retry build-plan presence differs from the persisted run manifest."
+            )
+        return _finalize_run_at(
+            home,
+            profile_id=profile_id,
+            run_id=run_id,
+            audit_result=audit_result,
+            build_plan=build_plan,
+            started_at=persisted_manifest.get("startedAt"),
+            completed_at=persisted_manifest.get("completedAt"),
+        )
+
     finalized_at = _utc_now()
     if not isinstance(finalized_at, datetime) or finalized_at.tzinfo is None:
         raise FinalizationError("Trusted finalization clock must be timezone-aware.")
