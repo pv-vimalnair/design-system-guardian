@@ -1,4 +1,3 @@
-
 """Create-once host trust anchor and immutable-policy verification."""
 
 from __future__ import annotations
@@ -36,6 +35,12 @@ from .paths import (
 
 EXPECTED_POLICY_SHA256 = "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f"
 TRUST_SCHEMA_VERSION = 2
+ELO_LEDGER_MODEL = "guardian-weighted-elo-v1"
+ELO_LEDGER_MARKER_NAME = "elo-ledger-init.sealed.json"
+ELO_LEDGER_HEAD_NAME = "elo-head.sealed.json"
+ELO_LEDGER_MARKER_PURPOSE = "elo-ledger-init:v1"
+ELO_LEDGER_HEAD_PURPOSE = "elo-head:v1"
+ELO_GENESIS_SCORE = 1
 
 
 class PolicyInstallation(str):
@@ -53,6 +58,38 @@ class PolicyInstallation(str):
         value.created = created
         value.catalog_authority_key_id = catalog_authority_key_id
         return value
+
+
+def _initial_elo_anchors(authority_key: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
+    ledger_id = sha256_digest(os.urandom(32))
+    marker_unsigned = {
+        "schemaVersion": 1,
+        "model": ELO_LEDGER_MODEL,
+        "ledgerId": ledger_id,
+    }
+    head_unsigned = {
+        "schemaVersion": 1,
+        "model": ELO_LEDGER_MODEL,
+        "ledgerId": ledger_id,
+        "sequence": 0,
+        "entryDigest": None,
+        "score": ELO_GENESIS_SCORE,
+        "suiteDigest": None,
+    }
+    return (
+        {
+            **marker_unsigned,
+            "authoritySeal": authority_seal_with_key(
+                authority_key, ELO_LEDGER_MARKER_PURPOSE, marker_unsigned
+            ),
+        },
+        {
+            **head_unsigned,
+            "authoritySeal": authority_seal_with_key(
+                authority_key, ELO_LEDGER_HEAD_PURPOSE, head_unsigned
+            ),
+        },
+    )
 
 
 def shipped_policy_path() -> Path:
@@ -188,6 +225,9 @@ def install_policy_anchor(
                 authority_key,
             )
             harden_authority_key_permissions(stage / "snapshot-authority-v1.key")
+            marker, genesis_head = _initial_elo_anchors(authority_key)
+            atomic_write_json(stage / ELO_LEDGER_MARKER_NAME, marker)
+            atomic_write_json(stage / ELO_LEDGER_HEAD_NAME, genesis_head)
             atomic_write_bytes(
                 stage / "catalog-authority-ed25519.pem",
                 canonical_public_pem,

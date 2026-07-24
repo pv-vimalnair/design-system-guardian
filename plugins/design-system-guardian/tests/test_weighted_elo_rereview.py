@@ -60,7 +60,175 @@ def _package_bytes_digest(root: Path) -> str:
         digest.update(path.read_bytes())
     return digest.hexdigest()
 
+def _sealed_pair(home: Path) -> tuple[dict, dict]:
+    from guardian_core.canonical import sha256_digest
+    from guardian_core.elo import (
+        ELO_MODEL,
+        _public_suite,
+        _repetition_evidence,
+        _runtime_digest,
+        _seal_result,
+    )
+    from guardian_core.policy import verify_policy_anchor
+
+    suite, _ = _public_suite()
+    suite_digest = sha256_digest(suite)
+    policy_digest = verify_policy_anchor(home)
+    runtime_digest = _runtime_digest()
+    condition_digest = sha256_digest(
+        {
+            "model": ELO_MODEL,
+            "policyDigest": policy_digest,
+            "runtimeDigest": runtime_digest,
+            "suiteDigest": suite_digest,
+        }
+    )
+    modules = {item["moduleId"]: item for item in suite["caseModules"]}
+    identities = (
+        {
+            "canonicalRepository": "pv-vimalnair/design-system-guardian",
+            "pluginVersion": "0.2.0",
+            "sourceCommit": BOOTSTRAP_COMMIT,
+            "sourceTree": "a1ed3e786c565bb8e75e5cf207b9c3bd99e631bd",
+            "packageDigest": BOOTSTRAP_PACKAGE,
+        },
+        {
+            "canonicalRepository": "pv-vimalnair/design-system-guardian",
+            "pluginVersion": "0.2.1",
+            "sourceCommit": "1" * 40,
+            "sourceTree": "2" * 40,
+            "packageDigest": "3" * 64,
+        },
+    )
+    results = []
+    for identity in identities:
+        cases = []
+        for definition in suite["achievements"]:
+            module = modules[definition["caseModuleId"]]
+            repetitions = []
+            for repetition in (1, 2):
+                repetitions.append(
+                    {
+                        "repetition": repetition,
+                        "status": "passed",
+                        "evidenceDigest": _repetition_evidence(
+                            definition,
+                            module,
+                            condition_digest,
+                            identity["packageDigest"],
+                            repetition,
+                            "passed",
+                        ),
+                    }
+                )
+            cases.append(
+                {
+                    "achievementId": definition["achievementId"],
+                    "caseModuleId": definition["caseModuleId"],
+                    "moduleDigest": module["moduleDigest"],
+                    "caseFunction": definition["caseFunction"],
+                    "workerDigest": definition["workerDigest"],
+                    "repetitions": repetitions,
+                }
+            )
+        results.append(
+            _seal_result(
+                home,
+                {
+                    "schemaVersion": 2,
+                    "model": ELO_MODEL,
+                    "resultAuthority": "local-guardian-v1",
+                    "overallStatus": "complete",
+                    "suiteDigest": suite_digest,
+                    "policyDigest": policy_digest,
+                    "runtimeDigest": runtime_digest,
+                    "conditionDigest": condition_digest,
+                    "pluginName": "design-system-guardian",
+                    **identity,
+                    "cases": cases,
+                },
+            )
+        )
+    return results[0], results[1]
+
+
 class WeightedEloSecondReviewTest(unittest.TestCase):
+    def test_new_install_has_sealed_fresh_genesis(self) -> None:
+        from guardian_core.canonical import read_canonical_json
+        from guardian_core.elo import _head_path, _marker_path, _verify_head, _verify_marker, read_elo_state
+
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            _provision(home)
+            marker = _verify_marker(home, read_canonical_json(_marker_path(home)))
+            head = _verify_head(home, read_canonical_json(_head_path(home)))
+            self.assertEqual(head["ledgerId"], marker["ledgerId"])
+            self.assertEqual(
+                {key: head[key] for key in ("sequence", "entryDigest", "score", "suiteDigest")},
+                {"sequence": 0, "entryDigest": None, "score": 1, "suiteDigest": None},
+            )
+            self.assertEqual(read_elo_state(home)["sequence"], 0)
+            self.assertFalse((home / "evolution" / "elo" / "history").exists())
+
+    def test_first_append_advances_preseeded_genesis(self) -> None:
+        from guardian_core.canonical import read_canonical_json
+        from guardian_core.elo import _head_path, _marker_path, evaluate_elo, read_elo_state
+
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            _provision(home)
+            marker_before = read_canonical_json(_marker_path(home))
+            baseline, candidate = _sealed_pair(home)
+            result = evaluate_elo(home, baseline, candidate)
+            marker_after = read_canonical_json(_marker_path(home))
+            head = read_canonical_json(_head_path(home))
+            self.assertEqual(marker_after, marker_before)
+            self.assertEqual(result["ledgerId"], marker_before["ledgerId"])
+            self.assertEqual(head["ledgerId"], marker_before["ledgerId"])
+            self.assertEqual(head["sequence"], 1)
+            self.assertEqual(read_elo_state(home)["sequence"], 1)
+
+    def test_simultaneous_all_anchor_deletion_never_reseeds(self) -> None:
+        from guardian_core.elo import EloIntegrityError, _head_path, _marker_path, evaluate_elo, read_elo_state
+
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            _provision(home)
+            baseline, candidate = _sealed_pair(home)
+            evaluate_elo(home, baseline, candidate)
+            marker = _marker_path(home)
+            head = _head_path(home)
+            history = next((home / "evolution" / "elo" / "history").glob("*.sealed.json"))
+            marker.unlink()
+            head.unlink()
+            history.unlink()
+            with self.assertRaisesRegex(EloIntegrityError, "migration"):
+                read_elo_state(home)
+            with self.assertRaisesRegex(EloIntegrityError, "migration"):
+                evaluate_elo(home, baseline, candidate)
+            self.assertFalse(marker.exists())
+            self.assertFalse(head.exists())
+            self.assertFalse(any((home / "evolution" / "elo" / "history").iterdir()))
+
+    def test_legacy_trust_without_elo_anchors_requires_manual_migration(self) -> None:
+        from guardian_core.elo import EloIntegrityError, _head_path, _marker_path, read_elo_state
+        from guardian_core.policy import install_policy_anchor
+
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            _provision(home)
+            _marker_path(home).unlink()
+            _head_path(home).unlink()
+            repeated = install_policy_anchor(
+                home,
+                catalog_authority_public_key=home / "catalog-authority-input.pem",
+            )
+            self.assertFalse(repeated.created)
+            with self.assertRaisesRegex(EloIntegrityError, "migration"):
+                read_elo_state(home)
+            self.assertFalse(_marker_path(home).exists())
+            self.assertFalse(_head_path(home).exists())
+
     def test_current_score_pins_authenticated_public_bootstrap(self) -> None:
         current = json.loads((ROOT / "benchmarks" / "current-score.json").read_text("utf-8"))
         self.assertEqual(
@@ -163,18 +331,14 @@ class WeightedEloSecondReviewTest(unittest.TestCase):
             _validate_continuity(previous, current, candidate, candidate)
 
     def test_marker_prevents_reset_when_any_local_anchor_remains(self) -> None:
-        from guardian_core.authority import authority_seal
-        from guardian_core.canonical import atomic_write_json
-        from guardian_core.elo import EloIntegrityError, _marker_path, read_elo_state
+        from guardian_core.elo import EloIntegrityError, _head_path, read_elo_state
 
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             _provision(home)
-            unsigned = {"schemaVersion": 1, "model": "guardian-weighted-elo-v1", "ledgerId": "a" * 64}
-            atomic_write_json(_marker_path(home), {**unsigned, "authoritySeal": authority_seal(home, "elo-ledger-init:v1", unsigned)})
-            with self.assertRaisesRegex(EloIntegrityError, "history"):
+            _head_path(home).unlink()
+            with self.assertRaisesRegex(EloIntegrityError, "deletion"):
                 read_elo_state(home)
-
     def test_additive_suite_runs_against_unchanged_baseline_and_anchors_deletions(self) -> None:
         from guardian_core.canonical import read_canonical_json
         from guardian_core.elo import (

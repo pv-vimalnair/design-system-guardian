@@ -37,7 +37,9 @@ class WeightedEloContractTest(unittest.TestCase):
         })
         self.assertEqual((ELO_MIN, ELO_MAX), (1, 2000))
         with tempfile.TemporaryDirectory() as directory:
-            state = read_elo_state(Path(directory))
+            home = Path(directory)
+            _provision(home)
+            state = read_elo_state(home)
         self.assertEqual((state["score"], state["sequence"]), (1, 0))
 
     def test_score_bounds_are_exact(self) -> None:
@@ -106,8 +108,10 @@ class WeightedEloContractTest(unittest.TestCase):
             "_elo_evaluate_command",
         )
         with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            _provision(home)
             stdout, stderr = io.StringIO(), io.StringIO()
-            with patch("guardian_core.cli.default_guardian_home", return_value=Path(directory)), redirect_stdout(stdout), redirect_stderr(stderr):
+            with patch("guardian_core.cli.default_guardian_home", return_value=home), redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main(["elo", "show"])
         self.assertEqual((code, stderr.getvalue()), (0, ""))
         self.assertEqual(json.loads(stdout.getvalue())["score"], 1)

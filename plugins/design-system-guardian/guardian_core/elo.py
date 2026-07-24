@@ -23,11 +23,20 @@ from .canonical import (
     sha256_digest,
 )
 from .paths import GuardianPaths, assert_guardian_storage_path, is_link_or_reparse
-from .policy import EXPECTED_POLICY_SHA256, verify_policy_anchor
+from .policy import (
+    ELO_GENESIS_SCORE,
+    ELO_LEDGER_HEAD_NAME,
+    ELO_LEDGER_HEAD_PURPOSE,
+    ELO_LEDGER_MARKER_NAME,
+    ELO_LEDGER_MARKER_PURPOSE,
+    ELO_LEDGER_MODEL,
+    EXPECTED_POLICY_SHA256,
+    verify_policy_anchor,
+)
 from .storage import exclusive_write_json, transaction_lock
 
 
-ELO_MODEL = "guardian-weighted-elo-v1"
+ELO_MODEL = ELO_LEDGER_MODEL
 ELO_MIN = 1
 ELO_MAX = 2000
 ELO_EVALUATION_CAP = 200
@@ -758,7 +767,7 @@ def _default_state() -> dict[str, Any]:
 
 def _marker_path(home: Path) -> Path:
     return assert_guardian_storage_path(
-        home, GuardianPaths(home).trust / "elo-ledger-init.sealed.json"
+        home, GuardianPaths(home).trust / ELO_LEDGER_MARKER_NAME
     )
 
 
@@ -767,7 +776,7 @@ def _verify_marker(home: Path, value: Any) -> dict[str, Any]:
         raise EloIntegrityError("Elo ledger initialization marker has unknown or missing fields.")
     unsigned = {key: copy.deepcopy(item) for key, item in value.items() if key != "authoritySeal"}
     try:
-        verify_authority_seal(home, "elo-ledger-init:v1", unsigned, value.get("authoritySeal"))
+        verify_authority_seal(home, ELO_LEDGER_MARKER_PURPOSE, unsigned, value.get("authoritySeal"))
     except AuthorityIntegrityError as error:
         raise EloIntegrityError(f"Elo ledger initialization marker seal is invalid: {error}") from error
     if value.get("schemaVersion") != 1 or value.get("model") != ELO_MODEL:
@@ -776,24 +785,8 @@ def _verify_marker(home: Path, value: Any) -> dict[str, Any]:
     return copy.deepcopy(value)
 
 
-def _initialize_marker(home: Path) -> dict[str, Any]:
-    unsigned = {
-        "schemaVersion": 1,
-        "model": ELO_MODEL,
-        "ledgerId": sha256_digest(os.urandom(32)),
-    }
-    marker = {
-        **unsigned,
-        "authoritySeal": authority_seal(home, "elo-ledger-init:v1", unsigned),
-    }
-    exclusive_write_json(home, _marker_path(home), marker)
-    verified = _verify_marker(home, read_canonical_json(_marker_path(home)))
-    if verified != marker:
-        raise EloIntegrityError("Elo ledger initialization marker failed verification.")
-    return marker
-
 def _head_path(home: Path) -> Path:
-    return assert_guardian_storage_path(home, GuardianPaths(home).trust / "elo-head.sealed.json")
+    return assert_guardian_storage_path(home, GuardianPaths(home).trust / ELO_LEDGER_HEAD_NAME)
 
 
 def _verify_head(home: Path, value: Any) -> dict[str, Any]:
@@ -801,23 +794,34 @@ def _verify_head(home: Path, value: Any) -> dict[str, Any]:
         raise EloIntegrityError("Protected Elo head has unknown or missing fields.")
     unsigned = {key: copy.deepcopy(item) for key, item in value.items() if key != "authoritySeal"}
     try:
-        verify_authority_seal(home, "elo-head:v1", unsigned, value.get("authoritySeal"))
+        verify_authority_seal(
+            home, ELO_LEDGER_HEAD_PURPOSE, unsigned, value.get("authoritySeal")
+        )
     except AuthorityIntegrityError as error:
         raise EloIntegrityError(f"Protected Elo head seal is invalid: {error}") from error
+    sequence = value.get("sequence")
+    score = value.get("score")
     if (
         value.get("schemaVersion") != 1
         or value.get("model") != ELO_MODEL
-        or type(value.get("sequence")) is not int
-        or value["sequence"] < 1
-        or type(value.get("score")) is not int
-        or not ELO_MIN <= value["score"] <= ELO_MAX
+        or type(sequence) is not int
+        or sequence < 0
+        or type(score) is not int
+        or not ELO_MIN <= score <= ELO_MAX
     ):
         raise EloIntegrityError("Protected Elo head coordinates are invalid.")
     _require_digest(value.get("ledgerId"), "head.ledgerId")
-    _require_digest(value.get("entryDigest"), "head.entryDigest")
-    _require_digest(value.get("suiteDigest"), "head.suiteDigest")
+    if sequence == 0:
+        if (
+            score != ELO_GENESIS_SCORE
+            or value.get("entryDigest") is not None
+            or value.get("suiteDigest") is not None
+        ):
+            raise EloIntegrityError("Protected Elo genesis head is invalid.")
+    else:
+        _require_digest(value.get("entryDigest"), "head.entryDigest")
+        _require_digest(value.get("suiteDigest"), "head.suiteDigest")
     return copy.deepcopy(value)
-
 
 def _write_head(home: Path, entry: dict[str, Any]) -> None:
     unsigned = {
@@ -829,7 +833,7 @@ def _write_head(home: Path, entry: dict[str, Any]) -> None:
         "score": entry["score"],
         "suiteDigest": entry["suiteDigest"],
     }
-    head = {**unsigned, "authoritySeal": authority_seal(home, "elo-head:v1", unsigned)}
+    head = {**unsigned, "authoritySeal": authority_seal(home, ELO_LEDGER_HEAD_PURPOSE, unsigned)}
     atomic_write_json(_head_path(home), head)
     if _verify_head(home, read_canonical_json(_head_path(home))) != head:
         raise EloIntegrityError("Protected Elo head failed post-write verification.")
@@ -904,19 +908,31 @@ def _read_entries(home: Path) -> tuple[dict[str, Any], ...]:
     history = assert_guardian_storage_path(home, GuardianPaths(home).elo_history)
     head_path = _head_path(home)
     marker_path = _marker_path(home)
+    if history.exists() and not history.is_dir():
+        raise EloIntegrityError("Elo history path is not a directory.")
+    paths = (
+        sorted(history.iterdir(), key=lambda item: item.name)
+        if history.is_dir()
+        else []
+    )
     marker_exists = marker_path.is_file()
-    history_exists = history.is_dir()
     head_exists = head_path.is_file()
-    if not marker_exists and not history_exists and not head_exists:
-        return ()
-    if not marker_exists:
-        raise EloIntegrityError("Elo history or head exists without its create-once initialization marker.")
+    if not marker_exists or not head_exists:
+        if not marker_exists and not head_exists and not paths:
+            raise EloIntegrityError(
+                "Elo trust anchors are missing; explicit Task 5/manual migration is required."
+            )
+        raise EloIntegrityError(
+            "Elo marker or head deletion is proven by the remaining local anchor."
+        )
     marker = _verify_marker(home, read_canonical_json(marker_path))
-    if not history_exists or not head_exists:
-        raise EloIntegrityError("Elo initialization marker proves history or head deletion.")
-    paths = sorted(history.iterdir(), key=lambda item: item.name)
+    head = _verify_head(home, read_canonical_json(head_path))
+    if head["ledgerId"] != marker["ledgerId"]:
+        raise EloIntegrityError("Protected Elo marker and head ledger identities differ.")
     if not paths:
-        raise EloIntegrityError("Elo initialization marker proves whole-history deletion.")
+        if head["sequence"] != 0:
+            raise EloIntegrityError("Protected Elo head proves whole-history deletion.")
+        return ()
     entries: list[dict[str, Any]] = []
     for path in paths:
         if not path.is_file() or _HISTORY_NAME.fullmatch(path.name) is None:
@@ -929,10 +945,9 @@ def _read_entries(home: Path) -> tuple[dict[str, Any], ...]:
                 marker["ledgerId"],
             )
         )
-    head = _verify_head(home, read_canonical_json(head_path))
     latest = entries[-1]
     if (
-        head["ledgerId"] != marker["ledgerId"]
+        head["sequence"] == 0
         or latest["ledgerId"] != marker["ledgerId"]
         or head["sequence"] != latest["sequence"]
         or head["entryDigest"] != latest["entryDigest"]
@@ -944,6 +959,7 @@ def _read_entries(home: Path) -> tuple[dict[str, Any], ...]:
 
 def read_elo_state(home: Path) -> dict[str, Any]:
     normalized_home = home.expanduser().absolute()
+    verify_policy_anchor(normalized_home)
     entries = _read_entries(normalized_home)
     if not entries:
         return _default_state()
@@ -975,10 +991,8 @@ def evaluate_elo(home: Path, baseline: Any, candidate: Any) -> dict[str, Any]:
         entries = _read_entries(normalized_home)
         previous = None if not entries else entries[-1]
         _validate_continuity(previous, current_score, baseline_result, candidate_result)
-        marker = (
-            _initialize_marker(normalized_home)
-            if previous is None
-            else _verify_marker(normalized_home, read_canonical_json(_marker_path(normalized_home)))
+        marker = _verify_marker(
+            normalized_home, read_canonical_json(_marker_path(normalized_home))
         )
         previous_suite = current_score["suiteSnapshot"] if previous is None else previous["suiteSnapshot"]
         _validate_suite_transition(previous_suite, suite)
