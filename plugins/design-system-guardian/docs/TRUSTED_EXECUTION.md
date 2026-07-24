@@ -1,6 +1,6 @@
 # Trusted execution boundary
 
-Design System Guardian 0.3.0 is a cross-agent pilot candidate. Its local
+Design System Guardian 0.3.1 is a cross-agent pilot candidate. Its local
 HMAC seals detect accidental corruption and cross-run replay, but they are not a
 production authority against code running as the same operating-system account.
 An agent process that can read the local sealing key must never be allowed to

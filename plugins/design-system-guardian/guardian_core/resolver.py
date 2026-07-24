@@ -186,6 +186,38 @@ def _validate_asset_selection(
     }
 
 
+def _validate_working_instance_selection(
+    candidate: dict[str, Any], request: dict[str, Any], *, working_mode: bool
+) -> tuple[ResolutionStatus | None, str, dict[str, Any]]:
+    locator = request.get("figmaInstance")
+    if locator is None:
+        if working_mode:
+            return ResolutionStatus.INVALID, "working_instance_locator_required", {}
+        return None, "", {}
+    fields = {"fileKey", "nodeId", "sourceVersion"}
+    if not isinstance(locator, dict) or set(locator) != fields or any(
+        not isinstance(locator.get(field), str) or not locator[field] for field in fields
+    ):
+        return ResolutionStatus.INVALID, "working_instance_locator_is_malformed", {}
+    matches = [
+        binding
+        for binding in candidate.get("workingFileInstances", [])
+        if isinstance(binding, dict)
+        and all(binding.get(field) == locator[field] for field in fields)
+    ]
+    if len(matches) > 1:
+        return ResolutionStatus.AMBIGUOUS, "multiple_exact_working_instance_bindings", {}
+    if not matches:
+        return ResolutionStatus.INVALID, "working_instance_not_proven", {}
+    selected = matches[0]
+    if (
+        selected.get("variant") != request.get("variant")
+        or selected.get("properties") != request.get("properties", {})
+    ):
+        return ResolutionStatus.INVALID, "working_instance_selection_mismatch", {}
+    return None, "", {"workingFileInstance": selected}
+
+
 def _resolve_verified_snapshot_identity(
     *,
     profile_id: str,
@@ -246,7 +278,7 @@ def _resolve_verified_snapshot_identity(
     if kind == "token":
         allowed_fields |= {"tokenType", "resolverContext"}
     else:
-        allowed_fields |= {"variant", "properties", "codeMapping"}
+        allowed_fields |= {"variant", "properties", "codeMapping", "figmaInstance"}
     if set(request) - allowed_fields:
         return _invalid(profile_id, snapshot_id, request, "raw_values_or_unknown_selection_fields_are_forbidden")
 
@@ -321,6 +353,26 @@ def _resolve_verified_snapshot_identity(
                 request=request,
                 evidence={"reason": reason, "denyWins": True},
             )
+        registry = snapshot.get("registry")
+        working_mode = isinstance(registry, dict) and any(
+            isinstance(asset, dict) and bool(asset.get("workingFileInstances"))
+            for plural in ("components", "icons")
+            for asset in registry.get(plural, [])
+        )
+        status, reason, working_evidence = _validate_working_instance_selection(
+            candidate,
+            request,
+            working_mode=working_mode,
+        )
+        if status is not None:
+            return _result(
+                status=status,
+                profile_id=profile_id,
+                snapshot_id=snapshot_id,
+                request=request,
+                evidence={"reason": reason, "denyWins": True},
+            )
+        selection_evidence.update(working_evidence)
     return _result(
         status=ResolutionStatus.ALLOWED,
         profile_id=profile_id,

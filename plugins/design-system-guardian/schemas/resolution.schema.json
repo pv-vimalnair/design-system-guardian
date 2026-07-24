@@ -36,6 +36,34 @@
       }
     },
     {
+      "if": {
+        "properties": {
+          "status": {"const": "allowed"},
+          "request": {"required": ["figmaInstance"]}
+        },
+        "required": ["status", "request"]
+      },
+      "then": {
+        "properties": {
+          "evidence": {"required": ["workingFileInstance"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "allowed"},
+          "request": {"not": {"required": ["figmaInstance"]}}
+        },
+        "required": ["status", "request"]
+      },
+      "then": {
+        "properties": {
+          "evidence": {"not": {"required": ["workingFileInstance"]}}
+        }
+      }
+    },
+    {
       "if": {"properties": {"status": {"const": "missing"}}, "required": ["status"]},
       "then": {
         "properties": {
@@ -96,15 +124,48 @@
             "framework": {"type": "string", "minLength": 1},
             "symbol": {"type": "string", "minLength": 1}
           }
-        }
+        },
+        "figmaInstance": {"$ref": "#/$defs/figmaInstanceLocator"}
       },
       "allOf": [
         {
           "if": {"properties": {"kind": {"const": "token"}}, "required": ["kind"]},
-          "then": {"not": {"anyOf": [{"required": ["variant"]}, {"required": ["properties"]}, {"required": ["codeMapping"]}]}},
+          "then": {"not": {"anyOf": [{"required": ["variant"]}, {"required": ["properties"]}, {"required": ["codeMapping"]}, {"required": ["figmaInstance"]}]}},
           "else": {"not": {"anyOf": [{"required": ["tokenType"]}, {"required": ["resolverContext"]}]}}
         }
       ]
+    },
+    "figmaInstanceLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileKey", "nodeId", "sourceVersion"],
+      "properties": {
+        "fileKey": {"type": "string", "minLength": 1},
+        "nodeId": {"type": "string", "minLength": 1},
+        "sourceVersion": {"type": "string", "minLength": 1}
+      }
+    },
+    "workingFileInstanceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileKey", "nodeId", "sourceVersion", "nodeType", "canonicalAssetKey",
+        "remote", "variant", "properties", "unapprovedOverrideFields"
+      ],
+      "properties": {
+        "fileKey": {"type": "string", "minLength": 1},
+        "nodeId": {"type": "string", "minLength": 1},
+        "sourceVersion": {"type": "string", "minLength": 1},
+        "nodeType": {"const": "INSTANCE"},
+        "canonicalAssetKey": {"type": "string", "minLength": 1},
+        "remote": {"const": true},
+        "variant": {"type": ["string", "null"], "minLength": 1},
+        "properties": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "minLength": 1}
+        },
+        "unapprovedOverrideFields": {"const": []}
+      }
     },
     "evidence": {
       "type": "object",
@@ -123,7 +184,8 @@
         "resolverContext": {"type": ["object", "null"]},
         "variant": {"type": ["string", "null"]},
         "properties": {"type": "object"},
-        "codeMapping": {"type": ["object", "null"]}
+        "codeMapping": {"type": ["object", "null"]},
+        "workingFileInstance": {"$ref": "#/$defs/workingFileInstanceEvidence"}
       }
     },
     "sentinel": {
