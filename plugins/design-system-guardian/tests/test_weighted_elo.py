@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import ast
-import hashlib
 import io
 import json
 import tempfile
@@ -48,27 +46,26 @@ class WeightedEloContractTest(unittest.TestCase):
         self.assertEqual(_bounded_score(1950, 200), 2000)
         self.assertEqual(_bounded_score(30, -200), 1)
 
-    def test_public_suite_binds_immutable_executable_case_ast(self) -> None:
+    def test_public_suite_binds_immutable_executable_modules(self) -> None:
         from guardian_core.canonical import sha256_digest
-        from guardian_core.elo import _public_suite
+        from guardian_core.elo import _public_suite, _worker_digest
 
         suite, by_id = _public_suite()
-        source = (ROOT / "benchmarks" / "elo_cases.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        digests = {
-            node.name: hashlib.sha256(
-                ast.dump(node, annotate_fields=True, include_attributes=False).encode("utf-8")
-            ).hexdigest()
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef) and node.name.startswith("case_")
-        }
         self.assertTrue(by_id)
+        modules = {item["moduleId"]: item for item in suite["caseModules"]}
+        for module in modules.values():
+            self.assertEqual(
+                sha256_digest((ROOT / module["path"]).read_bytes()),
+                module["moduleDigest"],
+            )
+            self.assertEqual(module["workerDigest"], _worker_digest())
         for item in suite["achievements"]:
-            self.assertEqual(item["caseDigest"], digests[item["caseFunction"]])
+            self.assertIn(item["caseModuleId"], modules)
+            self.assertEqual(item["workerDigest"], modules[item["caseModuleId"]]["workerDigest"])
         current = json.loads((ROOT / "benchmarks" / "current-score.json").read_text("utf-8"))
+        self.assertEqual(current["schemaVersion"], 3)
         self.assertEqual(current["suiteSnapshot"], suite)
         self.assertEqual(current["suiteDigest"], sha256_digest(suite))
-
     def test_evolution_schemas_are_strict_v2(self) -> None:
         root = ROOT / "schemas" / "evolution"
         expected = {"elo-benchmark-result.schema.json", "elo-ledger-entry.schema.json"}

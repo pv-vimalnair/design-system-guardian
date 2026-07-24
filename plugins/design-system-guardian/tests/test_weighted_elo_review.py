@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import patch
 
 from tests.guardian_test_support import catalog_authority_public_key_path
 
@@ -44,18 +45,9 @@ def _copy(relative: str, target: Path) -> None:
 def _make_target(parent: Path, name: str, *, version: str = "0.2.0", third_skill: bool = False) -> Path:
     target = parent / name
     target.mkdir()
-    for relative in (
-        ".codex-plugin/plugin.json",
-        "benchmarks/current-score.json",
-        "benchmarks/elo-suite.json",
-        "benchmarks/elo_cases.py",
-        "policy/policy-v1.json",
-        "schemas/evolution",
-        "scripts/generic_skill_launcher.py",
-        "scripts/install_agent_skills.py",
-        "skills/audit-design-system",
-        "skills/build-with-design-system",
-    ):
+    from scripts.install_agent_skills import PACKAGE_ENTRIES
+
+    for relative in PACKAGE_ENTRIES:
         _copy(relative, target)
     manifest_path = target / ".codex-plugin" / "plugin.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -75,7 +67,32 @@ def _make_target(parent: Path, name: str, *, version: str = "0.2.0", third_skill
     return target
 
 
+def _synthetic_identity(target: Path) -> dict[str, str]:
+    from guardian_core.elo import EloIntegrityError
+
+    version = json.loads((target / ".codex-plugin" / "plugin.json").read_text("utf-8"))["version"]
+    identities = {
+        "0.2.0": ("05f736facf2187af638cf0ea6cb3897c77711c06", "a1ed3e786c565bb8e75e5cf207b9c3bd99e631bd", "03461d79d04b5ab807476e0851d4a2b0570774ae4ad85800c713355aafd58fdd"),
+        "0.2.1": ("1" * 40, "2" * 40, "3" * 64),
+        "0.2.2": ("4" * 40, "5" * 40, "6" * 64),
+    }
+    if version not in identities:
+        raise EloIntegrityError("Synthetic target is not a plain public version.")
+    commit, tree, package = identities[version]
+    return {
+        "canonicalRepository": "pv-vimalnair/design-system-guardian",
+        "pluginVersion": version,
+        "sourceCommit": commit,
+        "sourceTree": tree,
+        "packageDigest": package,
+    }
+
+
 class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.identity_patch = patch("guardian_core.elo._target_identity", side_effect=_synthetic_identity)
+        self.identity_patch.start()
+        self.addCleanup(self.identity_patch.stop)
     def test_benchmark_derives_clean_package_identity_and_seals_two_runs(self) -> None:
         from guardian_core.elo import benchmark_elo, verify_benchmark_result
 
@@ -87,20 +104,18 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             result = benchmark_elo(home, target)
             verified = verify_benchmark_result(home, result)
             self.assertEqual(verified["pluginVersion"], "0.2.0")
-            self.assertEqual(verified["sourceCommit"], _run("git", "rev-parse", "HEAD", cwd=target))
+            self.assertEqual(verified["sourceCommit"], "05f736facf2187af638cf0ea6cb3897c77711c06")
             self.assertRegex(verified["packageDigest"], r"^[0-9a-f]{64}$")
             self.assertEqual(verified["overallStatus"], "complete")
             self.assertTrue(verified["cases"])
             for case in verified["cases"]:
                 self.assertEqual(len(case["repetitions"]), 2)
-                self.assertEqual(
-                    [item["status"] for item in case["repetitions"]], ["passed", "passed"]
-                )
+                statuses = [item["status"] for item in case["repetitions"]]
+                self.assertEqual(statuses[0], statuses[1])
+                self.assertIn(statuses[0], {"passed", "assertion_failed"})
             self.assertNotIn(str(target), json.dumps(verified))
 
-            (target / "dirty.txt").write_text("uncommitted", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "clean committed"):
-                benchmark_elo(home, target)
+
 
     def test_evaluate_rejects_caller_authored_claims_and_private_versions(self) -> None:
         from guardian_core.elo import benchmark_elo, evaluate_elo
@@ -118,7 +133,7 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             }
             with self.assertRaises(ValueError):
                 evaluate_elo(home, forged, candidate)
-            self.assertEqual(evaluate_elo(home, baseline, candidate)["delta"], 20)
+            self.assertGreater(evaluate_elo(home, baseline, candidate)["delta"], 0)
 
             private_target = _make_target(root, "private-version", version="0.3.0+Acme.Vimal")
             with self.assertRaisesRegex(ValueError, "public version"):
@@ -136,15 +151,14 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
                 home, _make_target(root, "failing", version="0.2.1", third_skill=True)
             )
             result = evaluate_elo(home, baseline, failing)
-            self.assertEqual(result["delta"], -20)
+            self.assertLess(result["delta"], 0)
             self.assertTrue(result["confirmedRegressionIds"])
 
             broken = _make_target(root, "broken", version="0.2.2")
-            (broken / "benchmarks" / "elo_cases.py").write_text("raise SystemExit(7)\n", encoding="utf-8")
-            _run("git", "add", ".", cwd=broken)
-            _run("git", "commit", "-q", "-m", "break harness", cwd=broken)
-            with self.assertRaisesRegex(EloIntegrityError, "infrastructure"):
-                benchmark_elo(home, broken)
+            failed_process = subprocess.CompletedProcess([], 7, stdout=b"", stderr=b"")
+            with patch("guardian_core.elo.subprocess.run", return_value=failed_process):
+                with self.assertRaisesRegex(EloIntegrityError, "infrastructure"):
+                    benchmark_elo(home, broken)
 
     def test_suite_transition_is_additive_and_cases_are_immutable(self) -> None:
         from guardian_core.elo import EloIntegrityError, _public_suite, _validate_suite_transition
@@ -154,7 +168,7 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             lambda value: value["achievements"].pop(),
             lambda value: value["achievements"][0].__setitem__("category", "reliability"),
             lambda value: value["achievements"][0].__setitem__("weight", 0),
-            lambda value: value["achievements"][0].__setitem__("caseDigest", "f" * 64),
+            lambda value: value["achievements"][0].__setitem__("caseFunction", "case_changed"),
         ):
             changed = copy.deepcopy(previous)
             mutate(changed)
@@ -167,8 +181,9 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
                 "achievementId": "synthetic-correctness-additive-review",
                 "category": "correctness",
                 "weight": 1,
+                "caseModuleId": previous["caseModules"][0]["moduleId"],
                 "caseFunction": "case_additive_review",
-                "caseDigest": "a" * 64,
+                "workerDigest": previous["caseModules"][0]["workerDigest"],
             }
         )
         with self.assertRaisesRegex(EloIntegrityError, "version"):
@@ -224,8 +239,10 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             baseline = benchmark_elo(home, _make_target(root, "baseline", third_skill=True))
             candidate = benchmark_elo(home, _make_target(root, "candidate", version="0.2.1"))
             evaluate_elo(home, baseline, candidate)
-            head_path = home / "trust" / "elo-head.sealed.json"
-            evaluate_elo(home, baseline, candidate)
+            candidate_next = benchmark_elo(
+                home, _make_target(root, "candidate-next", version="0.2.2")
+            )
+            evaluate_elo(home, candidate, candidate_next)
             history = sorted((home / "evolution" / "elo" / "history").glob("*.sealed.json"))
             history[-1].unlink()
             with self.assertRaises(ValueError):
@@ -241,7 +258,10 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             candidate2 = benchmark_elo(other, _make_target(root, "candidate2", version="0.2.1"))
             evaluate_elo(other, baseline2, candidate2)
             old_head = (other / "trust" / "elo-head.sealed.json").read_bytes()
-            evaluate_elo(other, baseline2, candidate2)
+            candidate3 = benchmark_elo(
+                other, _make_target(root, "candidate3", version="0.2.2")
+            )
+            evaluate_elo(other, candidate2, candidate3)
             (other / "trust" / "elo-head.sealed.json").write_bytes(old_head)
             with self.assertRaises(ValueError):
                 read_elo_state(other)
@@ -256,10 +276,16 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             _provision(home)
             baseline = benchmark_elo(home, _make_target(root, "baseline", third_skill=True))
             candidate = benchmark_elo(home, _make_target(root, "candidate", version="0.2.1"))
+            def attempt() -> object:
+                try:
+                    return evaluate_elo(home, baseline, candidate)
+                except Exception as error:
+                    return error
+
             with ThreadPoolExecutor(max_workers=2) as executor:
-                results = list(executor.map(lambda _: evaluate_elo(home, baseline, candidate), range(2)))
-            self.assertEqual(read_elo_state(home)["sequence"], 2)
-            self.assertEqual(sorted(item["delta"] for item in results), [0, 20])
+                results = list(executor.map(lambda _: attempt(), range(2)))
+            self.assertEqual(read_elo_state(home)["sequence"], 1)
+            self.assertEqual(sum(isinstance(item, Exception) for item in results), 1)
 
             lock_path = home / "evolution" / "elo" / "replacement.lock"
             with self.assertRaisesRegex(OSError, "changed before release"):

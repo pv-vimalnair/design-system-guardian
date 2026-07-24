@@ -1,46 +1,159 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://design-system-guardian.local/schemas/evolution/elo-benchmark-result.schema.json",
-  "title": "Authority-sealed executable Guardian Elo benchmark result",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "model", "resultAuthority", "overallStatus", "suiteDigest", "policyDigest", "runtimeDigest", "conditionDigest", "pluginName", "pluginVersion", "sourceCommit", "packageDigest", "cases", "authoritySeal"],
-  "properties": {
-    "schemaVersion": {"const": 2},
-    "model": {"const": "guardian-weighted-elo-v1"},
-    "resultAuthority": {"const": "local-guardian-v1"},
-    "overallStatus": {"const": "complete"},
-    "suiteDigest": {"$ref": "#/$defs/digest"},
-    "policyDigest": {"const": "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f"},
-    "runtimeDigest": {"$ref": "#/$defs/digest"},
-    "conditionDigest": {"$ref": "#/$defs/digest"},
-    "pluginName": {"const": "design-system-guardian"},
-    "pluginVersion": {"type": "string", "maxLength": 31, "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
-    "sourceCommit": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
-    "packageDigest": {"$ref": "#/$defs/digest"},
-    "cases": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/caseResult"}},
-    "authoritySeal": {"$ref": "#/$defs/digest"}
-  },
-  "$defs": {
-    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "achievementId": {"type": "string", "maxLength": 127, "pattern": "^synthetic-[a-z0-9]+(?:-[a-z0-9]+)*$"},
-    "caseResult": {
-      "type": "object", "additionalProperties": false,
-      "required": ["achievementId", "caseDigest", "repetitions"],
-      "properties": {
-        "achievementId": {"$ref": "#/$defs/achievementId"},
-        "caseDigest": {"$ref": "#/$defs/digest"},
-        "repetitions": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/repetition"}}
-      }
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://design-system-guardian.local/schemas/evolution/elo-benchmark-result.schema.json",
+    "title": "Authority-sealed executable Guardian Elo benchmark result",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schemaVersion",
+        "model",
+        "resultAuthority",
+        "overallStatus",
+        "suiteDigest",
+        "policyDigest",
+        "runtimeDigest",
+        "conditionDigest",
+        "pluginName",
+        "pluginVersion",
+        "canonicalRepository",
+        "sourceCommit",
+        "sourceTree",
+        "packageDigest",
+        "cases",
+        "authoritySeal"
+    ],
+    "properties": {
+        "schemaVersion": {
+            "const": 2
+        },
+        "model": {
+            "const": "guardian-weighted-elo-v1"
+        },
+        "resultAuthority": {
+            "const": "local-guardian-v1"
+        },
+        "overallStatus": {
+            "const": "complete"
+        },
+        "suiteDigest": {
+            "$ref": "#/$defs/digest"
+        },
+        "policyDigest": {
+            "const": "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f"
+        },
+        "runtimeDigest": {
+            "$ref": "#/$defs/digest"
+        },
+        "conditionDigest": {
+            "$ref": "#/$defs/digest"
+        },
+        "pluginName": {
+            "const": "design-system-guardian"
+        },
+        "pluginVersion": {
+            "type": "string",
+            "maxLength": 31,
+            "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "sourceCommit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+        },
+        "packageDigest": {
+            "$ref": "#/$defs/digest"
+        },
+        "cases": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+                "$ref": "#/$defs/caseResult"
+            }
+        },
+        "authoritySeal": {
+            "$ref": "#/$defs/digest"
+        },
+        "canonicalRepository": {
+            "const": "pv-vimalnair/design-system-guardian"
+        },
+        "sourceTree": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+        }
     },
-    "repetition": {
-      "type": "object", "additionalProperties": false,
-      "required": ["repetition", "status", "evidenceDigest"],
-      "properties": {
-        "repetition": {"type": "integer", "minimum": 1, "maximum": 2},
-        "status": {"enum": ["passed", "assertion_failed"]},
-        "evidenceDigest": {"$ref": "#/$defs/digest"}
-      }
+    "$defs": {
+        "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+        },
+        "achievementId": {
+            "type": "string",
+            "maxLength": 127,
+            "pattern": "^synthetic-[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "caseResult": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "achievementId",
+                "caseModuleId",
+                "moduleDigest",
+                "caseFunction",
+                "workerDigest",
+                "repetitions"
+            ],
+            "properties": {
+                "achievementId": {
+                    "$ref": "#/$defs/achievementId"
+                },
+                "repetitions": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                        "$ref": "#/$defs/repetition"
+                    }
+                },
+                "caseModuleId": {
+                    "type": "string",
+                    "pattern": "^guardian-public-cases-v[1-9][0-9]*$"
+                },
+                "moduleDigest": {
+                    "$ref": "#/$defs/digest"
+                },
+                "caseFunction": {
+                    "type": "string",
+                    "pattern": "^case_[a-z0-9]+(?:_[a-z0-9]+)*$"
+                },
+                "workerDigest": {
+                    "$ref": "#/$defs/digest"
+                }
+            }
+        },
+        "repetition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "repetition",
+                "status",
+                "evidenceDigest"
+            ],
+            "properties": {
+                "repetition": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2
+                },
+                "status": {
+                    "enum": [
+                        "passed",
+                        "assertion_failed"
+                    ]
+                },
+                "evidenceDigest": {
+                    "$ref": "#/$defs/digest"
+                }
+            }
+        }
     }
-  }
 }
