@@ -714,8 +714,14 @@ def _github_request(suffix: str) -> dict[str, Any]:
 def _remote_blob(value: dict[str, Any]) -> bytes:
     if value.get("encoding") != "base64" or not isinstance(value.get("content"), str):
         raise PublicReleaseError("Canonical GitHub blob evidence has the wrong shape.")
+    encoded = value["content"]
+    if re.search(r"[^A-Za-z0-9+/=\r\n]", encoded):
+        raise PublicReleaseError("Canonical GitHub blob evidence is invalid.")
+    compact = encoded.replace("\r\n", "").replace("\n", "")
+    if "\r" in compact:
+        raise PublicReleaseError("Canonical GitHub blob evidence is invalid.")
     try:
-        return base64.b64decode(value["content"], validate=True)
+        return base64.b64decode(compact, validate=True)
     except (ValueError, TypeError) as error:
         raise PublicReleaseError("Canonical GitHub blob evidence is invalid.") from error
 

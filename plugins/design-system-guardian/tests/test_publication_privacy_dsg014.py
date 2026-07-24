@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import subprocess
@@ -472,6 +473,19 @@ class PublicationPrivacyTests(unittest.TestCase):
             self.checker.validate_prior_suite_transition(current, weakened)
         self.assertTrue(self.checker.bootstrap_without_prior_suite_allowed(BOOTSTRAP_COMMIT))
         self.assertFalse(self.checker.bootstrap_without_prior_suite_allowed("1" * 40))
+
+    def test_remote_blob_accepts_github_line_wrapped_base64_only(self) -> None:
+        payload = b"guardian-prior-suite-evidence"
+        encoded = base64.b64encode(payload).decode("ascii")
+        wrapped = "\n".join((encoded[:12], encoded[12:]))
+        self.assertEqual(
+            self.checker._remote_blob({"encoding": "base64", "content": wrapped}),
+            payload,
+        )
+        with self.assertRaises(self.checker.PublicReleaseError):
+            self.checker._remote_blob(
+                {"encoding": "base64", "content": encoded[:12] + " " + encoded[12:]}
+            )
 
     def test_real_policy_and_two_skill_surface_remain_unchanged(self) -> None:
         from guardian_core.canonical import sha256_digest
