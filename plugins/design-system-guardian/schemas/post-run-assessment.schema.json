@@ -29,7 +29,7 @@
       "additionalProperties": false,
       "required": ["run", "designSystem", "uxAccessibility", "coverage", "enforcementAuthority"],
       "properties": {
-        "run": {"enum": ["passed", "violation", "incomplete", "source_blocked", "invalid"]},
+        "run": {"enum": ["passed", "violation", "invalid", "source_blocked", "unsupported"]},
         "designSystem": {"enum": ["allowed", "invalid", "stale", "source_unavailable", "source_incomplete", "unsupported", "not_assessed", "conflict"]},
         "uxAccessibility": {"enum": ["allowed", "conflict", "not_assessed"]},
         "coverage": {"enum": ["allowed", "unsupported", "not_assessed"]},

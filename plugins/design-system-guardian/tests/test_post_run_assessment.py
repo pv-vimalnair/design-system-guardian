@@ -141,7 +141,7 @@ class PostRunAssessmentTest(unittest.TestCase):
                     "analysisInputs": HEX_E,
                 },
                 "statuses": {
-                    "run": "incomplete",
+                    "run": "invalid",
                     "designSystem": "invalid",
                     "uxAccessibility": "not_assessed",
                     "coverage": "unsupported",
@@ -230,6 +230,45 @@ class PostRunAssessmentTest(unittest.TestCase):
                 run_manifest_digest="not-a-digest",
                 runtime_version="0.3.0",
             )
+
+    def test_rejects_matching_malformed_run_and_profile_identities(self) -> None:
+        for field, malformed in (("runId", "bad/run"), ("profileId", "Bad_Profile")):
+            with self.subTest(field=field):
+                audit = audit_result()
+                manifest = run_manifest()
+                audit[field] = malformed
+                manifest[field] = malformed
+                with self.assertRaises(PostRunAssessmentIntegrityError):
+                    build_post_run_assessment(
+                        audit_result=audit,
+                        run_manifest=manifest,
+                        run_manifest_digest=HEX_A,
+                        runtime_version="0.3.0",
+                    )
+
+    def test_projects_exact_public_exit_code_statuses(self) -> None:
+        expected = {
+            0: "passed",
+            1: "violation",
+            2: "invalid",
+            3: "source_blocked",
+            4: "unsupported",
+        }
+        for exit_code, status in expected.items():
+            with self.subTest(exit_code=exit_code):
+                audit = audit_result()
+                manifest = run_manifest()
+                ready = exit_code == 0
+                audit["productionReady"] = ready
+                manifest["productionReady"] = ready
+                manifest["exitCode"] = exit_code
+                assessment = build_post_run_assessment(
+                    audit_result=audit,
+                    run_manifest=manifest,
+                    run_manifest_digest=HEX_A,
+                    runtime_version="0.3.0",
+                )
+                self.assertEqual(assessment["statuses"]["run"], status)
 
     def test_runtime_and_lifecycle_enums_include_supported_artifacts(self) -> None:
         from guardian_core.run_artifacts import _ARTIFACT_TYPES

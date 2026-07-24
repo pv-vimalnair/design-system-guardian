@@ -16,6 +16,8 @@ ALLOWED_ATTRIBUTIONS = {
 }
 
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_PROFILE_ID = re.compile(r"^[a-z][a-z0-9-]{0,62}$")
 _RUNTIME_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _IDENTITY_FIELDS = ("runId", "profileId", "snapshotId", "policyDigest")
 _DESIGN_STATUSES = {
@@ -46,9 +48,9 @@ _RESOLUTION_STATUSES = (
 _RUN_STATUSES = {
     0: "passed",
     1: "violation",
-    2: "incomplete",
+    2: "invalid",
     3: "source_blocked",
-    4: "invalid",
+    4: "unsupported",
 }
 _RESOLUTION_REASONS = {
     "missing": ("resolution_missing", "design_system"),
@@ -109,6 +111,10 @@ def build_post_run_assessment(
             raise PostRunAssessmentIntegrityError(f"Final evidence {field} values differ.")
         if not isinstance(audit.get(field), str) or not audit[field]:
             raise PostRunAssessmentIntegrityError(f"Final evidence {field} must be non-empty text.")
+    if not _RUN_ID.fullmatch(audit["runId"]):
+        raise PostRunAssessmentIntegrityError("Final evidence runId is malformed.")
+    if not _PROFILE_ID.fullmatch(audit["profileId"]):
+        raise PostRunAssessmentIntegrityError("Final evidence profileId is malformed.")
     snapshot_id = _digest(audit["snapshotId"], "snapshotId")
     policy_digest = _digest(audit["policyDigest"], "policyDigest")
     manifest_digest = _digest(run_manifest_digest, "run_manifest_digest")
