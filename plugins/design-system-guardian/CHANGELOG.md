@@ -2,6 +2,13 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.2 - 2026-07-24 - Watched-root installer compatibility
+
+### Fixed
+
+- Stages and backs up generic Agent Skills beside the host's watched skill root, preventing Windows skill watchers from locking transient `SKILL.md` files during atomic installation.
+- Preserves the same journaled rollback, package digest, Python digest, policy digest, and modified-install refusal guarantees.
+
 ## 0.3.1 - 2026-07-24 - Duplicate working-file provenance
 
 ### Added
