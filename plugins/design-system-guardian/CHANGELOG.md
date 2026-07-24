@@ -2,6 +2,18 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.1 - 2026-07-24 - Duplicate working-file provenance
+
+### Added
+
+- Added exact signed bindings for duplicated Figma working-file instances that remain linked to approved published main components.
+- Added strict `figmaInstance` resolution evidence covering the pinned file version and exact node locator.
+
+### Security
+
+- Detached instances, cloned or local component definitions, modified overrides, and visual/name similarity remain invalid and never create a missing sentinel.
+- The immutable policy digest, two-skill contract, and local-only company data boundary are unchanged.
+
 ## 0.3.0 - 2026-07-24 - Evidence-driven evolution candidate
 
 ### Added

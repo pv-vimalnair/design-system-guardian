@@ -1,6 +1,6 @@
 {
   "name": "design-system-guardian",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
   "keywords": ["design-system", "figma", "flutter", "audit", "ux"],
   "homepage": "https://github.com/pv-vimalnair/design-system-guardian#readme",

@@ -198,7 +198,11 @@ def _validate_source_cut(profile: dict[str, Any], source_cut: Any) -> dict[str, 
     figma_files = source_cut.get("figmaFiles")
     if not isinstance(figma_files, list):
         raise SnapshotValidationError("sourceCut.figmaFiles must be an array.")
-    allowed = {item["fileKey"] for item in profile["figma"]["allowlistedLibraryFiles"]}
+    allowed = {
+        item["fileKey"]
+        for field in ("allowlistedLibraryFiles", "allowlistedWorkingFiles")
+        for item in profile["figma"].get(field, [])
+    }
     seen: set[str] = set()
     normalized_files: list[dict[str, str]] = []
     for item in figma_files:
@@ -206,13 +210,17 @@ def _validate_source_cut(profile: dict[str, Any], source_cut: Any) -> dict[str, 
             raise SnapshotValidationError("Each source-cut Figma file needs exact fileKey and version fields.")
         file_key, version = item.get("fileKey"), item.get("version")
         if file_key not in allowed or file_key in seen:
-            raise SnapshotValidationError("Source-cut Figma files must be unique and allowlisted.")
+            raise SnapshotValidationError(
+                "Source-cut Figma files must be unique and explicitly authorized by the profile."
+            )
         if not isinstance(version, str) or not version:
             raise SnapshotValidationError("Source-cut Figma versions must be non-empty exact strings.")
         seen.add(file_key)
         normalized_files.append({"fileKey": file_key, "version": version})
     if seen != allowed:
-        raise SnapshotValidationError("A complete source cut must version every allowlisted Figma library file.")
+        raise SnapshotValidationError(
+            "A complete source cut must version every profile-authorized library and working file."
+        )
     digest = source_cut.get("codeConnectParseDigest")
     if digest is not None and (not isinstance(digest, str) or not _HEX_64.fullmatch(digest)):
         raise SnapshotValidationError("codeConnectParseDigest must be null or a lowercase SHA-256 digest.")
@@ -897,11 +905,19 @@ def load_snapshot(home: Path, profile_id: str, snapshot_id: str | None = None) -
 def validate_registry(
     profile: dict[str, Any], source_cut: dict[str, Any], registry_document: Any
 ) -> dict[str, list[dict[str, Any]]]:
-    """Validate separate component and icon registries with exact published identities."""
+    """Validate published identities and exact remote instances in signed working files."""
 
     if not isinstance(registry_document, dict) or set(registry_document) != {"components", "icons"}:
         raise SnapshotValidationError("registry must contain separate components and icons arrays.")
-    allowed_versions = {item["fileKey"]: item["version"] for item in source_cut["figmaFiles"]}
+    source_versions = {item["fileKey"]: item["version"] for item in source_cut["figmaFiles"]}
+    library_keys = {item["fileKey"] for item in profile["figma"]["allowlistedLibraryFiles"]}
+    allowed_versions = {file_key: source_versions[file_key] for file_key in library_keys}
+    working_keys = {
+        item["fileKey"] for item in profile["figma"].get("allowlistedWorkingFiles", [])
+    }
+    working_versions = {file_key: source_versions[file_key] for file_key in working_keys}
+    used_working_files: set[str] = set()
+    working_locator_owners: dict[tuple[str, str, str], tuple[str, str]] = {}
     normalized: dict[str, list[dict[str, Any]]] = {"components": [], "icons": []}
     for plural, kind in (("components", "component"), ("icons", "icon")):
         items = registry_document[plural]
@@ -910,9 +926,21 @@ def validate_registry(
         seen: set[str] = set()
         for item in items:
             normalized[plural].append(
-                _validate_asset(item, kind=kind, allowed_versions=allowed_versions, seen=seen)
+                _validate_asset(
+                    item,
+                    kind=kind,
+                    allowed_versions=allowed_versions,
+                    working_versions=working_versions,
+                    working_locator_owners=working_locator_owners,
+                    used_working_files=used_working_files,
+                    seen=seen,
+                )
             )
         normalized[plural].sort(key=lambda item: item["identity"])
+    if used_working_files != set(working_versions):
+        raise SnapshotValidationError(
+            "Every non-library Figma file in the source cut must have an exact working-instance binding."
+        )
     return normalized
 
 
@@ -921,10 +949,13 @@ def _validate_asset(
     *,
     kind: str,
     allowed_versions: dict[str, str],
+    working_versions: dict[str, str],
+    working_locator_owners: dict[tuple[str, str, str], tuple[str, str]],
+    used_working_files: set[str],
     seen: set[str],
 ) -> dict[str, Any]:
     keys = {"identity", "status", "sourceVersion", "figma", "variants", "properties", "codeMappings"}
-    if not isinstance(item, dict) or set(item) != keys:
+    if not isinstance(item, dict) or set(item) - (keys | {"workingFileInstances"}) or not keys.issubset(item):
         raise SnapshotValidationError(f"Every {kind} record must contain only the canonical registry fields.")
     identity = item.get("identity")
     if not isinstance(identity, str) or not identity or identity in seen:
@@ -989,7 +1020,7 @@ def _validate_asset(
         if not isinstance(mapping.get("sourceDigest"), str) or not _HEX_64.fullmatch(mapping["sourceDigest"]):
             raise SnapshotValidationError(f"{kind} {identity!r} code mapping needs an exact source digest.")
         normalized_mappings.append(copy.deepcopy(mapping))
-    return {
+    normalized = {
         "kind": kind,
         "identity": identity,
         "status": status,
@@ -1008,3 +1039,91 @@ def _validate_asset(
             "sourceVersion": source_version,
         },
     }
+    if "workingFileInstances" in item:
+        normalized["workingFileInstances"] = _validate_working_file_instances(
+            item["workingFileInstances"],
+            kind=kind,
+            identity=identity,
+            canonical_asset_key=figma["assetKey"],
+            approved_variants=variants,
+            approved_properties=properties,
+            working_versions=working_versions,
+            working_locator_owners=working_locator_owners,
+            used_working_files=used_working_files,
+        )
+    return normalized
+
+
+def _validate_working_file_instances(
+    value: Any,
+    *,
+    kind: str,
+    identity: str,
+    canonical_asset_key: str,
+    approved_variants: list[str],
+    approved_properties: dict[str, list[str]],
+    working_versions: dict[str, str],
+    working_locator_owners: dict[tuple[str, str, str], tuple[str, str]],
+    used_working_files: set[str],
+) -> list[dict[str, Any]]:
+    fields = {
+        "fileKey", "nodeId", "sourceVersion", "nodeType", "canonicalAssetKey",
+        "remote", "variant", "properties", "unapprovedOverrideFields",
+    }
+    if not isinstance(value, list) or not value:
+        raise SnapshotValidationError(
+            f"{kind} {identity!r} workingFileInstances must be a non-empty array when supplied."
+        )
+    normalized: list[dict[str, Any]] = []
+    for binding in value:
+        if not isinstance(binding, dict) or set(binding) != fields:
+            raise SnapshotValidationError(
+                f"{kind} {identity!r} has malformed working-instance evidence."
+            )
+        file_key = binding.get("fileKey")
+        node_id = binding.get("nodeId")
+        source_version = binding.get("sourceVersion")
+        if any(not isinstance(item, str) or not item for item in (file_key, node_id, source_version)):
+            raise SnapshotValidationError("Working-instance locators must be exact non-empty strings.")
+        if file_key not in working_versions or source_version != working_versions[file_key]:
+            raise SnapshotValidationError(
+                "Working-instance evidence must use a pinned non-library Figma file version."
+            )
+        if (
+            binding.get("nodeType") != "INSTANCE"
+            or binding.get("remote") is not True
+            or binding.get("canonicalAssetKey") != canonical_asset_key
+        ):
+            raise SnapshotValidationError(
+                "Working-instance evidence must retain the exact approved remote main-component identity."
+            )
+        if binding.get("unapprovedOverrideFields") != []:
+            raise SnapshotValidationError(
+                "Working instances with unapproved visual overrides cannot be approved."
+            )
+        variant = binding.get("variant")
+        if approved_variants:
+            if not isinstance(variant, str) or variant not in approved_variants:
+                raise SnapshotValidationError("Working-instance variant is not exactly approved.")
+        elif variant is not None:
+            raise SnapshotValidationError("Working-instance variant is not registered.")
+        selected_properties = binding.get("properties")
+        if not isinstance(selected_properties, dict) or set(selected_properties) != set(approved_properties):
+            raise SnapshotValidationError(
+                "Working-instance properties must select every registered property exactly."
+            )
+        for name, selected in selected_properties.items():
+            if not isinstance(selected, str) or selected not in approved_properties[name]:
+                raise SnapshotValidationError("Working-instance property value is not exactly approved.")
+        locator = (file_key, node_id, source_version)
+        if locator in working_locator_owners:
+            raise SnapshotValidationError(
+                "One working-instance locator cannot resolve to multiple or duplicate identities."
+            )
+        working_locator_owners[locator] = (kind, identity)
+        used_working_files.add(file_key)
+        normalized.append(copy.deepcopy(binding))
+    return sorted(
+        normalized,
+        key=lambda item: (item["fileKey"], item["nodeId"], item["sourceVersion"]),
+    )

@@ -9,7 +9,7 @@
       "name": "design-system-guardian",
       "source": "./plugins/design-system-guardian",
       "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "author": {
         "name": "Pv Vimal Nair"
       },

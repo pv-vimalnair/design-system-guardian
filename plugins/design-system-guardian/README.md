@@ -33,6 +33,12 @@ That root holds the immutable policy anchor, pinned public authorities, isolated
 
 The existing Figma connection is reused for discovery and refresh. Guardian does not add another Figma credential store or claim that Figma search alone proves approval.
 
+### Duplicate working files
+
+A duplicated Figma working file is supported only when an `INSTANCE` remains linked to the exact approved published main component. The selected local profile must explicitly authorize the working file, and the catalog authority must pin its version and sign the exact instance locator, canonical component key, variant, properties, and empty unapproved-override set into the profile snapshot. `guardian resolve` then accepts the exact `figmaInstance` locator while returning the canonical identity.
+
+Detached instances, cloned component definitions, local components, modified overrides, names, screenshots, hashes, and visual similarity remain invalid. They never become `missing`, because the canonical asset exists and unproven lineage is not absence. A snapshot containing any working-file binding is deliberately fail-closed for every component and icon selection: each requires an exact bound locator. Use a canonical-only snapshot with no working-file authority for tasks that are not operating on a duplicate.
+
 ## Portable CLI
 
 The portable CLI implementation is `scripts/guardian.py`. A protected gate must use an authority-bound absolute interpreter or signed standalone executable. Private-pilot diagnostics may use a host-supplied absolute Python executable after recording its path and SHA-256, but those results can never confer production authority. The POSIX and Windows convenience wrappers deliberately exit `4` instead of discovering Python from `PATH`.
@@ -73,14 +79,14 @@ Plugin source updates use reviewed SemVer and deterministic migrations. Release 
 - A normal promotion must exceed every SemVer previously promoted on that channel. A downgrade is accepted only as a new externally signed restoration action that names an archived, previously promoted release.
 - Signed manifests, package bytes, channel pointers, and append-only history are stored under `~/.design-system-guardian/releases/`, not in the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned development install; it does not create a canary or stable release. In 0.3.0 the provider is an unconditional compile-time stub: configuration cannot unblock it, and every public trusted channel read, promotion, and restoration fails closed. A future reviewed code release must integrate and invoke one fixed external/WORM provider's authenticated latest-head, checkpoint, and monotonic compare-and-swap operations before trusted releases can operate.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned development install; it does not create a canary or stable release. In 0.3.1 the provider is an unconditional compile-time stub: configuration cannot unblock it, and every public trusted channel read, promotion, and restoration fails closed. A future reviewed code release must integrate and invoke one fixed external/WORM provider's authenticated latest-head, checkpoint, and monotonic compare-and-swap operations before trusted releases can operate.
 
 
 See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md). No real stable promotion is implied by a host manifest version.
 
 ## Flutter pilot
 
-Version 0.3.0 is Flutter-first. `guardian audit` owns analyzer execution: it derives a run-bound allowlist, hashes every relevant Dart source and analyzer input, analyzes an external staging copy, requires one config-bound attestation per compilation unit, scans suppression attempts, and seals the resulting evidence. Caller-authored analyzer results are not audit inputs.
+Version 0.3.1 is Flutter-first. `guardian audit` owns analyzer execution: it derives a run-bound allowlist, hashes every relevant Dart source and analyzer input, analyzes an external staging copy, requires one config-bound attestation per compilation unit, scans suppression attempts, and seals the resulting evidence. Caller-authored analyzer results are not audit inputs.
 
 The adapter uses Dart's supported analyzer-plugin structure and emits exact diagnostics for unapproved visual identities and suppression attempts. The selected profile must pin the full Dart SDK artifact for the current platform plus exact `flutter` and other package-config dependencies. Ambient `PATH` is discovery only: Guardian verifies and stages the bound SDK, runs it with a minimal environment, verifies and stages the complete Dart package-config closure, and rechecks both evidence sets during finalization. Local Git identity is read directly from bounded repository metadata; Guardian never executes a `git` binary selected from `PATH`.
 

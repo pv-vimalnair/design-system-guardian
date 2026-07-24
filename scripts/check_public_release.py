@@ -53,6 +53,7 @@ IDENTIFIER_KEYS = {
     "fileKey",
     "nodeId",
     "assetKey",
+    "canonicalAssetKey",
     "snapshotId",
     "displayName",
 }

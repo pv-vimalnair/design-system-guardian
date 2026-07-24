@@ -27,6 +27,20 @@
               "name": {"type": "string"}
             }
           }
+        },
+        "allowlistedWorkingFiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fileKey"],
+            "properties": {
+              "fileKey": {"type": "string", "minLength": 1},
+              "name": {"type": "string"}
+            }
+          }
         }
       }
     },

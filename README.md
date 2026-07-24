@@ -46,9 +46,15 @@ Replaceable plugin code contains the two skills, validators, schemas, and adapte
 
 Guardian reuses the existing Figma connection for discovery and refresh. Search results alone do not prove approval, and Guardian stores no second set of Figma credentials.
 
+### Duplicate Figma working files
+
+Guardian also works in duplicated Figma working files when an `INSTANCE` still resolves to the exact approved published main component. The selected local profile explicitly authorizes the working file; refresh then pins its version and seals its exact file/node locator, remote component key, variant, properties, and override evidence in the selected profile snapshot. A resolution request may then carry that exact `figmaInstance` locator while the selected identity remains canonical.
+
+Cloned component definitions, detached instances, local components, changed overrides, names, screenshots, and visual similarity are never accepted as lineage. Figma exposes no authoritative general duplicate-origin field for those cases, so Guardian returns `invalid` instead of guessing or creating a sentinel. Company Figma data and these bindings remain local under `~/.design-system-guardian/`; none belongs in this public repository. A snapshot containing any working-file binding is deliberately fail-closed for every component and icon selection: each requires an exact bound locator. Use a canonical-only snapshot with no working-file authority for tasks that are not operating on a duplicate.
+
 ## Flutter-first support
 
-Version 0.3.0 deeply audits Flutter through Dart analyzer evidence. It detects raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Projects without a supported adapter return `unsupported`; incomplete coverage never receives a green result.
+Version 0.3.1 deeply audits Flutter through Dart analyzer evidence. It detects raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Projects without a supported adapter return `unsupported`; incomplete coverage never receives a green result.
 
 The current source has no trusted host-attested UX/accessibility evaluator, so that lane remains `not_assessed` and blocks production readiness. Inaccessible approved assets are reported as design-system gaps; Guardian does not silently change them.
 
@@ -106,6 +112,6 @@ Never commit profiles, catalog snapshots, Figma credentials, authority private k
 
 ## Versioning and license
 
-The source version is `0.3.0`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
+The source version is `0.3.1`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
 
 Licensed under the [MIT License](LICENSE).

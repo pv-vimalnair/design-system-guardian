@@ -21,7 +21,7 @@ class ProfileValidationError(ValueError):
 
 
 _PROFILE_KEYS = {"schemaVersion", "profileId", "displayName", "figma", "adapters"}
-_FIGMA_KEYS = {"allowlistedLibraryFiles"}
+_FIGMA_KEYS = {"allowlistedLibraryFiles", "allowlistedWorkingFiles"}
 _LIBRARY_KEYS = {"fileKey", "name"}
 _FLUTTER_ENABLED_KEYS = {"enabled", "platformArtifacts", "requiredPackages"}
 
@@ -52,7 +52,7 @@ def validate_profile(document: Any) -> dict[str, Any]:
     figma = document.get("figma")
     if not isinstance(figma, dict):
         raise ProfileValidationError("Profile figma configuration must be an object.")
-    _exact_keys(figma, _FIGMA_KEYS, _FIGMA_KEYS, "profile.figma")
+    _exact_keys(figma, _FIGMA_KEYS, {"allowlistedLibraryFiles"}, "profile.figma")
     libraries = figma.get("allowlistedLibraryFiles")
     if not isinstance(libraries, list) or not libraries:
         raise ProfileValidationError("At least one Figma library file must be explicitly allowlisted.")
@@ -69,6 +69,32 @@ def validate_profile(document: Any) -> dict[str, Any]:
         seen.add(file_key)
         if "name" in library and not isinstance(library["name"], str):
             raise ProfileValidationError(f"Library entry {index} name must be a string.")
+    working_files = figma.get("allowlistedWorkingFiles", [])
+    if not isinstance(working_files, list) or ("allowlistedWorkingFiles" in figma and not working_files):
+        raise ProfileValidationError(
+            "allowlistedWorkingFiles must be a non-empty array when supplied."
+        )
+    for index, working_file in enumerate(working_files):
+        if not isinstance(working_file, dict):
+            raise ProfileValidationError(f"Working-file entry {index} must be an object.")
+        _exact_keys(
+            working_file,
+            _LIBRARY_KEYS,
+            {"fileKey"},
+            f"profile.figma.allowlistedWorkingFiles[{index}]",
+        )
+        file_key = working_file.get("fileKey")
+        if not isinstance(file_key, str) or not file_key.strip():
+            raise ProfileValidationError(
+                f"Working-file entry {index} needs a non-empty exact fileKey."
+            )
+        if file_key in seen:
+            raise ProfileValidationError(
+                f"Working-file Figma fileKey overlaps or duplicates profile authority: {file_key!r}."
+            )
+        seen.add(file_key)
+        if "name" in working_file and not isinstance(working_file["name"], str):
+            raise ProfileValidationError(f"Working-file entry {index} name must be a string.")
     adapters = document.get("adapters")
     if not isinstance(adapters, dict) or any(not isinstance(value, dict) for value in adapters.values()):
         raise ProfileValidationError("Profile adapters must map adapter IDs to configuration objects.")
