@@ -1,7 +1,92 @@
 {
   "achievementIds": [],
   "model": "guardian-weighted-elo-v1",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "score": 1,
-  "suiteDigest": "406b89f73c4d3906fc3a1be6c8aa26ed93c4245e387f12ff445a7c7966885cae"
+  "suiteDigest": "bef4b92af221ca0c7eac913690217d39e0053ab1ecb621a6543b15802fe06914",
+  "suiteSnapshot": {
+    "achievements": [
+      {
+        "achievementId": "synthetic-correctness-exact-identity",
+        "category": "correctness",
+        "weight": 1,
+        "caseFunction": "case_correctness_exact_identity",
+        "caseDigest": "9e857b8acfcb5b973a023930cbcf7dad17350684eede635627e23e24a3c7bf0a"
+      },
+      {
+        "achievementId": "synthetic-correctness-fail-closed",
+        "category": "correctness",
+        "weight": 1,
+        "caseFunction": "case_correctness_fail_closed",
+        "caseDigest": "e2eaa0f75adc6840c20c1512d1536dd00b2b9018e49be219ced2272da5a2b50f"
+      },
+      {
+        "achievementId": "synthetic-reliability-repeatability",
+        "category": "reliability",
+        "weight": 1,
+        "caseFunction": "case_reliability_repeatability",
+        "caseDigest": "7fcaddce592c9beb702be36fae84d5c6bd6146b2cbc2e8ab5dce16709b7e7d02"
+      },
+      {
+        "achievementId": "synthetic-reliability-tamper-detection",
+        "category": "reliability",
+        "weight": 1,
+        "caseFunction": "case_reliability_tamper_detection",
+        "caseDigest": "bcc0a5550ce94125e2c324ce64f1bb610078b3e0c7f0f467cb73852a8ec1601f"
+      },
+      {
+        "achievementId": "synthetic-coverage-supported-lanes",
+        "category": "coverage_usefulness",
+        "weight": 1,
+        "caseFunction": "case_coverage_supported_lanes",
+        "caseDigest": "97e75657bf2b708c7fb755333195abd4c71de6387ceab6a5ad47c34768c0581e"
+      },
+      {
+        "achievementId": "synthetic-coverage-useful-diagnostics",
+        "category": "coverage_usefulness",
+        "weight": 1,
+        "caseFunction": "case_coverage_useful_diagnostics",
+        "caseDigest": "236c526a197a18415a2169bbeefb0f473a0776a14b0e4cbd8578fa9910e1460d"
+      },
+      {
+        "achievementId": "synthetic-safety-privacy-boundary",
+        "category": "safety_privacy_integrity",
+        "weight": 1,
+        "caseFunction": "case_safety_privacy_boundary",
+        "caseDigest": "77f095576807cace87f1acff3ebe6f746fd567f36926fa9bc9014c8d6d721810"
+      },
+      {
+        "achievementId": "synthetic-safety-policy-integrity",
+        "category": "safety_privacy_integrity",
+        "weight": 1,
+        "caseFunction": "case_safety_policy_integrity",
+        "caseDigest": "708dbccbefc1761ea0d92146dac2f64f30be93d1242a6a138e93c66223d0055b"
+      },
+      {
+        "achievementId": "synthetic-portability-basic-host",
+        "category": "portability_usability_performance",
+        "weight": 1,
+        "caseFunction": "case_portability_basic_host",
+        "caseDigest": "3b5f5dec0ef9ca2d7c941ad6190a230a2aaa1950d7255fbbe95fed5e8d6bdffc"
+      },
+      {
+        "achievementId": "synthetic-usability-cli-contract",
+        "category": "portability_usability_performance",
+        "weight": 3,
+        "caseFunction": "case_usability_cli_contract",
+        "caseDigest": "1a54bf2e097bd7c217774fd0e4c0cbb723e6076f9aadbbc2307ea871ca4d8fad"
+      },
+      {
+        "achievementId": "synthetic-performance-bounded-runtime",
+        "category": "portability_usability_performance",
+        "weight": 4,
+        "caseFunction": "case_performance_bounded_runtime",
+        "caseDigest": "753f49f2f3c18675740949853ac6903af54a45d33462a328b7e4fa5f10eace6c"
+      }
+    ],
+    "model": "guardian-weighted-elo-v1",
+    "schemaVersion": 1,
+    "suiteId": "guardian-public-synthetic-v1",
+    "suiteVersion": 1
+  }
 }

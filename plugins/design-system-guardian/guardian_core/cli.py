@@ -11,11 +11,11 @@ from typing import Sequence
 
 from .audit import _authoritatively_resolve, evaluate_audit
 from .audit_attestation import build_analysis_attestation
-from .canonical import canonical_json_text, read_canonical_json, read_json, sha256_digest
+from .canonical import atomic_write_json, canonical_json_text, read_canonical_json, read_json, sha256_digest
 from .catalog_authority import verify_pinned_catalog_authority, verify_runtime_dependency
 from .contracts import ExitCode, ResolutionStatus
 from .dtcg import DtcgValidationError
-from .elo import evaluate_elo, read_elo_state
+from .elo import benchmark_elo, evaluate_elo, read_elo_state
 from .errors import GuardianError, PolicyIntegrityError
 from .finalize import finalize_run
 from .flutter_adapter import normalize_flutter_adapter_result
@@ -413,6 +413,14 @@ def _elo_show_command(args: argparse.Namespace) -> int:
     return int(ExitCode.PASS)
 
 
+def _elo_benchmark_command(args: argparse.Namespace) -> int:
+    result = benchmark_elo(default_guardian_home(), Path(args.target_root))
+    if args.output is not None:
+        atomic_write_json(Path(args.output), result)
+    _emit(result)
+    return int(ExitCode.PASS)
+
+
 def _elo_evaluate_command(args: argparse.Namespace) -> int:
     result = evaluate_elo(
         default_guardian_home(),
@@ -493,6 +501,10 @@ def build_parser() -> argparse.ArgumentParser:
     elo_commands = elo.add_subparsers(dest="elo_command", required=True)
     elo_show = elo_commands.add_parser("show")
     elo_show.set_defaults(handler=_elo_show_command)
+    elo_benchmark = elo_commands.add_parser("benchmark")
+    elo_benchmark.add_argument("--target-root", required=True)
+    elo_benchmark.add_argument("--output")
+    elo_benchmark.set_defaults(handler=_elo_benchmark_command)
     elo_evaluate = elo_commands.add_parser("evaluate")
     elo_evaluate.add_argument("--baseline-result", required=True)
     elo_evaluate.add_argument("--candidate-result", required=True)

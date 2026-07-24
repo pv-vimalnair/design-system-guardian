@@ -1,45 +1,46 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://design-system-guardian.local/schemas/evolution/elo-benchmark-result.schema.json",
-  "title": "Design System Guardian public synthetic Elo benchmark result",
+  "title": "Authority-sealed executable Guardian Elo benchmark result",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schemaVersion", "model", "suiteDigest", "policyDigest", "runtimeDigest",
-    "pluginVersion", "sourceCommit", "passedAchievementIds", "regressions"
-  ],
+  "required": ["schemaVersion", "model", "resultAuthority", "overallStatus", "suiteDigest", "policyDigest", "runtimeDigest", "conditionDigest", "pluginName", "pluginVersion", "sourceCommit", "packageDigest", "cases", "authoritySeal"],
   "properties": {
-    "schemaVersion": {"const": 1},
+    "schemaVersion": {"const": 2},
     "model": {"const": "guardian-weighted-elo-v1"},
+    "resultAuthority": {"const": "local-guardian-v1"},
+    "overallStatus": {"const": "complete"},
     "suiteDigest": {"$ref": "#/$defs/digest"},
     "policyDigest": {"const": "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f"},
     "runtimeDigest": {"$ref": "#/$defs/digest"},
-    "pluginVersion": {"$ref": "#/$defs/semver"},
+    "conditionDigest": {"$ref": "#/$defs/digest"},
+    "pluginName": {"const": "design-system-guardian"},
+    "pluginVersion": {"type": "string", "maxLength": 31, "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
     "sourceCommit": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
-    "passedAchievementIds": {
-      "type": "array", "uniqueItems": true,
-      "items": {"$ref": "#/$defs/achievementId"}
-    },
-    "regressions": {
-      "type": "array", "uniqueItems": true,
-      "items": {
-        "type": "object", "additionalProperties": false,
-        "required": ["achievementId", "attribution", "conditionDigest", "reproductionDigests"],
-        "properties": {
-          "achievementId": {"$ref": "#/$defs/achievementId"},
-          "attribution": {"enum": ["guardian", "external", "source", "project", "project_configuration"]},
-          "conditionDigest": {"$ref": "#/$defs/digest"},
-          "reproductionDigests": {
-            "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true,
-            "items": {"$ref": "#/$defs/digest"}
-          }
-        }
-      }
-    }
+    "packageDigest": {"$ref": "#/$defs/digest"},
+    "cases": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/caseResult"}},
+    "authoritySeal": {"$ref": "#/$defs/digest"}
   },
   "$defs": {
-    "achievementId": {"type": "string", "pattern": "^synthetic-[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 127},
     "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "semver": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"}
+    "achievementId": {"type": "string", "maxLength": 127, "pattern": "^synthetic-[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "caseResult": {
+      "type": "object", "additionalProperties": false,
+      "required": ["achievementId", "caseDigest", "repetitions"],
+      "properties": {
+        "achievementId": {"$ref": "#/$defs/achievementId"},
+        "caseDigest": {"$ref": "#/$defs/digest"},
+        "repetitions": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/repetition"}}
+      }
+    },
+    "repetition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repetition", "status", "evidenceDigest"],
+      "properties": {
+        "repetition": {"type": "integer", "minimum": 1, "maximum": 2},
+        "status": {"enum": ["passed", "assertion_failed"]},
+        "evidenceDigest": {"$ref": "#/$defs/digest"}
+      }
+    }
   }
 }
