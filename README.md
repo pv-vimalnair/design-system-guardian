@@ -54,7 +54,7 @@ Cloned component definitions, detached instances, local components, changed over
 
 ## Flutter-first support
 
-Version 0.3.1 deeply audits Flutter through Dart analyzer evidence. It detects raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Projects without a supported adapter return `unsupported`; incomplete coverage never receives a green result.
+Version 0.3.2 deeply audits Flutter through Dart analyzer evidence. It detects raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Projects without a supported adapter return `unsupported`; incomplete coverage never receives a green result.
 
 The current source has no trusted host-attested UX/accessibility evaluator, so that lane remains `not_assessed` and blocks production readiness. Inaccessible approved assets are reported as design-system gaps; Guardian does not silently change them.
 
@@ -112,6 +112,6 @@ Never commit profiles, catalog snapshots, Figma credentials, authority private k
 
 ## Versioning and license
 
-The source version is `0.3.1`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
+The source version is `0.3.2`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
 
 Licensed under the [MIT License](LICENSE).

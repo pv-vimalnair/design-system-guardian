@@ -25,7 +25,7 @@ Catalog approval and release authority roles must use distinct Ed25519 keys.
 
 Every catalog load, historical run-pin load, and ingestion enumerates and verifies the complete locally retained pair of immutable snapshots and sealed approval-sequence records. The two histories must have exactly the same approval sequences and exact pointer fields, and retained sequences must be contiguous from the first locally observed approval through the high-water. The sealed current pointer must equal the highest retained valid approval; an existing lower pointer is a replay and fails closed. A missing pointer is recovered only when both retained histories align exactly.
 
-This local check detects deletion or truncation of either side while its counterpart remains, including deletion of the newest sequence record while the newer immutable snapshot is retained. It does not claim rollback resistance against coordinated deletion of both the newest immutable snapshot and its matching sequence record followed by replay of an older sealed pointer. Account-owned files are not WORM storage, and version 0.3.1 deliberately does not add an external catalog-head service. Deployments that must resist that coordinated deletion require an independently preserved monotonic/WORM catalog approval head in a future reviewed release.
+This local check detects deletion or truncation of either side while its counterpart remains, including deletion of the newest sequence record while the newer immutable snapshot is retained. It does not claim rollback resistance against coordinated deletion of both the newest immutable snapshot and its matching sequence record followed by replay of an older sealed pointer. Account-owned files are not WORM storage, and version 0.3.2 deliberately does not add an external catalog-head service. Deployments that must resist that coordinated deletion require an independently preserved monotonic/WORM catalog approval head in a future reviewed release.
 
 ## Release integrity
 
@@ -73,9 +73,9 @@ Phase-local success is never labeled production readiness. Snapshot ingestion
 reports `snapshotUsable`; preflight reports `pinCreated`. Only protected
 finalization may emit `productionReady=true`.
 
-Version 0.3.1 deliberately has no trusted UX/accessibility evaluator. User-supplied UX assertions are not proof; the lane is forced to `not_assessed`, exit `4`, and `productionReady=false`.
+Version 0.3.2 deliberately has no trusted UX/accessibility evaluator. User-supplied UX assertions are not proof; the lane is forced to `not_assessed`, exit `4`, and `productionReady=false`.
 
 
 ## Supported pilot
 
-The current source declares version `0.3.1`. It is a pilot candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, or skill loading alone do not constitute a signed production release.
+The current source declares version `0.3.2`. It is a pilot candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, or skill loading alone do not constitute a signed production release.

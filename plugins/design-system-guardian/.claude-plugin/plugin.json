@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "design-system-guardian",
   "displayName": "Design System Guardian",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
   "author": {
     "name": "Pv Vimal Nair"

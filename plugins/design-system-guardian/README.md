@@ -79,14 +79,14 @@ Plugin source updates use reviewed SemVer and deterministic migrations. Release 
 - A normal promotion must exceed every SemVer previously promoted on that channel. A downgrade is accepted only as a new externally signed restoration action that names an archived, previously promoted release.
 - Signed manifests, package bytes, channel pointers, and append-only history are stored under `~/.design-system-guardian/releases/`, not in the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned development install; it does not create a canary or stable release. In 0.3.1 the provider is an unconditional compile-time stub: configuration cannot unblock it, and every public trusted channel read, promotion, and restoration fails closed. A future reviewed code release must integrate and invoke one fixed external/WORM provider's authenticated latest-head, checkpoint, and monotonic compare-and-swap operations before trusted releases can operate.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned development install; it does not create a canary or stable release. In 0.3.2 the provider is an unconditional compile-time stub: configuration cannot unblock it, and every public trusted channel read, promotion, and restoration fails closed. A future reviewed code release must integrate and invoke one fixed external/WORM provider's authenticated latest-head, checkpoint, and monotonic compare-and-swap operations before trusted releases can operate.
 
 
 See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md). No real stable promotion is implied by a host manifest version.
 
 ## Flutter pilot
 
-Version 0.3.1 is Flutter-first. `guardian audit` owns analyzer execution: it derives a run-bound allowlist, hashes every relevant Dart source and analyzer input, analyzes an external staging copy, requires one config-bound attestation per compilation unit, scans suppression attempts, and seals the resulting evidence. Caller-authored analyzer results are not audit inputs.
+Version 0.3.2 is Flutter-first. `guardian audit` owns analyzer execution: it derives a run-bound allowlist, hashes every relevant Dart source and analyzer input, analyzes an external staging copy, requires one config-bound attestation per compilation unit, scans suppression attempts, and seals the resulting evidence. Caller-authored analyzer results are not audit inputs.
 
 The adapter uses Dart's supported analyzer-plugin structure and emits exact diagnostics for unapproved visual identities and suppression attempts. The selected profile must pin the full Dart SDK artifact for the current platform plus exact `flutter` and other package-config dependencies. Ambient `PATH` is discovery only: Guardian verifies and stages the bound SDK, runs it with a minimal environment, verifies and stages the complete Dart package-config closure, and rechecks both evidence sets during finalization. Local Git identity is read directly from bounded repository metadata; Guardian never executes a `git` binary selected from `PATH`.
 
