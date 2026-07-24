@@ -28,6 +28,7 @@ PACKAGE_ENTRIES = (
     ".codex-plugin",
     "adapters",
     "assets",
+    "benchmarks",
     "docs",
     "guardian_core",
     "policy",

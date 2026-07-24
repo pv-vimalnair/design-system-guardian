@@ -155,6 +155,18 @@ class GuardianPaths:
         return self.trust / "catalog-authority-ed25519.binding.json"
 
     @property
+    def evolution(self) -> Path:
+        return self.home / "evolution"
+
+    @property
+    def elo(self) -> Path:
+        return self.evolution / "elo"
+
+    @property
+    def elo_history(self) -> Path:
+        return self.elo / "history"
+
+    @property
     def profiles(self) -> Path:
         return self.home / "profiles"
 

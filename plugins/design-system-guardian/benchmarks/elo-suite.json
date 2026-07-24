@@ -1,0 +1,18 @@
+{
+  "achievements": [
+    {"achievementId": "synthetic-correctness-exact-identity", "category": "correctness", "weight": 1},
+    {"achievementId": "synthetic-correctness-fail-closed", "category": "correctness", "weight": 1},
+    {"achievementId": "synthetic-reliability-repeatability", "category": "reliability", "weight": 1},
+    {"achievementId": "synthetic-reliability-tamper-detection", "category": "reliability", "weight": 1},
+    {"achievementId": "synthetic-coverage-supported-lanes", "category": "coverage_usefulness", "weight": 1},
+    {"achievementId": "synthetic-coverage-useful-diagnostics", "category": "coverage_usefulness", "weight": 1},
+    {"achievementId": "synthetic-safety-privacy-boundary", "category": "safety_privacy_integrity", "weight": 1},
+    {"achievementId": "synthetic-safety-policy-integrity", "category": "safety_privacy_integrity", "weight": 1},
+    {"achievementId": "synthetic-portability-basic-host", "category": "portability_usability_performance", "weight": 1},
+    {"achievementId": "synthetic-usability-cli-contract", "category": "portability_usability_performance", "weight": 3},
+    {"achievementId": "synthetic-performance-bounded-runtime", "category": "portability_usability_performance", "weight": 4}
+  ],
+  "model": "guardian-weighted-elo-v1",
+  "schemaVersion": 1,
+  "suiteId": "guardian-public-synthetic-v1"
+}
