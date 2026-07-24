@@ -60,7 +60,7 @@ Report UX/accessibility separately from design-system compliance. Review hierarc
 
 Keep these as separate lanes: neither design-system compliance nor UX/accessibility may conceal failure in the other.
 
-Version 0.2.0 does not ship a trusted UX/accessibility evaluator. Request-supplied checks are context, not proof; Guardian canonicalizes this lane to `not_assessed`, exit `4`, and `productionReady=false`. Never convert those assertions into a pass manually.
+Version 0.3.0 does not ship a trusted UX/accessibility evaluator. Request-supplied checks are context, not proof; Guardian canonicalizes this lane to `not_assessed`, exit `4`, and `productionReady=false`. Never convert those assertions into a pass manually.
 
 When an approved asset itself is inaccessible, report the exact asset as a design-system gap with required action `request_design_system_change`. Do not change its color, size, motion, or behavior and do not recommend an unauthorized replacement.
 

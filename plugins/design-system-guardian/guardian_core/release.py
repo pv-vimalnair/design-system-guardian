@@ -51,7 +51,7 @@ from .storage import contained_atomic_write_json
 
 
 PLUGIN_NAME = "design-system-guardian"
-RUNTIME_VERSION = "0.2.0"
+RUNTIME_VERSION = "0.3.0"
 CURRENT_RELEASE_SCHEMA_VERSION = 1
 SUPPORTED_RELEASE_SCHEMA_VERSIONS = frozenset({1})
 CURRENT_STATE_SCHEMA_VERSION = 1

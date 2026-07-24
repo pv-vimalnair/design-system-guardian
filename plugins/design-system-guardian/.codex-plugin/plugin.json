@@ -1,6 +1,6 @@
 {
   "name": "design-system-guardian",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
   "author": {
     "name": "Pv Vimal Nair",

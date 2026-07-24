@@ -2,6 +2,26 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.0 - 2026-07-24 - Evidence-driven evolution candidate
+
+### Added
+
+- Added an automatic sealed post-run self-check that records what worked, what failed, and fixed attribution reason codes without storing prompts, product source, credentials, or general user activity.
+- Added an explicit permission gate before Plugin Evolution Manager or an equivalent compatible-agent review may change Guardian.
+- Added executable weighted Guardian Elo from 1 to 2000, with public synthetic benchmarks, additive immutable coverage, controlled regression evidence, and a 200-point per-release cap.
+- Added a clean-public-release gate over committed bytes, reachable history, local design-system identifiers and file hashes, Git modes, and authenticated prior-suite continuity.
+
+### Changed
+
+- Synchronized Codex, Claude Code, Kimi Code, Flutter, generic Agent Skills, and Guardian runtime metadata at version 0.3.0.
+- Kept company profiles, catalogs, snapshots, run evidence, and Elo history local under `~/.design-system-guardian/`; public source remains a clean implementation and synthetic benchmark package.
+
+### Promotion status
+
+- The authenticated 0.2.0 package remains the immutable Elo genesis at score 1; measured progress is stored only in the sealed local ledger.
+- This public source candidate is not a signed canary or stable promotion. The fixed external/WORM release-head provider and trusted UX/accessibility evaluator remain deliberate blockers.
+- The immutable policy digest and exactly two visible skills are unchanged.
+
 ## 0.2.0 - 2026-07-23 - Cross-agent distribution candidate
 
 ### Added
