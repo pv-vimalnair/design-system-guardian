@@ -14,6 +14,18 @@ Codex may require a build-metadata cachebuster to reload an edited local plugin.
 
 Keep the Codex, Claude Code, and Kimi Code manifest versions equal to `guardian_core.release.RUNTIME_VERSION`. Start a new task or session after reinstall so skill discovery is refreshed. Validate that exactly `build-with-design-system` and `audit-design-system` appear under the host's normal namespace.
 
+## Mandatory clean-public-release check
+
+After committing the candidate and before any push, run:
+
+```powershell
+python scripts/check_public_release.py --repository-root . --history
+```
+
+This local run inspects committed bytes and reachable history, compares the public tree with high-confidence identifiers and exact private-file hashes under `~/.design-system-guardian/`, authenticates the prior canonical public Elo suite, and prints only redacted reason codes. A missing local Guardian directory is valid; bypassing the local comparison is not. CI independently runs structural and history validation with `--ci` because hosted runners do not possess account-local company data.
+
+Any failure blocks publication. Never copy local company data into a release to diagnose the result.
+
 ## Release preparation
 
 This section records the intended future production flow. Version 0.2.0 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.

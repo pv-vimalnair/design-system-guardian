@@ -30,6 +30,11 @@ jobs:
           cache: pip
           cache-dependency-path: plugins/design-system-guardian/requirements-test.txt
 
+      - name: Verify committed public bytes and history
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/check_public_release.py --repository-root . --history --ci
+
       - name: Install test dependencies
         run: python -m pip install -r plugins/design-system-guardian/requirements-test.txt
 
@@ -61,7 +66,7 @@ jobs:
           from pathlib import Path
           root = Path("plugins/design-system-guardian")
           schemas = sorted(root.rglob("*.schema.json"))
-          assert len(schemas) == 19, [str(path) for path in schemas]
+          assert len(schemas) == 22, [str(path) for path in schemas]
           for path in schemas:
               json.loads(path.read_text(encoding="utf-8"))
 

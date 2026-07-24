@@ -45,6 +45,12 @@ A release action fails closed unless all of these are exact:
 
 Normal downgrades, same-version replacements, unsigned manifests, wrong-key signatures, future schemas, and replacement artifacts are rejected. A rollback is a new signed restoration record referencing one archived release; it never deletes or rewrites prior evidence.
 
+## Public-source privacy gate
+
+Every public update must pass `python scripts/check_public_release.py --repository-root . --history` from a clean committed tree before push. The checker reads committed Git objects, rejects unapproved paths and object modes, runtime-state shapes, absolute account homes, high-confidence secret material, and matches against local Guardian file digests and high-confidence design-system identifiers. Its output contains reason codes only; it never prints private values or local paths.
+
+CI repeats committed-tree and reachable-history checks with `--ci`. CI cannot inspect account-local Guardian data, so the local-data-aware pre-push run remains mandatory. The gate also authenticates the prior canonical public Elo suite and permits only additive benchmark evolution; absence is accepted only for the exact authenticated 0.2.0 bootstrap commit.
+
 ## Filesystem integrity
 
 Guardian rejects redirected trust and state paths, non-canonical JSON, duplicate JSON keys, invalid seals, replayed channel pointers while the complete local archive is retained, broken history chains, non-monotonic or future timestamps, and attempts to rewrite local append-only projections. A stale transaction lock blocks rather than being guessed safe to remove.

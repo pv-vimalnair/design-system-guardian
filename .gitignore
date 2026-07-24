@@ -14,3 +14,4 @@ coverage/
 .superpowers/brainstorm/
 .superpowers/sdd/
 docs/superpowers/
+.design-system-guardian/
