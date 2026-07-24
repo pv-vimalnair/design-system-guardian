@@ -17,6 +17,7 @@ class CanonicalSchemaTest(unittest.TestCase):
             "build-plan.schema.json",
             "audit-result.schema.json",
             "coverage.schema.json",
+            "post-run-assessment.schema.json",
             "run-manifest.schema.json",
         }
         actual = {path.name for path in (PLUGIN_ROOT / "schemas").glob("*.schema.json")}

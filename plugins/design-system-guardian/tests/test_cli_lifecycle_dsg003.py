@@ -116,12 +116,28 @@ class LifecycleCliTest(unittest.TestCase):
 
             self.assertEqual(code, 4)
             self.assertFalse(finalized["productionReady"])
+            self.assertFalse(finalized["postRunAssessment"]["sourceMutationPerformed"])
             self.assertEqual(
                 set(finalized["artifactPaths"]),
-                {"audit-result", "coverage", "run-manifest", "readable-report"},
+                {"audit-result", "coverage", "run-manifest", "post-run-assessment", "readable-report"},
             )
             for relative in finalized["artifactPaths"].values():
                 self.assertTrue((home / relative).is_file())
+
+            before_self_check = file_state(home)
+            code, assessment = invoke(
+                home,
+                [
+                    "self-check",
+                    "--profile",
+                    "example-company",
+                    "--run-id",
+                    "run-cli-clean",
+                ],
+            )
+            self.assertEqual(code, 4)
+            self.assertEqual(assessment, finalized["postRunAssessment"])
+            self.assertEqual(file_state(home), before_self_check)
 
             (project / "lib" / "main.dart").write_text(
                 "void main() { print('changed'); }\n", encoding="utf-8", newline="\n"

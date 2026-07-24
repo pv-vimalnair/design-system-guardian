@@ -32,7 +32,7 @@ from .preflight import PreflightError, load_run_pin, preflight_snapshot
 from .project_binding import project_evidence_from_runner, require_requested_project
 from .profile import ProfileValidationError, install_profile, load_profile, validate_profile
 from .resolver import resolve_identity
-from .run_artifacts import seal_run_artifact, write_run_artifact
+from .run_artifacts import read_run_artifact, seal_run_artifact, write_run_artifact
 from .snapshot import SnapshotValidationError, ingest_snapshot
 
 
@@ -339,10 +339,36 @@ def _finalize_command(args: argparse.Namespace) -> int:
             "exitCode": int(result.exit_code),
             "productionReady": result.production_ready,
             "manifest": result.manifest,
+            "postRunAssessment": result.post_run_assessment,
             "artifactPaths": paths,
         }
     )
     return int(result.exit_code)
+
+
+def _self_check_command(args: argparse.Namespace) -> int:
+    home = default_guardian_home()
+    verify_policy_anchor(home)
+    envelope = read_run_artifact(
+        home,
+        profile_id=args.profile,
+        run_id=args.run_id,
+        artifact_type="post-run-assessment",
+    )
+    assessment = envelope["payload"]
+    statuses = assessment.get("statuses")
+    run_status = statuses.get("run") if isinstance(statuses, dict) else None
+    exit_codes = {
+        "passed": ExitCode.PASS,
+        "violation": ExitCode.VIOLATION_OR_SENTINEL,
+        "invalid": ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY,
+        "source_blocked": ExitCode.SOURCE_UNAVAILABLE_STALE_OR_INCOMPLETE,
+        "unsupported": ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE,
+    }
+    if run_status not in exit_codes:
+        raise ValueError("Sealed post-run assessment has an unsupported run status.")
+    _emit(assessment)
+    return int(exit_codes[run_status])
 
 
 def _migrate_command(args: argparse.Namespace) -> int:
@@ -440,6 +466,11 @@ def build_parser() -> argparse.ArgumentParser:
     finalize.add_argument("--audit-result", required=True)
     finalize.add_argument("--build-plan")
     finalize.set_defaults(handler=_finalize_command)
+
+    self_check = commands.add_parser("self-check")
+    self_check.add_argument("--profile", required=True)
+    self_check.add_argument("--run-id", required=True)
+    self_check.set_defaults(handler=_self_check_command)
 
     migrate = commands.add_parser("migrate")
     migrate.add_argument("--profile", required=True)

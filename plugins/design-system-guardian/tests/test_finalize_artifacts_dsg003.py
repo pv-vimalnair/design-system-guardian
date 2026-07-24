@@ -326,13 +326,22 @@ class FinalizationTest(unittest.TestCase):
             self.assertEqual(result, repeated)
             self.assertEqual(result.exit_code, ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
             self.assertFalse(result.production_ready)
+            self.assertIn("post-run-assessment", result.artifact_paths)
+            self.assertFalse(result.post_run_assessment["sourceMutationPerformed"])
             self.assertEqual(
                 set(result.artifact_paths),
-                {"audit-result", "coverage", "run-manifest", "readable-report"},
+                {"audit-result", "coverage", "run-manifest", "post-run-assessment", "readable-report"},
             )
-            for kind in ("audit-result", "coverage", "run-manifest"):
+            verified = {}
+            for kind in ("audit-result", "coverage", "run-manifest", "post-run-assessment"):
                 envelope = read_canonical_json(result.artifact_paths[kind])
-                verify_run_artifact(home, envelope)
+                verified[kind] = verify_run_artifact(home, envelope)
+            self.assertEqual(verified["post-run-assessment"], result.post_run_assessment)
+            run_manifest_envelope = read_canonical_json(result.artifact_paths["run-manifest"])
+            self.assertEqual(
+                result.post_run_assessment["evidenceDigests"]["runManifest"],
+                run_manifest_envelope["payloadDigest"],
+            )
             report = result.artifact_paths["readable-report"].read_text(encoding="utf-8")
             self.assertIn("Production ready: no", report)
             self.assertEqual(result.manifest["sourceCut"], pin["sourceCut"])

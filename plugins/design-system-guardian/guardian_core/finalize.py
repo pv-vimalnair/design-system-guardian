@@ -17,8 +17,10 @@ from .enforcement_authority import (
     canonicalize_enforcement_authority_lane,
 )
 from .flutter_config import _generate_flutter_adapter_config_at_home
+from .post_run import build_post_run_assessment
 from .preflight import PreflightError, load_run_pin
 from .project_binding import ProjectBindingError, project_evidence_matches_binding
+from .release import RUNTIME_VERSION
 from .resolver import _resolve_verified_snapshot_identity
 from .run_artifacts import RunArtifactIntegrityError, read_run_artifact, render_audit_report, seal_run_artifact, write_readable_report, write_run_artifact
 from .sentinels import SentinelIntegrityError, validate_sentinel
@@ -35,6 +37,7 @@ class FinalizationResult:
     manifest: dict[str, Any]
     exit_code: ExitCode
     production_ready: bool
+    post_run_assessment: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 def _timestamp(value: Any, field: str) -> tuple[datetime, str]:
@@ -263,10 +266,17 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
             "exitCode": int(code),
             "productionReady": ready,
         }
-        store("run-manifest", manifest)
+        manifest_envelope = store("run-manifest", manifest)
+        post_run_assessment = build_post_run_assessment(
+            audit_result=audit,
+            run_manifest=manifest,
+            run_manifest_digest=manifest_envelope["payloadDigest"],
+            runtime_version=RUNTIME_VERSION,
+        )
+        store("post-run-assessment", post_run_assessment)
     except (RunArtifactIntegrityError, OSError, ValueError) as error:
         raise FinalizationError(f"Final evidence could not be sealed: {error}") from error
-    return FinalizationResult(manifest, code, ready, artifacts)
+    return FinalizationResult(manifest, code, ready, post_run_assessment, artifacts)
 
 def finalize_run(home: Path, *, profile_id: str, run_id: str, audit_result: dict[str, Any], build_plan: dict[str, Any] | None) -> FinalizationResult:
     """Finalize at trusted host time; public callers cannot inject freshness time."""
