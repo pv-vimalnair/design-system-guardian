@@ -50,7 +50,11 @@ class WeightedEloContractTest(unittest.TestCase):
 
     def test_public_suite_binds_immutable_executable_modules(self) -> None:
         from guardian_core.canonical import sha256_digest
-        from guardian_core.elo import _public_suite, _worker_digest
+        from guardian_core.elo import (
+            _public_suite,
+            _validate_suite_transition,
+            _worker_digest,
+        )
 
         suite, by_id = _public_suite()
         self.assertTrue(by_id)
@@ -66,8 +70,10 @@ class WeightedEloContractTest(unittest.TestCase):
             self.assertEqual(item["workerDigest"], modules[item["caseModuleId"]]["workerDigest"])
         current = json.loads((ROOT / "benchmarks" / "current-score.json").read_text("utf-8"))
         self.assertEqual(current["schemaVersion"], 3)
-        self.assertEqual(current["suiteSnapshot"], suite)
-        self.assertEqual(current["suiteDigest"], sha256_digest(suite))
+        self.assertEqual(current["score"], 1)
+        self.assertEqual(current["achievementIds"], [])
+        self.assertEqual(current["suiteDigest"], sha256_digest(current["suiteSnapshot"]))
+        _validate_suite_transition(current["suiteSnapshot"], suite)
 
         attributes = (ROOT.parents[1] / ".gitattributes").read_text("utf-8")
         self.assertIn(

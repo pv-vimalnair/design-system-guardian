@@ -127,6 +127,46 @@
             "caseModuleId": "guardian-public-cases-v3",
             "caseFunction": "case_portability_permissioned_runtime_bootstrap",
             "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-correctness-explicit-rules-fail-closed",
+            "category": "correctness",
+            "weight": 5,
+            "caseModuleId": "guardian-public-cases-v4",
+            "caseFunction": "case_correctness_explicit_rules_fail_closed",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-reliability-deterministic-rule-preview",
+            "category": "reliability",
+            "weight": 4,
+            "caseModuleId": "guardian-public-cases-v4",
+            "caseFunction": "case_reliability_deterministic_rule_preview",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-coverage-six-rule-predicates",
+            "category": "coverage_usefulness",
+            "weight": 4,
+            "caseModuleId": "guardian-public-cases-v4",
+            "caseFunction": "case_coverage_six_rule_predicates",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-safety-rule-preview-nondisclosure",
+            "category": "safety_privacy_integrity",
+            "weight": 5,
+            "caseModuleId": "guardian-public-cases-v4",
+            "caseFunction": "case_safety_rule_preview_nondisclosure",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-usability-rule-cli-contract",
+            "category": "portability_usability_performance",
+            "weight": 4,
+            "caseModuleId": "guardian-public-cases-v4",
+            "caseFunction": "case_usability_rule_cli_contract",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
         }
     ],
     "caseModules": [
@@ -141,10 +181,16 @@
             "path": "benchmarks/elo_cases_v3.py",
             "moduleDigest": "751ca9c6c7fd63e66a34f70ee9fb2a2111e92aef40d790c1f1d173afce9f4300",
             "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "moduleId": "guardian-public-cases-v4",
+            "path": "benchmarks/elo_cases_v4.py",
+            "moduleDigest": "2882dcfb90a038dc7c82b63a249ba7d8cf65885fb3c8e641e324114ec854d40c",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
         }
     ],
     "model": "guardian-weighted-elo-v1",
     "schemaVersion": 2,
     "suiteId": "guardian-public-synthetic-v1",
-    "suiteVersion": 3
+    "suiteVersion": 4
 }

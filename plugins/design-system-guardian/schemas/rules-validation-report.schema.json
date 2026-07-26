@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/rules-validation-report.schema.json",
+  "title": "Design System Guardian usage-rules validation preview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "authority",
+    "sourceType",
+    "rulesDigest",
+    "identityCoverage",
+    "summary",
+    "entries",
+    "localChangesPerformed",
+    "productionReady"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "status": {"enum": ["allowed", "invalid", "not_assessed"]},
+    "authority": {"const": "preview_only"},
+    "sourceType": {"enum": ["artifact", "figma_description"]},
+    "rulesDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identityCoverage": {"enum": ["complete", "not_assessed"]},
+    "summary": {"$ref": "#/$defs/summary"},
+    "entries": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/entry"}
+    },
+    "localChangesPerformed": {"const": false},
+    "productionReady": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "allowed"}},
+        "required": ["status"]
+      },
+      "then": {"properties": {"identityCoverage": {"const": "complete"}}}
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "not_assessed"}},
+        "required": ["status"]
+      },
+      "then": {"properties": {"identityCoverage": {"const": "not_assessed"}}}
+    }
+  ],
+  "$defs": {
+    "ruleIdOrNull": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 127,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+        },
+        {"type": "null"}
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "warnings", "errors", "notAssessed"],
+      "properties": {
+        "ok": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0},
+        "errors": {"type": "integer", "minimum": 0},
+        "notAssessed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "ruleClass", "tier", "reasonCode"],
+      "properties": {
+        "ruleId": {"$ref": "#/$defs/ruleIdOrNull"},
+        "ruleClass": {"enum": ["machine", "judgment", "informative", null]},
+        "tier": {"enum": ["ok", "warning", "error", "not_assessed"]},
+        "reasonCode": {
+          "enum": [
+            "ok",
+            "unmarked_text_ignored",
+            "parse_failure",
+            "unknown_predicate",
+            "invalid_value",
+            "duplicate_rule_id",
+            "unknown_identity",
+            "identity_not_assessed",
+            "statement_missing",
+            "statement_forbidden",
+            "predicate_forbidden",
+            "unknown_field",
+            "input_too_large",
+            "input_unavailable",
+            "invalid_container",
+            "duplicate_json_key",
+            "missing_metadata",
+            "invalid_json",
+            "invalid_utf8",
+            "invalid_identity_coverage",
+            "invalid_source_type",
+            "no_rule_markers"
+          ]
+        }
+      }
+    }
+  }
+}

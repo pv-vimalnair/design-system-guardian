@@ -1,8 +1,8 @@
 {
   "name": "design-system-guardian",
-  "version": "0.3.3",
-  "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, and fail-closed evidence.",
-  "keywords": ["design-system", "figma", "flutter", "audit", "ux"],
+  "version": "0.3.4",
+  "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, and fail-closed evidence.",
+  "keywords": ["design-system", "figma", "flutter", "audit", "ux", "rules"],
   "homepage": "https://github.com/pv-vimalnair/design-system-guardian#readme",
   "license": "MIT",
   "skills": "./plugins/design-system-guardian/skills/",
@@ -10,7 +10,7 @@
   "interface": {
     "displayName": "Design System Guardian",
     "shortDescription": "Exact approved identities only, with fail-closed auditing.",
-    "longDescription": "Set up locally with permission, build from exact Figma-bound design-system identities, audit UX/accessibility separately, and expose proven gaps through conspicuous sentinels.",
+    "longDescription": "Set up locally with permission, build from exact Figma-bound design-system identities, perform preview-only rule validation for explicit usage rules, audit UX/accessibility separately, and expose proven gaps through conspicuous sentinels.",
     "developerName": "Pv Vimal Nair",
     "websiteURL": "https://github.com/pv-vimalnair/design-system-guardian"
   }

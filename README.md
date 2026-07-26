@@ -26,8 +26,9 @@ Policy precedence is `immutable policy -> evolving validators -> selected compan
 
 Setup, Figma read-back, the UX evaluator, CLI, schemas, Flutter adapter, sentinels, and release machinery are internal infrastructure. They are not extra skills or plugins.
 
-## What is new in 0.3.3
+## What is new in 0.3.4
 
+- Preview-only usage-rule validation: `guardian rules validate` accepts explicit Figma description markers or a local rule artifact, validates the six supported machine predicates, and returns a deterministic report without changing Guardian or project state.
 - Plug-and-play, permission-bound local setup: the agent checks readiness, explains one exact local change, asks once, and applies only the digest-bound setup after permission.
 - Mandatory exact Figma binding and read-back for variables, text styles, component identities, variants, properties, and approved duplicate-file lineage. Visual equality is never evidence.
 - A quick screen checkpoint after a completed screen and a final-flow UX/accessibility evaluation that rechecks every screen plus navigation, reachability, errors, recovery, and cross-screen state.
@@ -35,7 +36,7 @@ Setup, Figma read-back, the UX evaluator, CLI, schemas, Flutter adapter, sentine
 - Skills are portable; automatic routing is not. Installation on Claude Code, Kimi Code, OpenClaw, or a generic host does not create an always-on protected route. Guardian cannot prevent raw-tool bypass on those hosts. No sealed Guardian manifest means the result is not Guardian-approved.
 - Fixed Figma API safeguards so common mutation-order and read-only-value traps fail clearly instead of encouraging agents to bypass Guardian.
 
-The Usage Rules Lane is planned for 0.3.4. It is deliberately not part of 0.3.3.
+Version 0.3.4 includes only the Usage Rules Lane foundation. Rule validation is read-only and preview-only, reports `localChangesPerformed=false` and `productionReady=false`, and keeps missing identity coverage `not_assessed`. Its results are not consumed by audit or finalization and cannot authorize production.
 
 ## Build and audit workflow
 
@@ -72,7 +73,7 @@ The Figma adapter requires agents to clear or bind a new frame's default fill, a
 
 ## Flutter-first support
 
-Version 0.3.3 keeps the deep Flutter analyzer adapter and adds Figma-native observation enforcement. Flutter diagnostics detect raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Figma diagnostics require exact bound-variable, text-style, component-instance, variant/property, source-version, and duplicate-lineage evidence.
+Version 0.3.4 keeps the deep Flutter analyzer adapter and Figma-native observation enforcement. Flutter diagnostics detect raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Figma diagnostics require exact bound-variable, text-style, component-instance, variant/property, source-version, and duplicate-lineage evidence.
 
 The built-in UX/accessibility evaluator derives status from evidence; callers cannot submit a pass. Screen checkpoints are diagnostic. The final-flow result is the complete UX lane input. An inaccessible approved asset is reported as a design-system gap; Guardian never silently changes its color, size, motion, or behavior.
 
@@ -107,7 +108,7 @@ Before installing or updating, compare the fetched full Git commit with the revi
 
 ## CLI and exit codes
 
-The portable `guardian` CLI exposes permission-bound `setup status`, `setup preview`, and `setup apply`, plus `doctor`, `profile validate`, `snapshot ingest`, `preflight`, `resolve`, `adapter flutter config`, `adapter figma config`, `ux checkpoint`, `audit`, `finalize`, `self-check`, profile-artifact `migrate`, and the `elo show`, `elo migrate`, `elo benchmark`, and `elo evaluate` commands.
+The portable `guardian` CLI exposes permission-bound `setup status`, `setup preview`, and `setup apply`, plus `doctor`, `profile validate`, `snapshot ingest`, `preflight`, `resolve`, `rules validate`, `adapter flutter config`, `adapter figma config`, `ux checkpoint`, `audit`, `finalize`, `self-check`, profile-artifact `migrate`, and the `elo show`, `elo migrate`, `elo benchmark`, and `elo evaluate` commands.
 
 | Exit | Meaning |
 | ---: | --- |
@@ -134,6 +135,6 @@ Never commit profiles, catalog snapshots, Figma credentials, authority private k
 
 ## Versioning and license
 
-The source version is `0.3.3`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
+The source version is `0.3.4`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
 
 Licensed under the [MIT License](LICENSE).

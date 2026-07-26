@@ -31,6 +31,12 @@ Only after explicit permission does the agent add the preview's exact digest bin
 
 Ordinary users should not have to copy commands. The two skills perform this sequence internally and surface only the permission request or exact blocker.
 
+## Preview-only usage-rule validation
+
+`guardian rules validate` accepts either explicit `[dsg-rule ...]...[/dsg-rule]` markers from a Figma description or a local JSON rule artifact. Unmarked prose is not treated as an enforceable rule. The validator supports the six machine predicates defined by the v0.3.4 contract and reports invalid, unknown, or unassessed identities without guessing.
+
+This foundation is read-only and preview-only: it writes no Guardian or project state, reports `localChangesPerformed=false` and `productionReady=false`, and keeps missing identity coverage `not_assessed`. Rule results are not consumed by audit or finalization in v0.3.4 and cannot authorize production.
+
 ## Figma evidence
 
 `guardian adapter figma config --profile <id> --run-id <id> --output <absolute-guardian-local-state-config.json>` derives the run-bound collector contract. The output must stay inside Guardian local state under `~/.design-system-guardian/`; never place it in the product tree, repository, or Git staging. The supported Figma collector reads the selected nodes back through the Plugin API. A version 2 audit accepts exact input shaped as:
@@ -106,6 +112,7 @@ The command surface is:
 - `snapshot ingest`
 - `preflight`
 - `resolve`
+- `rules validate`
 - `adapter flutter config`
 - `adapter figma config`
 - `ux checkpoint`
@@ -146,9 +153,9 @@ Plugin source updates use reviewed SemVer and deterministic migrations. Release 
 - rollback is a new signed restoration and never rewrites history;
 - private catalogs, trust anchors, run evidence, and release state remain outside the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.3 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.4 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
 
-The Usage Rules Lane is deferred to version 0.3.4.
+Version 0.3.4 adds only the preview-only Usage Rules Lane foundation described above; production audit and finalization do not consume its results.
 
 See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md).
 

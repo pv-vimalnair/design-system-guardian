@@ -124,8 +124,39 @@ Across every host, the portable fallback rule is: No sealed Guardian manifest me
 
 ## Updating
 
-- Codex, Claude Code, OpenClaw, and Kimi Code update through their native marketplace or plugin workflow after the manifest version changes.
-- For a generic install, check out the reviewed new commit and rerun the installer with `--replace`.
+Review and pin the new full Git commit, then refresh the installed host package. These commands update public plugin source only; they do not copy local company state into the package.
+
+Codex:
+
+```powershell
+codex plugin marketplace upgrade pv-vimalnair-design-system-guardian --json
+codex plugin add design-system-guardian@pv-vimalnair-design-system-guardian --json
+```
+
+Claude Code:
+
+```powershell
+claude plugin marketplace update pv-vimalnair-design-system-guardian
+claude plugin update design-system-guardian@pv-vimalnair-design-system-guardian
+```
+
+OpenClaw: inspect the dry run before applying it.
+
+```powershell
+openclaw plugins update design-system-guardian --dry-run
+openclaw plugins update design-system-guardian
+openclaw plugins inspect design-system-guardian
+```
+
+Kimi Code: rerun the repository install, then reload and inspect.
+
+```text
+/plugins install https://github.com/pv-vimalnair/design-system-guardian
+/reload
+/plugins info design-system-guardian
+```
+
+For a generic install, check out the reviewed new commit and rerun the same installer command with `--replace`.
 - The installer replaces only an intact prior install from the same package root and refuses unknown or locally modified skill folders.
 - A journal rolls back prepared replacements or finishes committed cleanup after interruption.
 - Transient staging remains beside, never inside, the watched live skill root.

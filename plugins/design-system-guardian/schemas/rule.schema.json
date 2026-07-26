@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/rule.schema.json",
+  "title": "Design System Guardian usage rule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "ruleId", "class", "appliesTo", "provenance"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "ruleId": {"$ref": "#/$defs/ruleId"},
+    "class": {"enum": ["machine", "judgment", "informative"]},
+    "predicate": {"$ref": "#/$defs/predicate"},
+    "statement": {"$ref": "#/$defs/nonBlankText"},
+    "appliesTo": {"$ref": "#/$defs/appliesTo"},
+    "provenance": {"$ref": "#/$defs/provenance"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"class": {"const": "machine"}},
+        "required": ["class"]
+      },
+      "then": {
+        "required": ["predicate"],
+        "not": {"required": ["statement"]}
+      },
+      "else": {
+        "required": ["statement"],
+        "not": {"required": ["predicate"]}
+      }
+    }
+  ],
+  "$defs": {
+    "ruleId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "nonBlankText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "\\S"
+    },
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "\\S"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["widget_class", "compilation_unit"]
+    },
+    "relation": {
+      "type": "string",
+      "enum": ["sibling", "child", "descendant"]
+    },
+    "appliesTo": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "system"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "category"],
+          "properties": {
+            "kind": {"const": "category"},
+            "category": {"$ref": "#/$defs/nonBlankText"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "identity"],
+          "properties": {
+            "kind": {"enum": ["component", "icon", "token"]},
+            "identity": {"$ref": "#/$defs/identity"}
+          }
+        }
+      ]
+    },
+    "figmaLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileKey", "nodeId", "sourceVersion"],
+      "properties": {
+        "fileKey": {"$ref": "#/$defs/nonBlankText"},
+        "nodeId": {"$ref": "#/$defs/nonBlankText"},
+        "sourceVersion": {"$ref": "#/$defs/nonBlankText"}
+      }
+    },
+    "provenance": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "figma", "docRef"],
+          "properties": {
+            "origin": {"const": "figma_description"},
+            "figma": {"$ref": "#/$defs/figmaLocator"},
+            "docRef": {"const": null}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "figma", "docRef"],
+          "properties": {
+            "origin": {"const": "team_artifact"},
+            "figma": {"const": null},
+            "docRef": {"$ref": "#/$defs/nonBlankText"}
+          }
+        }
+      ]
+    },
+    "predicate": {
+      "oneOf": [
+        {"$ref": "#/$defs/maxInstancesPerScope"},
+        {"$ref": "#/$defs/forbiddenNesting"},
+        {"$ref": "#/$defs/requiredCompanion"},
+        {"$ref": "#/$defs/allowedParents"},
+        {"$ref": "#/$defs/variantContext"},
+        {"$ref": "#/$defs/forbiddenIdentityInScope"}
+      ]
+    },
+    "maxInstancesPerScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "identity", "scope", "max"],
+      "properties": {
+        "type": {"const": "max_instances_per_scope"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "max": {"type": "integer", "minimum": 0}
+      }
+    },
+    "forbiddenNesting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "outerIdentity", "innerIdentity"],
+      "properties": {
+        "type": {"const": "forbidden_nesting"},
+        "outerIdentity": {"$ref": "#/$defs/identity"},
+        "innerIdentity": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "requiredCompanion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "identity", "companionIdentity", "relation"],
+      "properties": {
+        "type": {"const": "required_companion"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "companionIdentity": {"$ref": "#/$defs/identity"},
+        "relation": {"$ref": "#/$defs/relation"}
+      }
+    },
+    "allowedParents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "identity", "parents"],
+      "properties": {
+        "type": {"const": "allowed_parents"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "parents": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identity"}
+        }
+      }
+    },
+    "variantContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "identity", "variant", "allowedScopes"],
+      "properties": {
+        "type": {"const": "variant_context"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "variant": {"$ref": "#/$defs/nonBlankText"},
+        "allowedScopes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/scope"}
+        }
+      }
+    },
+    "forbiddenIdentityInScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "identity", "scope"],
+      "properties": {
+        "type": {"const": "forbidden_identity_in_scope"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "scope": {"$ref": "#/$defs/scope"}
+      }
+    }
+  }
+}
