@@ -176,6 +176,15 @@ class GuardianPaths:
     def snapshots(self, profile_id: str) -> Path:
         return self.profile(profile_id) / "snapshots"
 
+    def rule_snapshots(self, profile_id: str) -> Path:
+        return self.profile(profile_id) / "rule-snapshots"
+
+    def rule_approval_sequences(self, profile_id: str) -> Path:
+        return self.profile(profile_id) / "rule-approval-sequences"
+
+    def current_rule_snapshot(self, profile_id: str) -> Path:
+        return self.profile(profile_id) / "current-rule-snapshot.json"
+
     def audits(self, profile_id: str) -> Path:
         return self.profile(profile_id) / "audits"
 

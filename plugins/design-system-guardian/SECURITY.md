@@ -27,6 +27,12 @@ Every catalog load, historical run-pin load, and ingestion enumerates and verifi
 
 This local check detects deletion or truncation of either side while its counterpart remains, including deletion of the newest sequence record while the newer immutable snapshot is retained. It does not claim rollback resistance against coordinated deletion of both the newest immutable snapshot and its matching sequence record followed by replay of an older sealed pointer. Account-owned files are not WORM storage, and version 0.3.4 deliberately does not add an external catalog-head service. Deployments that must resist that coordinated deletion require an independently preserved monotonic/WORM catalog approval head in a future reviewed release.
 
+## Rule-activation integrity
+
+Version 0.3.5 adds an append-only rule snapshot, sequence continuation, and sealed high-water pointer in a parallel v2 namespace. It never rewrites the v1 profile, catalog snapshots, approval sequences, current pointer, run pins, or adapter config. The first v2 approval sequence must advance exactly one from the retained v1 high-water, and later v2 entries must remain contiguous and bound to the same profile, policy, authority, and catalog lineage.
+
+Activation permission is digest-bound authorization to perform one local change; it is not rule approval. Every activated rule and its evidence must already be present in the complete catalog v2 signed by the selected profile's pinned external catalog authority. Once any v2 evidence exists, missing, corrupt, incomplete, replayed, or discontinuous v2 state blocks protected rule work and never falls back to v1.
+
 ## Release integrity
 
 A release action fails closed unless all of these are exact:
@@ -73,7 +79,7 @@ Phase-local success is never labeled production readiness. Snapshot ingestion
 reports `snapshotUsable`; preflight reports `pinCreated`. Only protected
 finalization may emit `productionReady=true`.
 
-Version 0.3.4 includes diagnostic Figma read-back, screen/final-flow UX evaluation, and preview-only usage-rule validation. Proven violations or gaps can fail, but clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. These local mechanisms cannot issue `allowed` or prevent raw-tool bypass. Design-system compliance, UX/accessibility, and protected production authority stay separate, and `productionReady=false` without the protected lane.
+Version 0.3.5 preserves diagnostic Figma read-back, screen/final-flow UX evaluation, and preview-only usage-rule validation, and adds Safe Activation for two compilation-unit predicate pairs. Proven violations or gaps can fail, but clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. These local mechanisms cannot issue `allowed` or prevent raw-tool bypass. Design-system compliance, UX/accessibility, and protected production authority stay separate, and `productionReady=false` without the protected lane.
 
 ## Usage-rule preview boundary
 
@@ -83,4 +89,4 @@ Missing identity evidence remains `not_assessed`; invalid or incomplete inputs f
 
 ## Supported source release
 
-The current source declares version `0.3.4`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.
+The current source declares version `0.3.5`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.

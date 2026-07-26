@@ -66,7 +66,7 @@ jobs:
           from pathlib import Path
           root = Path("plugins/design-system-guardian")
           schemas = sorted(root.rglob("*.schema.json"))
-          assert len(schemas) == 25, [str(path) for path in schemas]
+          assert len(schemas) == 28, [str(path) for path in schemas]
           for path in schemas:
               json.loads(path.read_text(encoding="utf-8"))
 

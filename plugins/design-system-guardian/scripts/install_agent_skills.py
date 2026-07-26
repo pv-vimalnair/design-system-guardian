@@ -48,6 +48,12 @@ TRANSACTION_ID = re.compile(r"[0-9a-f]{32}\Z")
 PINNED_REQUIREMENT = re.compile(
     r"([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9][A-Za-z0-9._+!-]*)\Z"
 )
+SEMVER = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    r"(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?"
+    r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
+)
 RUNTIME_OWNER = "design-system-guardian"
 DEFAULT_RUNTIME_BASE = Path.home() / ".design-system-guardian" / "runtimes"
 RUNTIME_MARKER_NAME = ".design-system-guardian-runtime.json"
@@ -114,6 +120,47 @@ raise SystemExit(0)
 
 class InstallError(Exception):
     pass
+
+
+def parse_semver(value: Any, field: str) -> tuple[int, int, int, tuple[str, ...] | None]:
+    """Parse strict SemVer 2.0 precedence fields or fail closed."""
+
+    if not isinstance(value, str):
+        raise InstallError(f"{field} must be strict SemVer")
+    match = SEMVER.fullmatch(value)
+    if match is None:
+        raise InstallError(f"{field} must be strict SemVer")
+    prerelease = tuple(match.group(4).split(".")) if match.group(4) else None
+    return int(match.group(1)), int(match.group(2)), int(match.group(3)), prerelease
+
+
+def compare_semver(left: str, right: str) -> int:
+    """Compare strict SemVer values; build metadata does not affect precedence."""
+
+    left_value = parse_semver(left, "candidate pluginVersion")
+    right_value = parse_semver(right, "installed pluginVersion")
+    for left_part, right_part in zip(left_value[:3], right_value[:3]):
+        if left_part != right_part:
+            return 1 if left_part > right_part else -1
+
+    left_pre, right_pre = left_value[3], right_value[3]
+    if left_pre is None or right_pre is None:
+        if left_pre == right_pre:
+            return 0
+        return 1 if left_pre is None else -1
+    for left_identifier, right_identifier in zip(left_pre, right_pre):
+        if left_identifier == right_identifier:
+            continue
+        left_numeric = left_identifier.isdigit()
+        right_numeric = right_identifier.isdigit()
+        if left_numeric and right_numeric:
+            return 1 if int(left_identifier) > int(right_identifier) else -1
+        if left_numeric != right_numeric:
+            return -1 if left_numeric else 1
+        return 1 if left_identifier > right_identifier else -1
+    if len(left_pre) == len(right_pre):
+        return 0
+    return 1 if len(left_pre) > len(right_pre) else -1
 
 
 def sha256_file(path: Path) -> str:
@@ -229,7 +276,7 @@ def validate_managed_skill(destination: Path) -> dict[str, Any]:
     return binding
 
 
-def validate_existing(destination: Path) -> None:
+def validate_existing(destination: Path) -> dict[str, Any]:
     binding = validate_managed_skill(destination)
     package_value = binding.get("packageRoot")
     if not isinstance(package_value, str) or not package_value:
@@ -237,6 +284,34 @@ def validate_existing(destination: Path) -> None:
     package_path = Path(package_value)
     if not package_path.is_absolute() or package_path.resolve() != PLUGIN_ROOT.resolve():
         raise InstallError(f"skill belongs to another Guardian package: {destination}")
+    return binding
+
+
+def validate_replacement_versions(
+    candidate_version: str,
+    existing_bindings: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """Refuse malformed, divergent, incomplete, or newer managed installs."""
+
+    parse_semver(candidate_version, "candidate pluginVersion")
+    if not existing_bindings:
+        return
+    if len(existing_bindings) != len(SKILL_NAMES):
+        raise InstallError("existing Guardian skill set is incomplete")
+
+    versions: list[str] = []
+    for skill_name, binding in existing_bindings:
+        version = binding.get("pluginVersion")
+        parse_semver(version, f"existing {skill_name} pluginVersion")
+        versions.append(version)
+    if len(set(versions)) != 1:
+        raise InstallError("existing Guardian skills have divergent pluginVersion values")
+    installed_version = versions[0]
+    if compare_semver(candidate_version, installed_version) < 0:
+        raise InstallError(
+            "refusing to downgrade Guardian-controlled skills from "
+            f"{installed_version} to {candidate_version}"
+        )
 
 
 def validate_python(python_path: Path, *, runner: Any | None = None) -> Path:
@@ -762,6 +837,10 @@ def install(
         pins = load_pinned_requirements(PLUGIN_ROOT / "requirements.txt")
         _verify_host_runtime(python_path, pins, runner=runtime_runner)
 
+    manifest = load_json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json")
+    plugin_version = manifest.get("version")
+    parse_semver(plugin_version, "candidate pluginVersion")
+
     target_root = target_root.expanduser().resolve()
     if target_root == Path(target_root.anchor):
         raise InstallError("refusing to use a filesystem root as the skill target")
@@ -771,13 +850,17 @@ def install(
         recover_interrupted(target_root)
 
         destinations = [target_root / name for name in SKILL_NAMES]
+        existing_bindings: list[tuple[str, dict[str, Any]]] = []
         for destination in destinations:
             if destination.exists():
                 if not replace:
                     raise InstallError(
                         f"destination exists: {destination}; rerun with --replace after review"
                     )
-                validate_existing(destination)
+                existing_bindings.append(
+                    (destination.name, validate_existing(destination))
+                )
+        validate_replacement_versions(plugin_version, existing_bindings)
 
         if bootstrap_runtime:
             python_path = provision_runtime(
@@ -787,10 +870,6 @@ def install(
                 runtime_base=runtime_base,
             )
 
-        manifest = load_json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json")
-        plugin_version = manifest.get("version")
-        if not isinstance(plugin_version, str) or not plugin_version:
-            raise InstallError("plugin version is missing")
         binding_base = make_binding(python_path, plugin_version)
 
         transaction = uuid.uuid4().hex

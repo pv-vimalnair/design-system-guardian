@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/rule-activation-permission.schema.json",
+  "title": "Design System Guardian permission-bound rule activation bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profileId", "catalog", "permission"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "profileId": {"$ref": "snapshot.schema.json#/$defs/profileId"},
+    "catalog": {
+      "$ref": "rule-activation-snapshot.schema.json#/$defs/catalogEvidence"
+    },
+    "permission": {"$ref": "#/$defs/permission"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "capabilities": {
+      "const": [
+        {"predicate": "forbidden_identity_in_scope", "scope": "compilation_unit"},
+        {"predicate": "max_instances_per_scope", "scope": "compilation_unit"}
+      ]
+    },
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "granted", "policyDigest", "profileId",
+        "profileDigest", "baseSnapshotId", "baseCatalogDigest",
+        "candidateCatalogDocumentDigest", "candidateCatalogDigest",
+        "candidateRulesDigest", "candidateApprovalSequence",
+        "catalogAuthorityKeyId", "namespaceTarget", "targetSchemaVersion",
+        "evaluatorId", "activatedCapabilities"
+      ],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "granted": {"type": "boolean"},
+        "policyDigest": {"$ref": "#/$defs/digest"},
+        "profileId": {"$ref": "snapshot.schema.json#/$defs/profileId"},
+        "profileDigest": {"$ref": "#/$defs/digest"},
+        "baseSnapshotId": {"$ref": "#/$defs/digest"},
+        "baseCatalogDigest": {"$ref": "#/$defs/digest"},
+        "candidateCatalogDocumentDigest": {"$ref": "#/$defs/digest"},
+        "candidateCatalogDigest": {"$ref": "#/$defs/digest"},
+        "candidateRulesDigest": {"$ref": "#/$defs/digest"},
+        "candidateApprovalSequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "catalogAuthorityKeyId": {"$ref": "#/$defs/digest"},
+        "namespaceTarget": {"const": "rule-snapshots-v2"},
+        "targetSchemaVersion": {"const": 2},
+        "evaluatorId": {"const": "guardian-flutter-usage-rules-v1"},
+        "activatedCapabilities": {"$ref": "#/$defs/capabilities"}
+      }
+    }
+  }
+}

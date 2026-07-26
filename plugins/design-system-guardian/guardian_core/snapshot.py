@@ -65,6 +65,34 @@ _SEQUENCE_RECORD_KEYS = {
 }
 
 
+def _has_rule_namespace_evidence(home: Path, profile_id: str) -> bool:
+    paths = GuardianPaths(home)
+    candidates = (
+        paths.rule_snapshots(profile_id),
+        paths.rule_approval_sequences(profile_id),
+        paths.current_rule_snapshot(profile_id),
+    )
+    evidence_present = False
+    for candidate in candidates:
+        try:
+            assert_guardian_storage_path(home, candidate)
+            candidate.lstat()
+            evidence_present = True
+        except FileNotFoundError:
+            continue
+        except (OSError, PathIntegrityError):
+            evidence_present = True
+    if not evidence_present:
+        return False
+    from .rule_activation import has_rule_namespace_evidence
+
+    if not has_rule_namespace_evidence(home, profile_id):
+        raise SnapshotValidationError(
+            "Rule-snapshot namespace evidence changed during inspection."
+        )
+    return True
+
+
 def _timestamp(value: Any, field: str) -> datetime:
     if not isinstance(value, str) or not value:
         raise SnapshotValidationError(f"{field} must be an ISO 8601 timestamp.")
@@ -708,6 +736,8 @@ def _verify_catalog_high_water(
     profile: dict[str, Any],
     policy_digest: str,
     current: dict[str, Any] | None,
+    *,
+    recover_missing_current: bool = True,
 ) -> dict[str, Any] | None:
     profile_id = profile["profileId"]
     sequence_history = _read_sequence_history(
@@ -749,6 +779,10 @@ def _verify_catalog_high_water(
     highest = snapshot_history[highest_sequence]
     pointer_path = GuardianPaths(home).profile(profile_id) / "current-snapshot.json"
     if current is None:
+        if not recover_missing_current:
+            raise SnapshotValidationError(
+                "Current snapshot pointer is missing; read-only verification will not repair it."
+            )
         recovered = _current_pointer(home, highest)
         contained_atomic_write_json(home, pointer_path, recovered)
         assert_guardian_storage_path(home, pointer_path)
@@ -784,9 +818,17 @@ def _store_snapshot_once(home: Path, snapshot: dict[str, Any]) -> None:
 def ingest_snapshot(home: Path, profile_document: Any, catalog_document: Any) -> dict[str, Any]:
     """Verify external approval, seal, store, and monotonically promote one snapshot."""
 
+    if isinstance(catalog_document, dict) and catalog_document.get("schemaVersion") == 2:
+        from .rule_activation import ingest_rule_snapshot
+
+        return ingest_rule_snapshot(home, profile_document, catalog_document)
     normalized_home = home.expanduser().absolute()
     policy_digest = verify_policy_anchor(normalized_home)
     profile = validate_profile(profile_document)
+    if _has_rule_namespace_evidence(normalized_home, profile["profileId"]):
+        raise SnapshotValidationError(
+            "Catalog v1 cannot advance after rule-snapshot activation evidence exists."
+        )
     installed_profile = load_profile(normalized_home, profile["profileId"])
     if installed_profile != profile:
         raise SnapshotValidationError("Snapshot ingestion profile differs from the installed isolated profile.")
@@ -803,6 +845,10 @@ def ingest_snapshot(home: Path, profile_document: Any, catalog_document: Any) ->
     sequence = snapshot["approvalSequence"]
     try:
         with profile_transaction_lock(normalized_home, profile_id):
+            if _has_rule_namespace_evidence(normalized_home, profile_id):
+                raise SnapshotValidationError(
+                    "Catalog v1 cannot advance after rule-snapshot activation evidence exists."
+                )
             current = _read_current_pointer(
                 normalized_home, profile_id, policy_digest, missing_ok=True
             )
@@ -883,6 +929,20 @@ def load_snapshot(home: Path, profile_id: str, snapshot_id: str | None = None) -
         profile = load_profile(normalized_home, profile_id)
     except ProfileValidationError as error:
         raise SnapshotValidationError(f"Selected snapshot profile cannot be loaded: {error}") from error
+    if _has_rule_namespace_evidence(normalized_home, profile_id):
+        from .rule_activation import load_rule_snapshot
+
+        rule_snapshot = load_rule_snapshot(
+            normalized_home,
+            profile_id,
+            snapshot_id,
+        )
+        if rule_snapshot is not None:
+            return rule_snapshot
+        if snapshot_id is None:
+            raise SnapshotValidationError(
+                "Rule-snapshot activation evidence exists without a valid current v2 snapshot."
+            )
     current = _read_current_pointer(
         normalized_home,
         profile_id,

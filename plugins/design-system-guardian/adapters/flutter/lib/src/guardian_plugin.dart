@@ -12,6 +12,7 @@ import 'rules/radius_rule.dart';
 import 'rules/sentinel_presence_rule.dart';
 import 'rules/suppression_rule.dart';
 import 'rules/text_style_rule.dart';
+import 'rules/usage_rule.dart';
 import 'rules/variant_rule.dart';
 import 'rules/visual_primitive_rule.dart';
 import 'rules/widget_rule.dart';
@@ -38,5 +39,7 @@ final class DesignSystemGuardianFlutterPlugin extends Plugin {
     registry.registerWarningRule(GuardianVisualPrimitiveRule());
     registry.registerWarningRule(GuardianSentinelPresenceRule());
     registry.registerWarningRule(GuardianSuppressionRule());
+    final registerWarning = registry.registerWarningRule;
+    registerWarning(GuardianUsageRule());
   }
 }

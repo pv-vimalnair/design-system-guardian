@@ -90,7 +90,7 @@ class PublicationContractTests(unittest.TestCase):
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "design-system-guardian")
-        self.assertEqual(manifest["version"], "0.3.4")
+        self.assertEqual(manifest["version"], "0.3.5")
         self.assertEqual(manifest["license"], "MIT")
         self.assertNotIn("hooks", manifest)
         self.assertEqual(manifest["interface"]["brandColor"], "#3157D8")
@@ -104,10 +104,10 @@ class PublicationContractTests(unittest.TestCase):
         from guardian_core.release import RUNTIME_VERSION
         self.assertEqual(RUNTIME_VERSION, manifest["version"])
         pubspec = (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8")
-        self.assertIn("version: 0.3.4", pubspec)
+        self.assertIn("version: 0.3.5", pubspec)
         self.assertIn("analyzer_testing: 0.3.3", pubspec)
 
-    def test_v034_release_page_describes_supported_lanes_and_preview_scope(self) -> None:
+    def test_v035_release_page_preserves_supported_lanes_and_describes_safe_activation(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
         for phrase in (
             "exact Figma binding",
@@ -133,6 +133,7 @@ class PublicationContractTests(unittest.TestCase):
         self.assertNotIn('"projectRoot": null', plugin_readme)
 
         changelog = (PLUGIN_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertLess(changelog.index("## 0.3.5"), changelog.index("## 0.3.4"))
         self.assertLess(changelog.index("## 0.3.4"), changelog.index("## 0.3.3"))
 
     def test_release_pages_describe_opt_in_runtime_bootstrap_honestly(self) -> None:

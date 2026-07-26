@@ -63,8 +63,23 @@ final class GuardianToolchain {
   final String executableRelativePath;
 }
 
+final class GuardianCompiledUsageRule {
+  const GuardianCompiledUsageRule({
+    required this.ruleId,
+    required this.predicate,
+    required this.constructorIdentities,
+    required this.maximum,
+  });
+
+  final String ruleId;
+  final String predicate;
+  final Set<String> constructorIdentities;
+  final int maximum;
+}
+
 final class GuardianAdapterConfig {
   const GuardianAdapterConfig({
+    required this.schemaVersion,
     required this.profileId,
     required this.policyDigest,
     required this.snapshotId,
@@ -75,8 +90,10 @@ final class GuardianAdapterConfig {
     required this.approvedPackages,
     required this.approvedIdentities,
     required this.componentVariants,
+    required this.activeUsageRules,
   });
 
+  final int schemaVersion;
   final String profileId;
   final String policyDigest;
   final String snapshotId;
@@ -87,6 +104,7 @@ final class GuardianAdapterConfig {
   final Map<String, GuardianApprovedPackage> approvedPackages;
   final Map<String, Set<String>> approvedIdentities;
   final Map<String, Map<String, Set<String>>> componentVariants;
+  final List<GuardianCompiledUsageRule> activeUsageRules;
 
   bool isApproved(String category, String? identity) =>
       identity != null && approvedIdentities[category]!.contains(identity);
@@ -167,6 +185,10 @@ final class GuardianAdapterConfigRepository {
       return ConfigBinding.invalid('adapter config root must be an object');
     }
 
+    final schemaVersion = decoded['schemaVersion'];
+    if (schemaVersion != 1 && schemaVersion != 2) {
+      return ConfigBinding.invalid('unsupported Flutter adapter schema or version');
+    }
     final exactTopLevelKeys = <String>{
       'schemaVersion',
       'adapter',
@@ -182,11 +204,18 @@ final class GuardianAdapterConfigRepository {
       'approvedIdentities',
       'componentVariants',
     };
-    if (!_hasExactKeys(decoded, exactTopLevelKeys)) {
-      return ConfigBinding.invalid('adapter config keys do not match schema v1');
+    if (schemaVersion == 2) {
+      exactTopLevelKeys.addAll(<String>{
+        'ruleSnapshotId',
+        'rulesDigest',
+        'activeUsageRules',
+        'usageRuleCoverage',
+      });
     }
-    if (decoded['schemaVersion'] != 1 ||
-        decoded['adapter'] != 'flutter' ||
+    if (!_hasExactKeys(decoded, exactTopLevelKeys)) {
+      return ConfigBinding.invalid('adapter config keys do not match its exact schema');
+    }
+    if (decoded['adapter'] != 'flutter' ||
         decoded['adapterVersion'] != _adapterVersion) {
       return ConfigBinding.invalid('unsupported Flutter adapter schema or version');
     }
@@ -199,6 +228,7 @@ final class GuardianAdapterConfigRepository {
     if (profileId is! String || profileId.isEmpty ||
         policyDigest is! String || !_isDigest(policyDigest) ||
         snapshotId is! String || snapshotId.isEmpty ||
+        (schemaVersion == 2 && !_isDigest(snapshotId)) ||
         sourceCutDigest is! String || !_isDigest(sourceCutDigest) ||
         configDigest is! String || !_isDigest(configDigest)) {
       return ConfigBinding.unbound(
@@ -387,8 +417,17 @@ final class GuardianAdapterConfigRepository {
         'approvedPackages must exactly bind all approved identities',
       );
     }
+    final usageRules = _parseUsageRules(
+      decoded,
+      schemaVersion: schemaVersion as int,
+      approvedWidgets: identities['widgets']!,
+    );
+    if (usageRules.error != null) {
+      return ConfigBinding.invalid(usageRules.error!);
+    }
     return ConfigBinding.valid(
       GuardianAdapterConfig(
+        schemaVersion: schemaVersion as int,
         profileId: profileId,
         policyDigest: policyDigest,
         snapshotId: snapshotId,
@@ -399,9 +438,159 @@ final class GuardianAdapterConfigRepository {
         approvedPackages: packages,
         approvedIdentities: identities,
         componentVariants: variants,
+        activeUsageRules: usageRules.rules!,
       ),
     );
   }
+}
+
+({
+  List<GuardianCompiledUsageRule>? rules,
+  String? error,
+}) _parseUsageRules(
+  Map<String, dynamic> decoded, {
+  required int schemaVersion,
+  required Set<String> approvedWidgets,
+}) {
+  if (schemaVersion == 1) {
+    return (
+      rules: const <GuardianCompiledUsageRule>[],
+      error: null,
+    );
+  }
+  final ruleSnapshotId = decoded['ruleSnapshotId'];
+  final rulesDigest = decoded['rulesDigest'];
+  if (ruleSnapshotId != decoded['snapshotId'] ||
+      ruleSnapshotId is! String ||
+      !_isDigest(ruleSnapshotId) ||
+      rulesDigest is! String ||
+      !_isDigest(rulesDigest)) {
+    return (rules: null, error: 'v2 rule snapshot bindings are invalid');
+  }
+  final rawRules = decoded['activeUsageRules'];
+  if (rawRules is! List) {
+    return (rules: null, error: 'activeUsageRules must be an array');
+  }
+  final rules = <GuardianCompiledUsageRule>[];
+  final ruleIds = <String>[];
+  for (final rawRule in rawRules) {
+    if (rawRule is! Map<String, dynamic>) {
+      return (rules: null, error: 'activeUsageRules contains a malformed rule');
+    }
+    final predicate = rawRule['predicate'];
+    final expectedKeys = <String>{
+      'ruleId',
+      'predicate',
+      'scope',
+      'constructorIdentities',
+    };
+    if (predicate == 'max_instances_per_scope') {
+      expectedKeys.add('max');
+    }
+    if (!_hasExactKeys(rawRule, expectedKeys) ||
+        (predicate != 'forbidden_identity_in_scope' &&
+            predicate != 'max_instances_per_scope') ||
+        rawRule['scope'] != 'compilation_unit') {
+      return (rules: null, error: 'activeUsageRules contains an unsupported predicate');
+    }
+    final ruleId = rawRule['ruleId'];
+    if (ruleId is! String || !_isRuleId(ruleId)) {
+      return (rules: null, error: 'activeUsageRules contains an invalid ruleId');
+    }
+    final constructors = _parseIdentityList(
+      rawRule['constructorIdentities'],
+      allowEmpty: false,
+    );
+    if (constructors == null ||
+        constructors.any((identity) => !approvedWidgets.contains(identity))) {
+      return (
+        rules: null,
+        error: 'activeUsageRules constructor is not an approved widget identity',
+      );
+    }
+    final rawMaximum = rawRule['max'];
+    final int maximum;
+    if (predicate == 'max_instances_per_scope') {
+      if (rawMaximum is! int || rawMaximum < 0) {
+        return (rules: null, error: 'activeUsageRules maximum is invalid');
+      }
+      maximum = rawMaximum;
+    } else {
+      maximum = 0;
+    }
+    ruleIds.add(ruleId);
+    rules.add(
+      GuardianCompiledUsageRule(
+        ruleId: ruleId,
+        predicate: predicate as String,
+        constructorIdentities: constructors,
+        maximum: maximum,
+      ),
+    );
+  }
+  if (!_isSortedUnique(ruleIds)) {
+    return (rules: null, error: 'activeUsageRules must be sorted and unique');
+  }
+
+  final coverage = decoded['usageRuleCoverage'];
+  if (coverage is! Map<String, dynamic> ||
+      !_hasExactKeys(coverage, <String>{
+        'status',
+        'activeRuleIds',
+        'inactive',
+        'informativeRuleIds',
+      })) {
+    return (rules: null, error: 'usageRuleCoverage has unknown or missing fields');
+  }
+  final coverageActive = _parseRuleIdList(coverage['activeRuleIds']);
+  if (coverageActive == null || !_sameStrings(coverageActive, ruleIds)) {
+    return (
+      rules: null,
+      error: 'usageRuleCoverage activeRuleIds differs from compiled rules',
+    );
+  }
+  final informative = _parseRuleIdList(coverage['informativeRuleIds']);
+  if (informative == null) {
+    return (rules: null, error: 'usageRuleCoverage informativeRuleIds is invalid');
+  }
+  final rawInactive = coverage['inactive'];
+  if (rawInactive is! List) {
+    return (rules: null, error: 'usageRuleCoverage inactive must be an array');
+  }
+  final inactiveIds = <String>[];
+  for (final item in rawInactive) {
+    if (item is! Map<String, dynamic> ||
+        !_hasExactKeys(item, <String>{'ruleId', 'reasonCode'})) {
+      return (rules: null, error: 'usageRuleCoverage inactive metadata is invalid');
+    }
+    final ruleId = item['ruleId'];
+    final reason = item['reasonCode'];
+    if (ruleId is! String ||
+        !_isRuleId(ruleId) ||
+        !const <String>{
+          'identity_not_mapped',
+          'unsupported_predicate_scope',
+          'unsupported_rule_class',
+        }.contains(reason)) {
+      return (rules: null, error: 'usageRuleCoverage inactive metadata is invalid');
+    }
+    inactiveIds.add(ruleId);
+  }
+  if (!_isSortedUnique(inactiveIds)) {
+    return (rules: null, error: 'usageRuleCoverage inactive rules are not canonical');
+  }
+  final allIds = <String>{...ruleIds, ...inactiveIds, ...informative};
+  if (allIds.length != ruleIds.length + inactiveIds.length + informative.length) {
+    return (rules: null, error: 'usageRuleCoverage rule classes overlap');
+  }
+  final expectedStatus = inactiveIds.isEmpty ? 'complete' : 'incomplete';
+  if (coverage['status'] != expectedStatus) {
+    return (rules: null, error: 'usageRuleCoverage status differs from inactive evidence');
+  }
+  return (
+    rules: List<GuardianCompiledUsageRule>.unmodifiable(rules),
+    error: null,
+  );
 }
 
 bool verifyConfigDigest(Map<String, dynamic> document) {
@@ -495,4 +684,30 @@ Set<String>? _parseIdentityList(Object? value, {required bool allowEmpty}) {
     if (value[index] != sorted[index]) return null;
   }
   return Set<String>.unmodifiable(output);
+}
+
+bool _isRuleId(String value) =>
+    RegExp(r'^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$').hasMatch(value);
+
+List<String>? _parseRuleIdList(Object? value) {
+  if (value is! List) return null;
+  final output = <String>[];
+  for (final item in value) {
+    if (item is! String || !_isRuleId(item)) return null;
+    output.add(item);
+  }
+  return _isSortedUnique(output) ? List<String>.unmodifiable(output) : null;
+}
+
+bool _isSortedUnique(List<String> values) {
+  final sorted = values.toSet().toList()..sort();
+  return _sameStrings(values, sorted);
+}
+
+bool _sameStrings(List<String> left, List<String> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }

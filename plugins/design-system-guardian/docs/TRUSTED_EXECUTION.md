@@ -1,6 +1,6 @@
 # Trusted execution boundary
 
-Design System Guardian 0.3.4 is a cross-agent public source release. Its local HMAC seals detect accidental corruption and cross-run replay, but they are not production authority against code running as the same operating-system account. An agent process that can read the local sealing key must never turn its own local evidence into a production approval.
+Design System Guardian 0.3.5 is a cross-agent public source release. Its local HMAC seals detect accidental corruption and cross-run replay, but they are not production authority against code running as the same operating-system account. An agent process that can read the local sealing key must never turn its own local evidence into a production approval.
 
 ## Three independent lanes
 
@@ -18,6 +18,12 @@ A local run may fail design-system or UX lanes from proven violations or gaps. I
 
 Usage-rule validation is a local read-only preview. It writes no Guardian or project state, is not consumed by audit or finalization in version 0.3.4, and always reports `productionReady=false`. Even a syntactically valid rule result cannot supply protected production authority.
 
+## Permission-bound Safe Activation
+
+Version 0.3.5 may activate the first two compilation-unit predicate pairs only after a zero-write preview and explicit permission for the exact candidate digest. Permission enables the evaluator; it does not approve rules. The complete catalog v2 and every activated rule require the selected profile's pinned external catalog-authority signature.
+
+Activation adds sealed evidence to a parallel append-only rule namespace and leaves all v1 state unchanged. Once v2 evidence exists, its absence or integrity failure blocks protected rule work; an older runtime or v1 snapshot is never an automatic fallback. Other predicates and scopes remain `not_assessed` until v0.3.6.
+
 ## Required production boundary
 
 A production gate must run the pinned Guardian release in a protected host or CI identity that the product-building agent cannot modify or impersonate. That host must provide all of the following as one reviewed integration:
@@ -33,7 +39,7 @@ No environment variable, project-local executable, caller-supplied path, local J
 
 ## Diagnostic behavior
 
-Version 0.3.4 does not integrate protected production authority. Local audit output is diagnostic: violations and gaps can fail, but a clean Figma or UX observation remains `not_assessed` rather than passing. `productionReady=false` whenever protected attestation is unavailable.
+Version 0.3.5 does not integrate protected production authority. Local audit output is diagnostic: violations and gaps can fail, but a clean Figma or UX observation remains `not_assessed` rather than passing. `productionReady=false` whenever protected attestation is unavailable.
 
 The convenience launchers `scripts/guardian` and `scripts/guardian.cmd` deliberately exit `4`; they do not discover Python from `PATH`. A protected host invokes `scripts/guardian.py` through its authority-bound runtime. For diagnostics and repository tests, a host-supplied absolute Python executable may invoke it after its path and SHA-256 are recorded. That route cannot change the protected lane.
 

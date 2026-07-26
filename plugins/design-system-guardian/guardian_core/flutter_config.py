@@ -34,7 +34,7 @@ from .paths import default_guardian_home
 TOKEN_CODE_CONNECT_EXTENSION = "org.design-system-guardian.code-connect"
 ADAPTER_VERSION = "0.1.0"
 
-_CONFIG_KEYS = {
+_CONFIG_V1_KEYS = {
     "schemaVersion",
     "adapter",
     "adapterVersion",
@@ -49,6 +49,13 @@ _CONFIG_KEYS = {
     "approvedIdentities",
     "componentVariants",
 }
+_CONFIG_V2_KEYS = _CONFIG_V1_KEYS | {
+    'ruleSnapshotId',
+    'rulesDigest',
+    'activeUsageRules',
+    'usageRuleCoverage',
+}
+
 _IDENTITY_CATEGORIES = (
     "colors",
     "textStyles",
@@ -70,9 +77,21 @@ _TOKEN_TYPE_CATEGORY = {
 }
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
+_RULE_ID = re.compile(r'^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$')
 _CODE_IDENTITY = re.compile(
     r"^(?:dart|package):[^#\s]+#[A-Za-z_$][A-Za-z0-9_$.]*$"
 )
+
+
+_ACTIVATED_USAGE_CAPABILITIES = [
+    {'predicate': 'forbidden_identity_in_scope', 'scope': 'compilation_unit'},
+    {'predicate': 'max_instances_per_scope', 'scope': 'compilation_unit'},
+]
+_INACTIVE_USAGE_RULE_REASONS = {
+    'identity_not_mapped',
+    'unsupported_predicate_scope',
+    'unsupported_rule_class',
+}
 
 
 class FlutterConfigError(ValueError):
@@ -327,12 +346,244 @@ def _derive_allowlist(snapshot: Any) -> tuple[dict[str, list[str]], dict[str, An
     )
 
 
+def _component_rule_symbol_map(
+    snapshot: Any,
+    approved_widgets: set[str],
+) -> dict[str, list[str]]:
+    """Bind canonical design identities only to approved exact Flutter constructors."""
+
+    registry = snapshot.get("registry") if isinstance(snapshot, dict) else None
+    components = registry.get("components") if isinstance(registry, dict) else None
+    if not isinstance(components, list):
+        raise FlutterConfigError("Verified registry.components must be an array.")
+    output: dict[str, list[str]] = {}
+    seen_design_identities: set[str] = set()
+    for index, asset in enumerate(components):
+        label = f"registry.components[{index}]"
+        if not isinstance(asset, dict) or asset.get("kind") != "component":
+            raise FlutterConfigError(f"{label} has an unsupported or conflicting asset kind.")
+        design_identity = asset.get("identity")
+        if not isinstance(design_identity, str) or not design_identity.strip():
+            raise FlutterConfigError(f"{label}.identity must be an exact non-empty string.")
+        if design_identity in seen_design_identities:
+            raise FlutterConfigError(
+                f"Design identity {design_identity!r} is duplicated ambiguously."
+            )
+        seen_design_identities.add(design_identity)
+        symbols = _registry_flutter_symbols(asset, "components", index)
+        if len(symbols) != len(set(symbols)):
+            raise FlutterConfigError(
+                f"{label} contains duplicate Flutter constructor mappings."
+            )
+        normalized = sorted(symbols)
+        if any(symbol not in approved_widgets for symbol in normalized):
+            raise FlutterConfigError(
+                f"{label} usage-rule mapping is not an approved widget identity."
+            )
+        if normalized:
+            output[design_identity] = normalized
+    return {identity: output[identity] for identity in sorted(output)}
+
+
+def _compile_usage_rules(
+    snapshot: Any,
+    approved_widgets: set[str] | list[str] | tuple[str, ...],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Compile only v0.3.5's two exact, permission-bound rule capabilities."""
+
+    if not isinstance(snapshot, dict):
+        raise FlutterConfigError("Verified rule snapshot is malformed.")
+    normalized_widgets = {
+        _exact_code_identity(value, "approved widget identity")
+        for value in approved_widgets
+    }
+    if len(normalized_widgets) != len(approved_widgets):
+        raise FlutterConfigError("Approved widget identities are not unique.")
+    capabilities = snapshot.get("activatedCapabilities")
+    if capabilities != _ACTIVATED_USAGE_CAPABILITIES:
+        raise FlutterConfigError(
+            "Rule snapshot activated capabilities differ from the v0.3.5 evaluator."
+        )
+    rules = snapshot.get("rules")
+    if not isinstance(rules, list):
+        raise FlutterConfigError("Rule snapshot rules must be an array.")
+    rule_ids: list[str] = []
+    for rule in rules:
+        rule_id = rule.get("ruleId") if isinstance(rule, dict) else None
+        if not isinstance(rule_id, str) or _RULE_ID.fullmatch(rule_id) is None:
+            raise FlutterConfigError("Rule snapshot contains an invalid ruleId.")
+        rule_ids.append(rule_id)
+    if rule_ids != sorted(set(rule_ids)):
+        raise FlutterConfigError("Rule snapshot rules are not sorted and unique by ruleId.")
+
+    constructor_map = _component_rule_symbol_map(snapshot, normalized_widgets)
+    active: list[dict[str, Any]] = []
+    inactive: list[dict[str, str]] = []
+    informative: list[str] = []
+    for rule in rules:
+        rule_id = rule["ruleId"]
+        rule_class = rule.get("class")
+        if rule_class == "informative":
+            informative.append(rule_id)
+            continue
+        if rule_class == "judgment":
+            inactive.append(
+                {"ruleId": rule_id, "reasonCode": "unsupported_rule_class"}
+            )
+            continue
+        if rule_class != "machine":
+            raise FlutterConfigError(f"Rule {rule_id!r} has an invalid rule class.")
+        predicate = rule.get("predicate")
+        if not isinstance(predicate, dict):
+            raise FlutterConfigError(f"Machine rule {rule_id!r} has no exact predicate.")
+        predicate_type = predicate.get("type")
+        scope = predicate.get("scope")
+        capability = {"predicate": predicate_type, "scope": scope}
+        if capability not in _ACTIVATED_USAGE_CAPABILITIES:
+            inactive.append(
+                {"ruleId": rule_id, "reasonCode": "unsupported_predicate_scope"}
+            )
+            continue
+        expected_predicate_keys = {"type", "identity", "scope"}
+        if predicate_type == "max_instances_per_scope":
+            expected_predicate_keys.add("max")
+        if set(predicate) != expected_predicate_keys:
+            raise FlutterConfigError(f"Machine rule {rule_id!r} predicate is malformed.")
+        design_identity = predicate.get("identity")
+        if not isinstance(design_identity, str) or not design_identity.strip():
+            raise FlutterConfigError(f"Machine rule {rule_id!r} identity is invalid.")
+        constructors = constructor_map.get(design_identity)
+        if not constructors:
+            inactive.append(
+                {"ruleId": rule_id, "reasonCode": "identity_not_mapped"}
+            )
+            continue
+        compiled: dict[str, Any] = {
+            "ruleId": rule_id,
+            "predicate": predicate_type,
+            "scope": "compilation_unit",
+            "constructorIdentities": copy.deepcopy(constructors),
+        }
+        if predicate_type == "max_instances_per_scope":
+            maximum = predicate.get("max")
+            if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0:
+                raise FlutterConfigError(f"Machine rule {rule_id!r} maximum is invalid.")
+            compiled["max"] = maximum
+        active.append(compiled)
+
+    coverage = {
+        "status": "incomplete" if inactive else "complete",
+        "activeRuleIds": [item["ruleId"] for item in active],
+        "inactive": inactive,
+        "informativeRuleIds": informative,
+    }
+    return active, coverage
+
+
+def _validate_usage_rule_config(
+    document: dict[str, Any],
+    approved_widgets: list[str],
+) -> None:
+    if document.get("ruleSnapshotId") != document.get("snapshotId"):
+        raise FlutterConfigError("ruleSnapshotId must equal the pinned snapshotId.")
+    rules_digest = document.get("rulesDigest")
+    if not isinstance(rules_digest, str) or _DIGEST.fullmatch(rules_digest) is None:
+        raise FlutterConfigError("Flutter adapter config rulesDigest is invalid.")
+    active = document.get("activeUsageRules")
+    if not isinstance(active, list):
+        raise FlutterConfigError("activeUsageRules must be an array.")
+    active_ids: list[str] = []
+    approved_widget_set = set(approved_widgets)
+    for item in active:
+        if not isinstance(item, dict):
+            raise FlutterConfigError("activeUsageRules contains a malformed rule.")
+        predicate = item.get("predicate")
+        expected = {"ruleId", "predicate", "scope", "constructorIdentities"}
+        if predicate == "max_instances_per_scope":
+            expected.add("max")
+        if (
+            set(item) != expected
+            or predicate
+            not in {"forbidden_identity_in_scope", "max_instances_per_scope"}
+            or item.get("scope") != "compilation_unit"
+        ):
+            raise FlutterConfigError("activeUsageRules contains an unsupported predicate.")
+        rule_id = item.get("ruleId")
+        if not isinstance(rule_id, str) or _RULE_ID.fullmatch(rule_id) is None:
+            raise FlutterConfigError("activeUsageRules contains an invalid ruleId.")
+        constructors = _variant_identity_list(
+            item.get("constructorIdentities"),
+            f"activeUsageRules.{rule_id}.constructorIdentities",
+        )
+        if any(identity not in approved_widget_set for identity in constructors):
+            raise FlutterConfigError(
+                "activeUsageRules constructor is not an approved widget identity."
+            )
+        if predicate == "max_instances_per_scope":
+            maximum = item.get("max")
+            if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0:
+                raise FlutterConfigError("activeUsageRules maximum is invalid.")
+        active_ids.append(rule_id)
+    if active_ids != sorted(set(active_ids)):
+        raise FlutterConfigError("activeUsageRules is not sorted and unique by ruleId.")
+
+    coverage = document.get("usageRuleCoverage")
+    expected_coverage_keys = {
+        "status",
+        "activeRuleIds",
+        "inactive",
+        "informativeRuleIds",
+    }
+    if not isinstance(coverage, dict) or set(coverage) != expected_coverage_keys:
+        raise FlutterConfigError("usageRuleCoverage has unknown or missing fields.")
+    if coverage.get("activeRuleIds") != active_ids:
+        raise FlutterConfigError("usageRuleCoverage activeRuleIds differs from compiled rules.")
+    informative = coverage.get("informativeRuleIds")
+    if (
+        not isinstance(informative, list)
+        or any(not isinstance(item, str) or _RULE_ID.fullmatch(item) is None for item in informative)
+        or informative != sorted(set(informative))
+    ):
+        raise FlutterConfigError("usageRuleCoverage informativeRuleIds is invalid.")
+    inactive = coverage.get("inactive")
+    if not isinstance(inactive, list):
+        raise FlutterConfigError("usageRuleCoverage inactive must be an array.")
+    inactive_ids: list[str] = []
+    for item in inactive:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"ruleId", "reasonCode"}
+            or not isinstance(item.get("ruleId"), str)
+            or _RULE_ID.fullmatch(item["ruleId"]) is None
+            or item.get("reasonCode") not in _INACTIVE_USAGE_RULE_REASONS
+        ):
+            raise FlutterConfigError("usageRuleCoverage contains invalid inactive metadata.")
+        inactive_ids.append(item["ruleId"])
+    if inactive_ids != sorted(set(inactive_ids)):
+        raise FlutterConfigError("usageRuleCoverage inactive rules are not sorted and unique.")
+    all_ids = active_ids + inactive_ids + informative
+    if len(all_ids) != len(set(all_ids)):
+        raise FlutterConfigError("usageRuleCoverage rule classes overlap.")
+    expected_status = "incomplete" if inactive else "complete"
+    if coverage.get("status") != expected_status:
+        raise FlutterConfigError("usageRuleCoverage status differs from inactive evidence.")
+
+
 def _validate_config_document(document: Any) -> dict[str, Any]:
-    if not isinstance(document, dict) or set(document) != _CONFIG_KEYS:
+    if not isinstance(document, dict):
+        raise FlutterConfigError("Flutter adapter config must be an object.")
+    schema_version = document.get("schemaVersion")
+    expected_keys = (
+        _CONFIG_V1_KEYS
+        if schema_version == 1
+        else _CONFIG_V2_KEYS
+        if schema_version == 2
+        else None
+    )
+    if expected_keys is None or set(document) != expected_keys:
         raise FlutterConfigError("Flutter adapter config has unknown or missing fields.")
     if (
-        document.get("schemaVersion") != 1
-        or document.get("adapter") != "flutter"
+        document.get("adapter") != "flutter"
         or document.get("adapterVersion") != ADAPTER_VERSION
     ):
         raise FlutterConfigError("Flutter adapter config schema or adapter version is unsupported.")
@@ -353,6 +604,8 @@ def _validate_config_document(document: Any) -> dict[str, Any]:
         normalized = [_exact_code_identity(item, f"approvedIdentities.{category}") for item in values]
         if normalized != sorted(set(normalized)):
             raise FlutterConfigError(f"approvedIdentities.{category} is not sorted and unique.")
+    if schema_version == 2:
+        _validate_usage_rule_config(document, approved["widgets"])
     variants = document.get("componentVariants")
     if not isinstance(variants, dict):
         raise FlutterConfigError("Flutter adapter componentVariants must be an object.")
@@ -451,8 +704,11 @@ def _generate_flutter_adapter_config_at_home(
         )
     except FlutterPackageProvenanceError as error:
         raise FlutterConfigError(str(error)) from error
+    snapshot_schema = snapshot.get("schemaVersion")
+    if snapshot_schema not in {1, 2}:
+        raise FlutterConfigError("Pinned snapshot schema is unsupported by the Flutter adapter.")
     unsigned = {
-        "schemaVersion": 1,
+        "schemaVersion": snapshot_schema,
         "adapter": "flutter",
         "adapterVersion": ADAPTER_VERSION,
         "profileId": pin["profileId"],
@@ -465,6 +721,48 @@ def _generate_flutter_adapter_config_at_home(
         "requiredPackages": required_packages,
         "componentVariants": component_variants,
     }
+    if snapshot_schema == 2:
+        snapshot_id = snapshot.get("snapshotId")
+        rules = snapshot.get("rules")
+        rules_digest = snapshot.get("rulesDigest")
+        rule_evidence = snapshot.get("ruleEvidence")
+        rule_validation = snapshot.get("ruleValidation")
+        if (
+            snapshot_id != pin.get("snapshotId")
+            or not isinstance(snapshot_id, str)
+            or _DIGEST.fullmatch(snapshot_id) is None
+        ):
+            raise FlutterConfigError("Rule snapshot identity differs from the sealed run pin.")
+        if (
+            not isinstance(rules, list)
+            or not isinstance(rules_digest, str)
+            or _DIGEST.fullmatch(rules_digest) is None
+            or sha256_digest(rules) != rules_digest
+        ):
+            raise FlutterConfigError("Rule snapshot rulesDigest does not bind canonical rules.")
+        if (
+            not isinstance(rule_evidence, dict)
+            or rule_evidence.get("captureAttempted") is not True
+            or rule_evidence.get("sourceComplete") is not True
+        ):
+            raise FlutterConfigError("Rule source capture is incomplete.")
+        if (
+            not isinstance(rule_validation, dict)
+            or rule_validation.get("status") != "allowed"
+        ):
+            raise FlutterConfigError("Rule validation is not allowed for production analysis.")
+        active_rules, rule_coverage = _compile_usage_rules(
+            snapshot,
+            set(approved_identities["widgets"]),
+        )
+        unsigned.update(
+            {
+                "ruleSnapshotId": snapshot_id,
+                "rulesDigest": rules_digest,
+                "activeUsageRules": active_rules,
+                "usageRuleCoverage": rule_coverage,
+            }
+        )
     config = {**unsigned, "configDigest": sha256_digest(unsigned)}
     return _validate_config_document(config)
 

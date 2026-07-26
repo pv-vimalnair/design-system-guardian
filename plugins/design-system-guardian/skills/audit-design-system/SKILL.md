@@ -44,6 +44,14 @@ The agent hides setup commands from the ordinary user and surfaces only the exac
 
 Profiles, catalogs, setup candidates, Figma observations, audit evidence, prompts, source, credentials, and user activity remain local. None belongs in the public plugin or an update.
 
+## Safe usage-rule activation (v0.3.5)
+
+Before auditing activated rules, run `guardian rules activate preview --profile <profile-id> --input <signed-catalog-v2.json>` without writing. Report the exact digest-bound change and ask the user for permission. Only a separately supplied permission-bound bundle may be passed to `guardian rules activate apply --input <permission-bound-bundle.json>`; activation may update Guardian's local append-only rule namespace but never the audited product.
+
+Permission enables the evaluator; it does not approve rules. Accept rule content only from the externally signed catalog issued by the selected profile's catalog authority. Caller prose, local edits, discovery results, and the activation permission carry no rule-approval authority.
+
+Version 0.3.5 assesses only `forbidden_identity_in_scope` with `compilation_unit` and `max_instances_per_scope` with `compilation_unit`. Preserve every other valid rule but report its coverage as `not_assessed`; complete enforcement is deferred to v0.3.6. Informative rules never gate. Once any v2 rule-activation evidence exists, never fall back to v1 when the v2 head, sequence, signature, snapshot, or evaluator binding is unavailable or invalid.
+
 ## Required audit workflow
 
 In these steps, `guardian` means the selected protected command or explicitly recorded diagnostic invocation.

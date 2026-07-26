@@ -250,6 +250,16 @@ def _snapshot_ingest(args: argparse.Namespace) -> int:
     snapshot = ingest_snapshot(home, profile, read_json(Path(args.input)))
     source_state = snapshot["sourceState"]
     status = "allowed" if source_state in {"fresh", "offline_grace"} else source_state
+    if snapshot.get("schemaVersion") == 2:
+        rule_evidence = snapshot.get("ruleEvidence")
+        rule_validation = snapshot.get("ruleValidation")
+        if not isinstance(rule_evidence, dict) or not isinstance(rule_validation, dict):
+            raise SnapshotValidationError("Rule-snapshot evidence is missing or malformed.")
+        if rule_evidence.get("sourceComplete") is not True:
+            source_state = ResolutionStatus.SOURCE_INCOMPLETE.value
+            status = source_state
+        elif rule_validation.get("status") != ResolutionStatus.ALLOWED.value:
+            status = str(rule_validation.get("status"))
     result = {
         "schemaVersion": 1,
         "status": status,
@@ -763,6 +773,29 @@ def _rules_validate_command(args: argparse.Namespace) -> int:
     return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
 
 
+def _rules_activate_preview_command(args: argparse.Namespace) -> int:
+    from .rule_activation import preview_rule_activation
+
+    result = preview_rule_activation(
+        default_guardian_home(),
+        profile_id=args.profile,
+        catalog_document=read_json(Path(args.input)),
+    )
+    _emit(result)
+    return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+
+
+def _rules_activate_apply_command(args: argparse.Namespace) -> int:
+    from .rule_activation import apply_rule_activation
+
+    result = apply_rule_activation(
+        default_guardian_home(),
+        read_json(Path(args.input)),
+    )
+    _emit(result)
+    return int(ExitCode.PASS)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="guardian")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -916,6 +949,27 @@ def build_parser() -> argparse.ArgumentParser:
     rules_validate.add_argument("--figma-node-id")
     rules_validate.add_argument("--figma-source-version")
     rules_validate.set_defaults(handler=_rules_validate_command)
+    rules_activate = rules_commands.add_parser(
+        "activate",
+        help="Preview or apply one permission-bound v2 rule-snapshot activation.",
+    )
+    rules_activate_commands = rules_activate.add_subparsers(
+        dest="rules_activate_command",
+        required=True,
+    )
+    rules_activate_preview = rules_activate_commands.add_parser(
+        "preview",
+        help="Verify one signed catalog v2 and return an exact permission request.",
+    )
+    rules_activate_preview.add_argument("--profile", required=True)
+    rules_activate_preview.add_argument("--input", required=True)
+    rules_activate_preview.set_defaults(handler=_rules_activate_preview_command)
+    rules_activate_apply = rules_activate_commands.add_parser(
+        "apply",
+        help="Apply a previously previewed activation only with exact granted permission.",
+    )
+    rules_activate_apply.add_argument("--input", required=True)
+    rules_activate_apply.set_defaults(handler=_rules_activate_apply_command)
 
     migrate = commands.add_parser("migrate")
     migrate.add_argument("--profile", required=True)

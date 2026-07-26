@@ -15,7 +15,7 @@ from unittest import mock
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
-EXPECTED_VERSION = "0.3.4"
+EXPECTED_VERSION = "0.3.5"
 EXPECTED_SKILLS = {"audit-design-system", "build-with-design-system"}
 
 
@@ -713,6 +713,137 @@ class CrossAgentPackagingTests(unittest.TestCase):
             )
             self.assertEqual(refused.returncode, 2)
             self.assertIn("refusing to replace modified skill", refused.stderr)
+
+    def test_generic_installer_uses_strict_semver_precedence(self) -> None:
+        module = installer_module()
+        for value in (
+            "0.0.0",
+            "1.2.3",
+            "1.2.3-alpha.1",
+            "1.2.3-alpha-1+build.7",
+        ):
+            with self.subTest(valid=value):
+                module.parse_semver(value, "pluginVersion")
+        for value in (
+            "v1.2.3",
+            "1.2",
+            "01.2.3",
+            "1.02.3",
+            "1.2.03",
+            "1.2.3-01",
+            "1.2.3-",
+            "1.2.3+",
+        ):
+            with self.subTest(invalid=value):
+                with self.assertRaisesRegex(module.InstallError, "strict SemVer"):
+                    module.parse_semver(value, "pluginVersion")
+
+        self.assertLess(module.compare_semver("1.2.3-alpha.1", "1.2.3-alpha.2"), 0)
+        self.assertLess(module.compare_semver("1.2.3-alpha", "1.2.3"), 0)
+        self.assertGreater(module.compare_semver("1.2.4", "1.2.3"), 0)
+        self.assertEqual(module.compare_semver("1.2.3+one", "1.2.3+two"), 0)
+
+    def test_generic_installer_replacement_version_gate_is_fail_closed(self) -> None:
+        module = installer_module()
+
+        def successful_runner(
+            command: list[str],
+            **_: object,
+        ) -> subprocess.CompletedProcess[bytes]:
+            return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+        def set_versions(target: Path, versions: tuple[str, str]) -> None:
+            for name, version in zip(module.SKILL_NAMES, versions):
+                path = target / name / module.BINDING_RELATIVE
+                binding = load_json(path)
+                binding["pluginVersion"] = version
+                write_json(path, binding)
+
+        def tree_bytes(target: Path) -> dict[str, bytes]:
+            return {
+                path.relative_to(target).as_posix(): path.read_bytes()
+                for path in sorted(target.rglob("*"))
+                if path.is_file()
+            }
+
+        candidate = load_json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json")["version"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            blocked_cases = (
+                ("downgrade", ("999.0.0", "999.0.0"), "refusing to downgrade"),
+                ("divergent", (candidate, "999.0.0"), "divergent pluginVersion"),
+                ("malformed", ("not-semver", "not-semver"), "strict SemVer"),
+            )
+            for label, versions, message in blocked_cases:
+                with self.subTest(blocked=label):
+                    target = root / label
+                    module.install(
+                        target,
+                        Path(sys.executable).resolve(),
+                        False,
+                        runtime_runner=successful_runner,
+                    )
+                    set_versions(target, versions)
+                    before = tree_bytes(target)
+                    with self.assertRaisesRegex(module.InstallError, message):
+                        module.install(
+                            target,
+                            Path(sys.executable).resolve(),
+                            True,
+                            runtime_runner=successful_runner,
+                        )
+                    self.assertEqual(tree_bytes(target), before)
+
+            for label, installed_version in (
+                ("same", candidate),
+                ("upgrade", "0.0.1"),
+            ):
+                with self.subTest(allowed=label):
+                    target = root / label
+                    module.install(
+                        target,
+                        Path(sys.executable).resolve(),
+                        False,
+                        runtime_runner=successful_runner,
+                    )
+                    set_versions(target, (installed_version, installed_version))
+                    module.install(
+                        target,
+                        Path(sys.executable).resolve(),
+                        True,
+                        runtime_runner=successful_runner,
+                    )
+                    for name in module.SKILL_NAMES:
+                        binding = load_json(target / name / module.BINDING_RELATIVE)
+                        self.assertEqual(binding["pluginVersion"], candidate)
+
+            with self.assertRaisesRegex(module.InstallError, "incomplete"):
+                module.validate_replacement_versions(
+                    candidate,
+                    [(module.SKILL_NAMES[0], {"pluginVersion": candidate})],
+                )
+
+            original_load_json = module.load_json
+            manifest_path = PLUGIN_ROOT / ".codex-plugin" / "plugin.json"
+
+            def malformed_candidate(path: Path) -> dict[str, object]:
+                value = original_load_json(path)
+                if Path(path).resolve() == manifest_path.resolve():
+                    return {**value, "version": "v1.2.3"}
+                return value
+
+            malformed_target = root / "malformed-candidate"
+            with (
+                mock.patch.object(module, "load_json", side_effect=malformed_candidate),
+                self.assertRaisesRegex(module.InstallError, "candidate pluginVersion"),
+            ):
+                module.install(
+                    malformed_target,
+                    Path(sys.executable).resolve(),
+                    False,
+                    runtime_runner=successful_runner,
+                )
+            self.assertFalse(malformed_target.exists())
 
     def test_interrupted_replacement_recovers_after_each_rename(self) -> None:
         module = installer_module()

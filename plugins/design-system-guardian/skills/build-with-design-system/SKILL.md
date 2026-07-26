@@ -40,6 +40,14 @@ The agent performs setup mechanics internally. The ordinary user should receive 
 
 All company design-system setup and run data stays local under `~/.design-system-guardian/`. Never add it to the public plugin, Git update, telemetry, prompt history, or generated deliverable.
 
+## Safe usage-rule activation (v0.3.5)
+
+Keep the existing profile and catalog snapshot intact. First run `guardian rules activate preview --profile <profile-id> --input <signed-catalog-v2.json>`; preview is read-only and must show the exact policy, profile, base snapshot, catalog, rules digest, approval sequence, evaluator, active predicate/scope pairs, deferred coverage, and target namespace. Ask the user for permission for that exact digest-bound activation. Only then run `guardian rules activate apply --input <permission-bound-bundle.json>`.
+
+Permission enables the evaluator; it does not approve rules. Rule approval comes only from the externally signed catalog issued by the selected profile's catalog authority. Never accept caller prose, a local edit, Figma discovery, or the permission itself as approval evidence.
+
+Version 0.3.5 activates only `forbidden_identity_in_scope` with `compilation_unit` and `max_instances_per_scope` with `compilation_unit`. Other valid usage rules remain preserved and previewable but `not_assessed`; their enforcement is deferred to v0.3.6. Informative rules never gate. If any v2 activation evidence exists but is missing, corrupt, incomplete, stale, or discontinuous, never fall back to v1 for protected usage-rule work.
+
 ## Statuses and sentinels
 
 | Status | Build action |

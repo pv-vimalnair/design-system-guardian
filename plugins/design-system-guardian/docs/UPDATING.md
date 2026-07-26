@@ -8,6 +8,16 @@ Guardian evolves in three separate layers:
 | Company catalog | Each approved source change creates a new immutable snapshot under its one profile. Profiles never blend. |
 | Plugin logic | Reviewed SemVer release, deterministic one-version migration, canary verification, then stable promotion. |
 
+## 0.3.5 release boundary
+
+Version 0.3.5 preserves every v0.3.2-v0.3.4 capability and adds only permission-bound Safe Activation. `guardian rules activate preview` performs no writes. `guardian rules activate apply` accepts only the exact digest-bound permission bundle for a complete catalog v2 already signed by the selected profile's pinned external catalog authority. Permission enables the evaluator; it does not approve rules.
+
+Apply writes a new immutable rule snapshot and approval-sequence continuation under the parallel `rule-snapshots/`, `rule-approval-sequences/`, and `current-rule-snapshot.json` namespace. It never mutates `profile.json`, v1 `snapshots/`, v1 `approval-sequences/`, `current-snapshot.json`, run pins, or v1 Flutter config. The first v2 sequence advances exactly one from the retained v1 high-water. Once v2 evidence exists, an invalid or unavailable v2 head blocks; there is no automatic v1 fallback.
+
+Only `forbidden_identity_in_scope` + `compilation_unit` and `max_instances_per_scope` + `compilation_unit` are active in this release. Every other valid rule remains preserved and previewable but `not_assessed` until v0.3.6. Normal generic-host installation rejects a lower SemVer before modifying either installed skill. Restoration remains a separately authorized release action.
+
+All company profiles, catalogs, usage rules, activation bundles, run evidence, and user content remain local. Public source and weighted Elo cases are synthetic and contain no company data.
+
 ## 0.3.4 release boundary
 
 Version 0.3.4 preserves permission-bound setup, exact Figma read-back, approved duplicate-file lineage, built-in screen/final-flow UX evaluation, three separate result lanes, and portable two-skill packaging with host-controlled routing. It adds `guardian rules validate` as the preview-only Usage Rules Lane foundation for explicit Figma description markers and local rule artifacts.
@@ -38,7 +48,7 @@ Any failure blocks publication. Never copy local company data into a release to 
 
 ## Release preparation
 
-This section records the intended future production flow. Version 0.3.4 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
+This section records the intended future production flow. Version 0.3.5 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
 
 1. Review the entire change and select the next strict SemVer. Normal promotion must be greater than every normal version previously promoted in that channel, including versions followed by a restoration.
 2. Run the complete unit/adversarial suite, plugin validator, skill validators, Python compilation, schema validation, and whitespace checks.
@@ -47,7 +57,7 @@ This section records the intended future production flow. Version 0.3.4 can prep
 5. Record one full lowercase Git object ID: 40 characters for SHA-1 repositories or 64 for SHA-256 repositories. Abbreviated commits are forbidden.
 6. Create a release manifest conforming to `schemas/release/release-manifest.schema.json`. The signed policy digest must remain `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`.
 7. Have the designated external release authority sign the exact bytes returned by `guardian_core.release.release_signing_payload`. Guardian does not sign and never receives the private key.
-8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.3.4 this call always blocks and accepts no configuration workaround.
+8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.3.5 this call always blocks and accepts no configuration workaround.
 
 The first production enrollment supplies only the external authority's public PEM to `enroll_release_authority`. Enrollment is create-once, and the release key must differ from the pinned catalog approval key. A different key is an integrity failure, not an automatic rotation.
 
@@ -88,7 +98,7 @@ Never edit migration history or a backup in place. Restoration creates a new app
 
 ## Rollback
 
-The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.3.4 always blocks the public rollback call.
+The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.3.5 always blocks the public rollback call.
 
 Rollback is an externally authorized release action, not a file copy or version decrement.
 

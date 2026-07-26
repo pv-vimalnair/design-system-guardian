@@ -171,6 +171,8 @@ class StrictRootSchemasTest(unittest.TestCase):
             "coverage.schema.json",
             "profile.schema.json",
             "resolution.schema.json",
+            "rule-activation-permission.schema.json",
+            "rule-activation-snapshot.schema.json",
             "rule.schema.json",
             "rules-validation-report.schema.json",
             "run-manifest.schema.json",
