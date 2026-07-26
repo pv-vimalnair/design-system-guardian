@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.dev/schemas/figma-observation.schema.json",
+  "title": "Guardian Figma read-back observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "adapter",
+    "adapterVersion",
+    "status",
+    "binding",
+    "source",
+    "document",
+    "analysis",
+    "observations"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "adapter": { "const": "figma" },
+    "adapterVersion": { "const": "0.1.0" },
+    "status": {
+      "enum": [
+        "allowed",
+        "unsupported",
+        "stale",
+        "source_unavailable",
+        "source_incomplete"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "profileId",
+        "policyDigest",
+        "snapshotId",
+        "sourceCutDigest",
+        "projectBindingDigest",
+        "configDigest",
+        "collectorDigest"
+      ],
+      "properties": {
+        "runId": { "$ref": "#/$defs/nonEmptyString" },
+        "profileId": { "$ref": "#/$defs/nonEmptyString" },
+        "policyDigest": { "$ref": "#/$defs/digest" },
+        "snapshotId": { "$ref": "#/$defs/digest" },
+        "sourceCutDigest": { "$ref": "#/$defs/digest" },
+        "projectBindingDigest": { "$ref": "#/$defs/digest" },
+        "configDigest": { "$ref": "#/$defs/digest" },
+        "collectorDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "available", "complete"],
+      "properties": {
+        "state": {
+          "enum": [
+            "fresh",
+            "offline_grace",
+            "stale",
+            "source_unavailable",
+            "source_incomplete"
+          ]
+        },
+        "available": { "type": "boolean" },
+        "complete": { "type": "boolean" }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileKey", "sourceVersion", "rootNodeIds"],
+      "properties": {
+        "fileKey": { "$ref": "#/$defs/nonEmptyString" },
+        "sourceVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "rootNodeIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "complete",
+        "assessedNodes",
+        "totalNodes",
+        "assessedFields",
+        "totalFields"
+      ],
+      "properties": {
+        "method": { "const": "figma_plugin_api_readback" },
+        "complete": { "type": "boolean" },
+        "assessedNodes": { "$ref": "#/$defs/count" },
+        "totalNodes": { "$ref": "#/$defs/count" },
+        "assessedFields": { "$ref": "#/$defs/count" },
+        "totalFields": { "$ref": "#/$defs/count" }
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/variableObservation" },
+          { "$ref": "#/$defs/styleObservation" },
+          { "$ref": "#/$defs/assetObservation" },
+          { "$ref": "#/$defs/rawObservation" },
+          { "$ref": "#/$defs/unassessedObservation" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "count": { "type": "integer", "minimum": 0 },
+    "category": {
+      "enum": [
+        "components",
+        "icons",
+        "colors",
+        "typography",
+        "spacing",
+        "radii",
+        "effects",
+        "motion"
+      ]
+    },
+    "textRange": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "end"],
+          "properties": {
+            "start": { "$ref": "#/$defs/count" },
+            "end": { "$ref": "#/$defs/count" }
+          }
+        }
+      ]
+    },
+    "figmaInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileKey",
+        "nodeId",
+        "sourceVersion",
+        "nodeType",
+        "canonicalAssetKey",
+        "remote",
+        "variant",
+        "properties",
+        "unapprovedOverrideFields"
+      ],
+      "properties": {
+        "fileKey": { "$ref": "#/$defs/nonEmptyString" },
+        "nodeId": { "$ref": "#/$defs/nonEmptyString" },
+        "sourceVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "nodeType": { "enum": ["INSTANCE", "FRAME", "COMPONENT"] },
+        "canonicalAssetKey": { "$ref": "#/$defs/nonEmptyString" },
+        "remote": { "type": "boolean" },
+        "variant": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/nonEmptyString" }
+          ]
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "unapprovedOverrideFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "variableObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "category",
+        "nodeId",
+        "field",
+        "identity",
+        "variableKey",
+        "collectionKey",
+        "resolvedType"
+      ],
+      "properties": {
+        "kind": { "const": "variable" },
+        "category": { "$ref": "#/$defs/category" },
+        "nodeId": { "$ref": "#/$defs/nonEmptyString" },
+        "field": { "$ref": "#/$defs/nonEmptyString" },
+        "identity": { "$ref": "#/$defs/nonEmptyString" },
+        "variableKey": { "$ref": "#/$defs/nonEmptyString" },
+        "collectionKey": { "$ref": "#/$defs/nonEmptyString" },
+        "resolvedType": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "styleObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "category",
+        "nodeId",
+        "field",
+        "identity",
+        "styleKey",
+        "styleType",
+        "range"
+      ],
+      "properties": {
+        "kind": { "const": "style" },
+        "category": { "$ref": "#/$defs/category" },
+        "nodeId": { "$ref": "#/$defs/nonEmptyString" },
+        "field": { "$ref": "#/$defs/nonEmptyString" },
+        "identity": { "$ref": "#/$defs/nonEmptyString" },
+        "styleKey": { "$ref": "#/$defs/nonEmptyString" },
+        "styleType": { "enum": ["paint", "text", "effect", "grid"] },
+        "range": { "$ref": "#/$defs/textRange" }
+      }
+    },
+    "assetObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "category", "nodeId", "field", "identity", "figmaInstance"],
+      "properties": {
+        "kind": { "const": "asset" },
+        "category": { "enum": ["components", "icons"] },
+        "nodeId": { "$ref": "#/$defs/nonEmptyString" },
+        "field": { "const": "instance" },
+        "identity": { "$ref": "#/$defs/nonEmptyString" },
+        "figmaInstance": { "$ref": "#/$defs/figmaInstance" }
+      }
+    },
+    "rawObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "category",
+        "nodeId",
+        "field",
+        "valueDigest",
+        "inferredVariableKeys"
+      ],
+      "properties": {
+        "kind": { "const": "raw" },
+        "category": { "$ref": "#/$defs/category" },
+        "nodeId": { "$ref": "#/$defs/nonEmptyString" },
+        "field": { "$ref": "#/$defs/nonEmptyString" },
+        "valueDigest": { "$ref": "#/$defs/digest" },
+        "inferredVariableKeys": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "unassessedObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "category", "nodeId", "field", "reason"],
+      "properties": {
+        "kind": { "const": "unassessed" },
+        "category": { "$ref": "#/$defs/category" },
+        "nodeId": { "$ref": "#/$defs/nonEmptyString" },
+        "field": { "$ref": "#/$defs/nonEmptyString" },
+        "reason": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

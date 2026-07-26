@@ -23,7 +23,7 @@ class FlutterConfigProvenanceTest(unittest.TestCase):
             home = root / "guardian-home"
             home.mkdir()
             pin = provision_pin(home, fully_mapped_catalog(), run_id="run-forged-config")
-            output = root / "generated.json"
+            output = home / "private" / "generated.json"
             stdout = io.StringIO()
             stderr = io.StringIO()
             with (

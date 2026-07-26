@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import importlib.util
 import json
 import shutil
@@ -8,12 +9,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+from unittest import mock
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
-EXPECTED_VERSION = "0.3.2"
+EXPECTED_VERSION = "0.3.3"
 EXPECTED_SKILLS = {"audit-design-system", "build-with-design-system"}
 
 
@@ -120,6 +122,49 @@ class CrossAgentPackagingTests(unittest.TestCase):
                 self.assertIn(phrase, guide)
 
         self.assertNotIn("copy the Guardian core", guide)
+        self.assertNotIn("Default routing on every compatible agent", guide)
+
+        kimi = load_json(REPOSITORY_ROOT / "kimi.plugin.json")
+        instructions = str(kimi["skillInstructions"])
+        self.assertIn("explicitly invoked", instructions)
+        self.assertIn("cannot prevent raw-tool bypass", instructions)
+        self.assertNotIn("route through one of the two Guardian skills", instructions)
+
+    def test_all_agent_guidance_is_fail_closed_and_setup_is_agent_driven(self) -> None:
+        guide = (PLUGIN_ROOT / "docs" / "INSTALLING.md").read_text(encoding="utf-8")
+        for phrase in (
+            "guardian setup status",
+            "guardian setup preview",
+            "guardian setup apply",
+            "No sealed Guardian manifest",
+            "local-only",
+            "unsupported",
+            "Skills are portable; automatic routing is not.",
+            "always-on protected route",
+            "cannot prevent raw-tool bypass",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
+
+    def test_install_guide_documents_permission_bound_runtime_bootstrap(self) -> None:
+        guide = (PLUGIN_ROOT / "docs" / "INSTALLING.md").read_text(encoding="utf-8")
+        for phrase in (
+            "--bootstrap-runtime",
+            "explicit permission",
+            "Python 3.11",
+            "isolated Guardian-owned virtual environment",
+            "bundled `requirements.txt`",
+            "never creates a virtual environment or invokes `pip`",
+            "host remains `unsupported`",
+            "fail closed",
+            "does not create an always-on protected route",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
+
+        lowered = guide.lower()
+        self.assertNotIn("zero prerequisites", lowered)
+        self.assertNotIn("no prerequisites", lowered)
 
     def test_installer_refuses_a_non_python_file(self) -> None:
         installer = PLUGIN_ROOT / "scripts" / "install_agent_skills.py"
@@ -142,6 +187,329 @@ class CrossAgentPackagingTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2)
             self.assertIn("cannot execute --python", result.stderr)
+
+    def test_runtime_bootstrap_is_explicit_and_requires_exact_pins(self) -> None:
+        module = installer_module()
+        self.assertEqual(
+            module.DEFAULT_RUNTIME_BASE,
+            Path.home() / ".design-system-guardian" / "runtimes",
+        )
+        base_arguments = [
+            "--target-root",
+            str((PLUGIN_ROOT / "unused-skills").resolve()),
+            "--python",
+            str(Path(sys.executable).resolve()),
+        ]
+        self.assertFalse(module.parser().parse_args(base_arguments).bootstrap_runtime)
+        self.assertTrue(
+            module.parser()
+            .parse_args([*base_arguments, "--bootstrap-runtime"])
+            .bootstrap_runtime
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            invalid = Path(temp_dir) / "requirements.txt"
+            invalid.write_text("cryptography>=46.0.7\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                module.InstallError,
+                "only exact name==version pins",
+            ):
+                module.load_pinned_requirements(invalid)
+
+    def test_default_install_verifies_host_without_provisioning(self) -> None:
+        module = installer_module()
+        commands: list[list[str]] = []
+
+        def fake_runner(
+            command: list[str],
+            **_: object,
+        ) -> subprocess.CompletedProcess[bytes]:
+            arguments = [str(value) for value in command]
+            commands.append(arguments)
+            return subprocess.CompletedProcess(arguments, 0, stdout=b"", stderr=b"")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "skills"
+            with mock.patch.object(module, "provision_runtime") as provision:
+                module.install(
+                    target,
+                    Path(sys.executable).resolve(),
+                    False,
+                    runtime_runner=fake_runner,
+                )
+            provision.assert_not_called()
+            self.assertEqual(
+                {path.name for path in target.iterdir() if path.is_dir()},
+                EXPECTED_SKILLS,
+            )
+            host_checks = [
+                command
+                for command in commands
+                if module.RUNTIME_VERIFICATION in command
+            ]
+            self.assertEqual(len(host_checks), 1)
+            self.assertNotIn("-I", host_checks[0])
+            script_index = host_checks[0].index("-c")
+            self.assertFalse(json.loads(host_checks[0][script_index + 4]))
+            self.assertFalse(
+                any(
+                    "-m" in command
+                    and (
+                        "pip" in command
+                        or "venv" in command
+                    )
+                    for command in commands
+                )
+            )
+
+    def test_default_dependency_failure_is_read_only_and_points_to_bootstrap(self) -> None:
+        module = installer_module()
+
+        def failing_runner(
+            command: list[str],
+            **_: object,
+        ) -> subprocess.CompletedProcess[bytes]:
+            arguments = [str(value) for value in command]
+            if module.RUNTIME_VERIFICATION in arguments:
+                return subprocess.CompletedProcess(
+                    arguments,
+                    1,
+                    stdout=b"",
+                    stderr=b"cffi: expected 2.1.0, found missing",
+                )
+            return subprocess.CompletedProcess(arguments, 0, stdout=b"", stderr=b"")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "skills"
+            with self.assertRaisesRegex(
+                module.InstallError,
+                "--bootstrap-runtime",
+            ):
+                module.install(
+                    target,
+                    Path(sys.executable).resolve(),
+                    False,
+                    runtime_runner=failing_runner,
+                )
+            self.assertFalse(target.exists())
+
+    def test_runtime_verifier_rejects_unpinned_only_in_isolated_mode(self) -> None:
+        module = installer_module()
+        approved = [
+            SimpleNamespace(metadata={"Name": name}, version=version)
+            for name, version in module.REQUIRED_RUNTIME_PINS.items()
+        ]
+        bootstrap = [
+            SimpleNamespace(metadata={"Name": name}, version="1.0")
+            for name in module.BOOTSTRAP_DISTRIBUTIONS
+        ]
+        rogue = SimpleNamespace(
+            metadata={"Name": "rogue-package"},
+            version="9.9",
+        )
+
+        def execute(distributions: list[object], *, strict: bool) -> object:
+            arguments = [
+                "verify-runtime",
+                json.dumps(module.REQUIRED_RUNTIME_PINS),
+                json.dumps(module.RUNTIME_IMPORTS),
+                json.dumps(strict),
+                json.dumps(module.BOOTSTRAP_DISTRIBUTIONS),
+            ]
+            with (
+                mock.patch.object(
+                    importlib.metadata,
+                    "distributions",
+                    return_value=distributions,
+                ),
+                mock.patch.object(importlib, "import_module"),
+                mock.patch.object(sys, "argv", arguments),
+                self.assertRaises(SystemExit) as exit_result,
+            ):
+                exec(module.RUNTIME_VERIFICATION, {})
+            return exit_result.exception.code
+
+        self.assertEqual(execute([*approved, *bootstrap], strict=True), 0)
+        strict_failure = execute([*approved, *bootstrap, rogue], strict=True)
+        self.assertIn("unexpected runtime distributions", str(strict_failure))
+        self.assertEqual(
+            execute([*approved, *bootstrap, rogue], strict=False),
+            0,
+        )
+
+    def test_runtime_storage_rejects_symlink_and_reparse_redirects(self) -> None:
+        module = installer_module()
+        symlink = SimpleNamespace(st_mode=module.stat.S_IFLNK, st_file_attributes=0)
+        reparse = SimpleNamespace(
+            st_mode=module.stat.S_IFDIR,
+            st_file_attributes=module.REPARSE_POINT_FLAG,
+        )
+        with mock.patch.object(module.os, "lstat", return_value=symlink):
+            self.assertTrue(module._path_is_redirect(Path("redirect")))
+        with mock.patch.object(module.os, "lstat", return_value=reparse):
+            self.assertTrue(module._path_is_redirect(Path("redirect")))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            redirected = root / "guardian-local"
+            runtime_base = redirected / "runtimes"
+
+            def redirect_component(path: Path) -> bool:
+                return Path(path).absolute() == redirected.absolute()
+
+            with (
+                mock.patch.object(
+                    module,
+                    "_path_is_redirect",
+                    side_effect=redirect_component,
+                ),
+                self.assertRaisesRegex(
+                    module.InstallError,
+                    "runtime storage redirect is forbidden",
+                ),
+            ):
+                module.install(
+                    root / "project" / ".agents" / "skills",
+                    Path(sys.executable).resolve(),
+                    False,
+                    bootstrap_runtime=True,
+                    runtime_runner=lambda command, **_: subprocess.CompletedProcess(
+                        command,
+                        0,
+                        stdout=b"",
+                        stderr=b"",
+                    ),
+                    runtime_base=runtime_base,
+                )
+            self.assertFalse(runtime_base.exists())
+    def test_opt_in_bootstrap_binds_the_account_local_runtime(self) -> None:
+        module = installer_module()
+        commands: list[list[str]] = []
+
+        def fake_runner(
+            command: list[str],
+            **_: object,
+        ) -> subprocess.CompletedProcess[bytes]:
+            arguments = [str(value) for value in command]
+            commands.append(arguments)
+            if arguments[1:5] == ["-I", "-m", "venv", "--copies"]:
+                stage_root = Path(arguments[-1])
+                fake_python = module.runtime_python_path(stage_root)
+                fake_python.parent.mkdir(parents=True, exist_ok=True)
+                fake_python.write_bytes(b"guardian isolated python")
+            return subprocess.CompletedProcess(arguments, 0, stdout=b"", stderr=b"")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_root = root / "project-repository"
+            target = project_root / ".agents" / "skills"
+            runtime_base = root / "guardian-local" / "runtimes"
+            module.install(
+                target,
+                Path(sys.executable).resolve(),
+                False,
+                bootstrap_runtime=True,
+                runtime_runner=fake_runner,
+                runtime_base=runtime_base,
+            )
+
+            runtime_roots = list(runtime_base.iterdir())
+            self.assertEqual(len(runtime_roots), 1)
+            runtime_root = runtime_roots[0]
+            runtime_python = module.runtime_python_path(runtime_root)
+            marker = load_json(runtime_root / module.RUNTIME_MARKER_NAME)
+            self.assertEqual(marker["owner"], "design-system-guardian")
+            self.assertEqual(Path(str(marker["targetRoot"])).resolve(), target.resolve())
+            self.assertTrue(runtime_root.resolve().is_relative_to(runtime_base.resolve()))
+            self.assertFalse(runtime_root.resolve().is_relative_to(project_root.resolve()))
+            self.assertEqual(
+                {path.name for path in target.parent.iterdir()},
+                {"skills"},
+            )
+            self.assertEqual(
+                marker["requirements"]["pins"],
+                {"cffi": "2.1.0", "cryptography": "46.0.7", "pycparser": "3.0"},
+            )
+
+            for name in EXPECTED_SKILLS:
+                binding = load_json(
+                    target
+                    / name
+                    / "references"
+                    / "guardian-install.json"
+                )
+                self.assertEqual(
+                    Path(str(binding["python"]["path"])).resolve(),
+                    runtime_python.resolve(),
+                )
+            self.assertEqual(
+                {path.name for path in target.iterdir() if path.is_dir()},
+                EXPECTED_SKILLS,
+            )
+
+            venv_calls = [
+                command
+                for command in commands
+                if command[1:5] == ["-I", "-m", "venv", "--copies"]
+            ]
+            pip_calls = [
+                command
+                for command in commands
+                if command[1:4] == ["-I", "-m", "pip"]
+            ]
+            self.assertEqual(len(venv_calls), 1)
+            self.assertEqual(len(pip_calls), 1)
+            self.assertEqual(
+                pip_calls[0][4:],
+                [
+                    "--isolated",
+                    "--disable-pip-version-check",
+                    "install",
+                    "--no-input",
+                    "--no-deps",
+                    "--requirement",
+                    str((PLUGIN_ROOT / "requirements.txt").resolve()),
+                ],
+            )
+            self.assertNotIn("cryptography==46.0.7", pip_calls[0])
+            verification_calls = [
+                command
+                for command in commands
+                if command[1:3] == ["-I", "-c"]
+                and "importlib.metadata" in command[3]
+            ]
+            self.assertGreaterEqual(len(verification_calls), 2)
+            self.assertEqual(
+                json.loads(verification_calls[0][4]),
+                {"cffi": "2.1.0", "cryptography": "46.0.7", "pycparser": "3.0"},
+            )
+            self.assertEqual(
+                set(json.loads(verification_calls[0][5])),
+                set(module.RUNTIME_IMPORTS),
+            )
+
+            module.install(
+                target,
+                Path(sys.executable).resolve(),
+                True,
+                bootstrap_runtime=True,
+                runtime_runner=fake_runner,
+                runtime_base=runtime_base,
+            )
+            self.assertEqual(
+                sum(
+                    command[1:5] == ["-I", "-m", "venv", "--copies"]
+                    for command in commands
+                ),
+                1,
+            )
+            self.assertEqual(
+                sum(
+                    command[1:4] == ["-I", "-m", "pip"]
+                    for command in commands
+                ),
+                1,
+            )
 
     def test_package_digest_covers_runtime_sentinel_resources(self) -> None:
         installer = installer_module()

@@ -122,6 +122,30 @@ class VisibleSkillContractTest(unittest.TestCase):
             },
         )
 
+    def test_v033_skills_disclose_routing_setup_figma_and_ux_boundaries(self) -> None:
+        required = (
+            "guardian setup status",
+            "guardian setup preview",
+            "guardian setup apply",
+            "exact figma binding",
+            "quick screen checkpoint",
+            "final-flow",
+            "no sealed guardian manifest",
+            "protected production authority",
+            "loading this skill does not create an always-on protected route",
+            "cannot prevent raw-tool bypass",
+            "clean caller-carried figma or ux evidence remains `not_assessed` until protected host attestation",
+            "inside the canonical guardian local state",
+            "never label those local lanes `allowed`",
+        )
+        for name in ("build-with-design-system", "audit-design-system"):
+            lowered = skill_text(name).lower()
+            with self.subTest(skill=name):
+                for phrase in required:
+                    self.assertIn(phrase, lowered)
+                self.assertNotIn("--output <config.json>", lowered)
+                self.assertNotIn("even when design-system and ux lanes are allowed", lowered)
+
 
 if __name__ == "__main__":
     unittest.main()

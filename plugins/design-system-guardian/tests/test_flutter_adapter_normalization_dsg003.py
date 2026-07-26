@@ -157,7 +157,7 @@ class FlutterAdapterNormalizationTest(unittest.TestCase):
         raw["coverage"]["colors"]["diagnosticCount"] = 1
         raw["diagnostics"] = [diagnostic("guardian_unapproved_color")]
         result = self.evaluate(raw)
-        self.assertEqual(result.exit_code, ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+        self.assertEqual(result.exit_code, ExitCode.VIOLATION_OR_SENTINEL)
         self.assertEqual(result.result["designSystemLane"]["status"], "conflict")
         self.assertEqual(result.result["designSystemLane"]["violations"][0]["category"], "colors")
 
@@ -173,7 +173,7 @@ class FlutterAdapterNormalizationTest(unittest.TestCase):
             diagnostic("guardian_unapproved_radius", line=21),
         ]
         result = self.evaluate(raw)
-        self.assertEqual(result.exit_code, ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+        self.assertEqual(result.exit_code, ExitCode.VIOLATION_OR_SENTINEL)
         self.assertEqual(
             {item["category"] for item in result.result["designSystemLane"]["violations"]},
             {"spacing", "radii"},
@@ -257,7 +257,7 @@ class FlutterAdapterNormalizationTest(unittest.TestCase):
             }
         ]
         result = self.evaluate(raw)
-        self.assertEqual(result.exit_code, ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+        self.assertEqual(result.exit_code, ExitCode.VIOLATION_OR_SENTINEL)
         self.assertEqual(
             {item["category"] for item in result.result["designSystemLane"]["violations"]},
             set(CATEGORIES),

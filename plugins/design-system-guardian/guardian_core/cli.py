@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Sequence
 
 
+from .adapter_dispatch import (
+    AdapterDispatchError,
+    build_figma_runner_evidence,
+    build_pinned_adapter_config,
+    select_adapter,
+)
 from .audit import _authoritatively_resolve, evaluate_audit
 from .audit_attestation import build_analysis_attestation
 from .canonical import atomic_write_json, canonical_json_text, read_canonical_json, read_json, sha256_digest
@@ -18,6 +24,11 @@ from .dtcg import DtcgValidationError
 from .elo import benchmark_elo, evaluate_elo, read_elo_state
 from .errors import GuardianError, PolicyIntegrityError
 from .finalize import finalize_run
+from .figma_adapter import (
+    FigmaAdapterIntegrityError,
+    FigmaAdapterSourceError,
+    expected_figma_ux_target,
+)
 from .flutter_adapter import normalize_flutter_adapter_result
 from .flutter_config import (
     _generate_flutter_adapter_config_at_home,
@@ -27,7 +38,13 @@ from .flutter_config import (
 )
 from .flutter_runner import FlutterRunnerUnsupportedError, run_flutter_analysis
 from .migrations import default_migration_registry, migrate_to_current
-from .paths import GuardianPaths, default_guardian_home
+from .onboarding import (
+    OnboardingError,
+    apply_onboarding,
+    inspect_onboarding,
+    prepare_onboarding_permission,
+)
+from .paths import GuardianPaths, assert_guardian_storage_path, default_guardian_home
 from .policy import (
     ELO_ENROLLMENT_NAME,
     TRUST_SCHEMA_VERSION,
@@ -42,9 +59,31 @@ from .profile import ProfileValidationError, install_profile, load_profile, vali
 from .resolver import resolve_identity
 from .run_artifacts import read_run_artifact, seal_run_artifact, write_run_artifact
 from .snapshot import SnapshotValidationError, ingest_snapshot
+from .ux_evaluator import (
+    UxEvaluationIntegrityError,
+    audit_checks_from_evaluation,
+    evaluate_final_flow,
+    evaluate_screen_checkpoint,
+)
 
 
-_AUDIT_REQUEST_KEYS = {"schemaVersion", "projectRoot", "resolutions", "uxChecks"}
+_AUDIT_REQUEST_V1_KEYS = {"schemaVersion", "projectRoot", "resolutions", "uxChecks"}
+_AUDIT_REQUEST_V2_KEYS = {
+    "schemaVersion",
+    "adapter",
+    "projectRoot",
+    "resolutions",
+    "uxEvidence",
+    "adapterEvidence",
+}
+_UX_EVIDENCE_KEYS = {"target", "observations"}
+_UX_CHECKPOINT_KEYS = {"schemaVersion", "target", "observations"}
+_ONBOARDING_CANDIDATE_KEYS = {
+    "schemaVersion",
+    "catalogAuthorityPublicKey",
+    "profile",
+    "catalog",
+}
 
 
 def _emit(value: dict[str, object], *, error: bool = False) -> None:
@@ -81,6 +120,60 @@ def _status_for_exit(code: ExitCode) -> str:
         ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE: ResolutionStatus.UNSUPPORTED.value,
     }[code]
 
+
+
+def _setup_status(args: argparse.Namespace) -> int:
+    result = inspect_onboarding(
+        default_guardian_home(),
+        profile_id=args.profile,
+    )
+    _emit(result)
+    status = str(result["status"])
+    if status == "ready":
+        return int(ExitCode.PASS)
+    if status in {
+        ResolutionStatus.STALE.value,
+        ResolutionStatus.SOURCE_UNAVAILABLE.value,
+        ResolutionStatus.SOURCE_INCOMPLETE.value,
+    }:
+        return int(ExitCode.SOURCE_UNAVAILABLE_STALE_OR_INCOMPLETE)
+    if status == ResolutionStatus.INVALID.value:
+        return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
+    return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+
+
+def _setup_preview(args: argparse.Namespace) -> int:
+    candidate = _canonical_object(
+        args.input,
+        keys=_ONBOARDING_CANDIDATE_KEYS,
+        label="Onboarding candidate",
+    )
+    if candidate.get("schemaVersion") != 1:
+        raise OnboardingError("Onboarding candidate schemaVersion must be exactly 1.")
+    public_key = candidate.get("catalogAuthorityPublicKey")
+    if not isinstance(public_key, str):
+        raise OnboardingError("Onboarding catalog authority key path must be a string.")
+    result = prepare_onboarding_permission(
+        catalog_authority_public_key=Path(public_key),
+        profile_document=candidate.get("profile"),
+        catalog_document=candidate.get("catalog"),
+    )
+    _emit(result)
+    return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+
+
+def _setup_apply(args: argparse.Namespace) -> int:
+    bundle = _canonical_object(
+        args.input,
+        keys=None,
+        label="Onboarding bundle",
+    )
+    result = apply_onboarding(default_guardian_home(), bundle)
+    _emit(result)
+    status = str(result["status"])
+    if status == ResolutionStatus.ALLOWED.value:
+        return int(ExitCode.PASS)
+    return _exit_for_status(status)
 
 
 def _doctor(args: argparse.Namespace) -> int:
@@ -213,63 +306,134 @@ def _audit_command(args: argparse.Namespace) -> int:
     )
     request = _canonical_object(
         args.input,
-        keys=_AUDIT_REQUEST_KEYS,
+        keys=None,
         label="Audit request",
     )
-    if request.get("schemaVersion") != 1:
-        raise ValueError("Audit request schemaVersion must be exactly 1.")
+    schema_version = request.get("schemaVersion")
+    if schema_version == 1:
+        if set(request) != _AUDIT_REQUEST_V1_KEYS:
+            raise ValueError("Version 1 audit request has unknown or missing fields.")
+        requested_adapter = "flutter"
+        legacy_ux_checks = request.get("uxChecks")
+        ux_evidence = None
+        adapter_evidence = None
+    elif schema_version == 2:
+        if set(request) != _AUDIT_REQUEST_V2_KEYS:
+            raise ValueError("Version 2 audit request has unknown or missing fields.")
+        requested_adapter = select_adapter(context["profile"], request.get("adapter"))
+        legacy_ux_checks = []
+        ux_evidence = request.get("uxEvidence")
+        adapter_evidence = request.get("adapterEvidence")
+        if not isinstance(ux_evidence, dict) or set(ux_evidence) != _UX_EVIDENCE_KEYS:
+            raise ValueError("Version 2 audit uxEvidence has unknown or missing fields.")
+        if not isinstance(ux_evidence.get("target"), dict) or not isinstance(
+            ux_evidence.get("observations"), list
+        ):
+            raise ValueError("Version 2 audit UX target and observations are invalid.")
+    else:
+        raise ValueError("Audit request schemaVersion must be exactly 1 or 2.")
+
     project_root = request.get("projectRoot")
-    if not isinstance(project_root, str) or not project_root.strip() or project_root.strip() != project_root:
+    if (
+        not isinstance(project_root, str)
+        or not project_root.strip()
+        or project_root.strip() != project_root
+    ):
         raise ValueError("Audit request projectRoot must be one exact non-empty path.")
     project_binding = require_requested_project(
         context["pin"]["projectBinding"], project_root
     )
-    expected_config = _generate_flutter_adapter_config_at_home(
-        home,
-        profile_id=args.profile,
-        run_id=args.run_id,
-    )
     resolutions = request.get("resolutions")
-    ux_checks = request.get("uxChecks")
-    if not isinstance(resolutions, list) or not isinstance(ux_checks, list):
-        raise ValueError("Audit resolutions and uxChecks must be arrays.")
+    if not isinstance(resolutions, list) or not isinstance(legacy_ux_checks, list):
+        raise ValueError("Audit resolutions and legacy uxChecks must be arrays.")
     authoritative, _, _ = _authoritatively_resolve(
         resolutions,
         pin=context["pin"],
         verified_snapshot=context["snapshot"],
     )
-    expected_sentinels = tuple(
-        {
-            "requestId": item["sentinel"]["requestId"],
-            "kind": item["sentinel"]["kind"],
-            "policyDigest": context["pin"]["policyDigest"],
-        }
-        for item in authoritative
-        if item.get("sentinel") is not None
-    )
-    with tempfile.TemporaryDirectory(prefix="design-system-guardian-audit-") as directory:
-        config_path = Path(directory) / "flutter-adapter.json"
-        write_flutter_adapter_config(expected_config, output_path=config_path)
-        runner_evidence = run_flutter_analysis(
-            project_root=Path(project_root),
-            adapter_config_path=config_path,
-            run_pin=context["pin"],
-            expected_sentinels=expected_sentinels,
+
+    if requested_adapter == "flutter":
+        if schema_version == 2 and adapter_evidence is not None:
+            raise ValueError("Flutter audit adapterEvidence must be null.")
+        expected_config = _generate_flutter_adapter_config_at_home(
+            home,
+            profile_id=args.profile,
+            run_id=args.run_id,
         )
+        expected_sentinels = tuple(
+            {
+                "requestId": item["sentinel"]["requestId"],
+                "kind": item["sentinel"]["kind"],
+                "policyDigest": context["pin"]["policyDigest"],
+            }
+            for item in authoritative
+            if item.get("sentinel") is not None
+        )
+        with tempfile.TemporaryDirectory(prefix="design-system-guardian-audit-") as directory:
+            config_path = Path(directory) / "flutter-adapter.json"
+            write_flutter_adapter_config(expected_config, output_path=config_path)
+            runner_evidence = run_flutter_analysis(
+                project_root=Path(project_root),
+                adapter_config_path=config_path,
+                run_pin=context["pin"],
+                expected_sentinels=expected_sentinels,
+            )
+        normalized = normalize_flutter_adapter_result(
+            runner_evidence.get("adapterResult"),
+            adapter_config=expected_config,
+            run_pin=context["pin"],
+        )
+        # Bind the already-derived audit projection into the sealed runner
+        # evidence. Finalization still re-normalizes the raw analyzer result.
+        runner_evidence["normalizedAdapterResult"] = normalized
+    else:
+        if not isinstance(adapter_evidence, dict):
+            raise ValueError("Figma audit requires one fixed collector observation object.")
+        runner_evidence, normalized, expected_config = build_figma_runner_evidence(
+            observation=adapter_evidence,
+            run_pin=context["pin"],
+            verified_snapshot=context["snapshot"],
+            project_binding=project_binding,
+        )
+
     project_evidence = project_evidence_from_runner(
         project_binding, runner_evidence.get("project")
     )
-    normalized = normalize_flutter_adapter_result(
-        runner_evidence.get("adapterResult"),
-        adapter_config=expected_config,
-        run_pin=context["pin"],
-    )
+    trusted_ux_checks = None
+    ux_target = None
+    ux_evaluation = None
+    if schema_version == 2:
+        if not isinstance(ux_evidence, dict):
+            raise RuntimeError("Validated v2 UX evidence is unavailable.")
+        ux_target = ux_evidence["target"]
+        if requested_adapter == "figma":
+            expected_target = expected_figma_ux_target(
+                adapter_evidence,
+                run_pin=context["pin"],
+                verified_snapshot=context["snapshot"],
+            )
+            if ux_target != expected_target:
+                raise UxEvaluationIntegrityError(
+                    "Figma UX target is not bound to the exact audited document roots."
+                )
+        ux_evaluation = evaluate_final_flow(
+            target=ux_target,
+            observations=ux_evidence["observations"],
+            source_cut=context["pin"]["sourceCut"],
+        )
+        trusted_ux_checks = audit_checks_from_evaluation(
+            ux_evaluation,
+            target=ux_target,
+            source_cut=context["pin"]["sourceCut"],
+        )
+
     runner_digest = sha256_digest(runner_evidence)
     evaluation = evaluate_audit(
         run_pin=context["pin"],
         adapter_result=normalized,
         resolutions=authoritative,
-        ux_checks=ux_checks,
+        ux_checks=legacy_ux_checks,
+        trusted_ux_checks=trusted_ux_checks,
         verified_snapshot=context["snapshot"],
         analysis_attestation_digest=runner_digest,
         project_evidence=project_evidence,
@@ -279,6 +443,10 @@ def _audit_command(args: argparse.Namespace) -> int:
         config_digest=expected_config["configDigest"],
         runner_evidence=runner_evidence,
         audit_result=evaluation.result,
+        ux_target=ux_target,
+        ux_evaluation=ux_evaluation,
+        adapter_config=expected_config,
+        verified_snapshot=context["snapshot"],
     )
     envelope = seal_run_artifact(
         home,
@@ -291,13 +459,23 @@ def _audit_command(args: argparse.Namespace) -> int:
     _emit(evaluation.result)
     return int(evaluation.exit_code)
 
+def _private_adapter_output(home: Path, requested: str) -> Path:
+    """Keep design-system allowlists inside Guardian host-owned local state."""
+
+    if not isinstance(requested, str) or not requested.strip():
+        raise ValueError("Adapter config output must be one exact non-empty path.")
+    return assert_guardian_storage_path(
+        home, Path(requested).expanduser().absolute()
+    )
+
 
 def _flutter_config_command(args: argparse.Namespace) -> int:
+    home = default_guardian_home()
     config = generate_flutter_adapter_config(
         profile_id=args.profile,
         run_id=args.run_id,
     )
-    output_path = Path(args.output).expanduser().absolute()
+    output_path = _private_adapter_output(home, args.output)
     written_path = write_flutter_adapter_config(config, output_path=output_path)
     _emit(
         {
@@ -313,6 +491,69 @@ def _flutter_config_command(args: argparse.Namespace) -> int:
     )
     return int(ExitCode.PASS)
 
+
+def _figma_config_command(args: argparse.Namespace) -> int:
+    home = default_guardian_home()
+    _, config = build_pinned_adapter_config(
+        home,
+        profile_id=args.profile,
+        run_id=args.run_id,
+        adapter="figma",
+    )
+    output_path = _private_adapter_output(home, args.output)
+    atomic_write_json(output_path, config)
+    if read_canonical_json(output_path) != config:
+        raise ValueError("Written Figma adapter config is not canonical.")
+    _emit(
+        {
+            "schemaVersion": 1,
+            "status": ResolutionStatus.ALLOWED.value,
+            "profileId": config["profileId"],
+            "runId": args.run_id,
+            "adapter": config["adapter"],
+            "adapterVersion": config["adapterVersion"],
+            "configDigest": config["configDigest"],
+            "collectorDigest": config["collectorDigest"],
+            "outputPath": str(output_path),
+        }
+    )
+    return int(ExitCode.PASS)
+
+
+def _ux_checkpoint_command(args: argparse.Namespace) -> int:
+    home = default_guardian_home()
+    context = load_run_pin(
+        home,
+        profile_id=args.profile,
+        run_id=args.run_id,
+        policy_digest=verify_policy_anchor(home),
+    )
+    request = _canonical_object(
+        args.input,
+        keys=_UX_CHECKPOINT_KEYS,
+        label="UX checkpoint request",
+    )
+    if request.get("schemaVersion") != 1:
+        raise UxEvaluationIntegrityError(
+            "UX checkpoint schemaVersion must be exactly 1."
+        )
+    target = request.get("target")
+    observations = request.get("observations")
+    if not isinstance(target, dict) or not isinstance(observations, list):
+        raise UxEvaluationIntegrityError(
+            "UX checkpoint target and observations are invalid."
+        )
+    result = evaluate_screen_checkpoint(
+        target=target,
+        observations=observations,
+        source_cut=context["pin"]["sourceCut"],
+    )
+    _emit(result)
+    if result["status"] == ResolutionStatus.ALLOWED.value:
+        return int(ExitCode.PASS)
+    if result["status"] == ResolutionStatus.CONFLICT.value:
+        return int(ExitCode.VIOLATION_OR_SENTINEL)
+    return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
 
 def _finalize_command(args: argparse.Namespace) -> int:
     home = default_guardian_home()
@@ -468,6 +709,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="guardian")
     commands = parser.add_subparsers(dest="command", required=True)
 
+    setup = commands.add_parser(
+        "setup",
+        help="Inspect or apply permission-bound local Guardian onboarding.",
+    )
+    setup_commands = setup.add_subparsers(dest="setup_command", required=True)
+    setup_status = setup_commands.add_parser(
+        "status",
+        help="Inspect local readiness without changing files.",
+    )
+    setup_status.add_argument("--profile")
+    setup_status.set_defaults(handler=_setup_status)
+    setup_preview = setup_commands.add_parser(
+        "preview",
+        help="Validate one local candidate and return the exact permission request.",
+    )
+    setup_preview.add_argument("--input", required=True)
+    setup_preview.set_defaults(handler=_setup_preview)
+    setup_apply = setup_commands.add_parser(
+        "apply",
+        help="Apply a candidate only when its exact permission binding is granted.",
+    )
+    setup_apply.add_argument("--input", required=True)
+    setup_apply.set_defaults(handler=_setup_apply)
+
     doctor = commands.add_parser("doctor", help="Verify Guardian integrity and environment readiness.")
     doctor.add_argument("--install-policy", action="store_true", help="Create the immutable policy anchor once.")
     doctor.add_argument(
@@ -518,6 +783,28 @@ def build_parser() -> argparse.ArgumentParser:
     flutter_config.add_argument("--output", required=True)
     flutter_config.set_defaults(handler=_flutter_config_command)
 
+    figma = adapter_commands.add_parser("figma")
+    figma_commands = figma.add_subparsers(dest="figma_command", required=True)
+    figma_config = figma_commands.add_parser("config")
+    figma_config.add_argument("--profile", required=True)
+    figma_config.add_argument("--run-id", required=True)
+    figma_config.add_argument("--output", required=True)
+    figma_config.set_defaults(handler=_figma_config_command)
+
+    ux = commands.add_parser(
+        "ux",
+        help="Run built-in UX/accessibility evidence checks.",
+    )
+    ux_commands = ux.add_subparsers(dest="ux_command", required=True)
+    ux_checkpoint = ux_commands.add_parser(
+        "checkpoint",
+        help="Evaluate one completed screen without production authority.",
+    )
+    ux_checkpoint.add_argument("--profile", required=True)
+    ux_checkpoint.add_argument("--run-id", required=True)
+    ux_checkpoint.add_argument("--input", required=True)
+    ux_checkpoint.set_defaults(handler=_ux_checkpoint_command)
+
     finalize = commands.add_parser("finalize")
     finalize.add_argument("--profile", required=True)
     finalize.add_argument("--run-id", required=True)
@@ -560,7 +847,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = parser.parse_args(list(argv) if argv is not None else None)
         return int(args.handler(args))
-    except (FlutterAdapterUnsupportedError, FlutterRunnerUnsupportedError) as error:
+    except (
+        AdapterDispatchError,
+        FlutterAdapterUnsupportedError,
+        FlutterRunnerUnsupportedError,
+    ) as error:
         _emit(
             {
                 "error": error.__class__.__name__,
@@ -570,6 +861,54 @@ def main(argv: Sequence[str] | None = None) -> int:
             error=True,
         )
         return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    except FigmaAdapterSourceError as error:
+        _emit(
+            {
+                "schemaVersion": 1,
+                "status": error.status,
+                "stage": "figma_source",
+                "reasonCode": f"figma_{error.status}",
+                "message": str(error),
+                "localChangesPerformed": False,
+                "nextAction": "refresh_the_exact_allowlisted_figma_source",
+            },
+            error=True,
+        )
+        return int(ExitCode.SOURCE_UNAVAILABLE_STALE_OR_INCOMPLETE)
+    except (FigmaAdapterIntegrityError, UxEvaluationIntegrityError) as error:
+        stage = (
+            "figma_audit"
+            if isinstance(error, FigmaAdapterIntegrityError)
+            else "ux_evaluation"
+        )
+        _emit(
+            {
+                "schemaVersion": 1,
+                "status": ResolutionStatus.INVALID.value,
+                "stage": stage,
+                "reasonCode": f"{stage}_invalid",
+                "message": str(error),
+                "localChangesPerformed": False,
+                "nextAction": "collect_complete_evidence_with_the_shipped_guardian_contract",
+            },
+            error=True,
+        )
+        return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
+    except OnboardingError as error:
+        _emit(
+            {
+                "schemaVersion": 1,
+                "status": ResolutionStatus.INVALID.value,
+                "stage": "setup",
+                "reasonCode": "onboarding_invalid",
+                "message": str(error),
+                "permissionRequired": False,
+                "localChangesPerformed": False,
+                "nextAction": "correct_or_replace_the_local_onboarding_bundle",
+            },
+            error=True,
+        )
+        return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
     except GuardianError as error:
         _emit(error.evidence(), error=True)
         return int(error.exit_code)
