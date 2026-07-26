@@ -185,7 +185,7 @@
         {
             "moduleId": "guardian-public-cases-v4",
             "path": "benchmarks/elo_cases_v4.py",
-            "moduleDigest": "d5e41bf45ecd0948ff1ca0ca2624681b467aeeea0060b6b6ebc41aac57338759",
+            "moduleDigest": "2882dcfb90a038dc7c82b63a249ba7d8cf65885fb3c8e641e324114ec854d40c",
             "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
         }
     ],
