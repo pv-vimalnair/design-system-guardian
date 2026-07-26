@@ -57,6 +57,15 @@ from .preflight import PreflightError, load_run_pin, preflight_snapshot
 from .project_binding import project_evidence_from_runner, require_requested_project
 from .profile import ProfileValidationError, install_profile, load_profile, validate_profile
 from .resolver import resolve_identity
+from .rules import (
+    RuleValidationError,
+    invalid_report,
+    load_description,
+    load_known_identities,
+    load_rule_artifact,
+    parse_description_markers,
+    validate_rules,
+)
 from .run_artifacts import read_run_artifact, seal_run_artifact, write_run_artifact
 from .snapshot import SnapshotValidationError, ingest_snapshot
 from .ux_evaluator import (
@@ -705,6 +714,55 @@ def _elo_evaluate_command(args: argparse.Namespace) -> int:
     return int(ExitCode.PASS)
 
 
+def _rules_validate_command(args: argparse.Namespace) -> int:
+    source_type = "artifact" if args.rule_format == "artifact" else "figma_description"
+    try:
+        known_identities = (
+            load_known_identities(Path(args.known_identities))
+            if args.known_identities is not None
+            else None
+        )
+        if source_type == "artifact":
+            candidates = load_rule_artifact(Path(args.input))
+        else:
+            metadata = (
+                args.host_kind,
+                args.host_identity,
+                args.figma_file_key,
+                args.figma_node_id,
+                args.figma_source_version,
+            )
+            if any(value is None for value in metadata):
+                report = invalid_report(source_type, "missing_metadata")
+                _emit(report)
+                return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
+            candidates = parse_description_markers(
+                load_description(Path(args.input)),
+                host_kind=args.host_kind,
+                host_identity=args.host_identity,
+                figma={
+                    "fileKey": args.figma_file_key,
+                    "nodeId": args.figma_node_id,
+                    "sourceVersion": args.figma_source_version,
+                },
+            )
+        result = validate_rules(
+            candidates,
+            known_identities=known_identities,
+            source_type=source_type,
+        )
+        report = result["report"]
+    except RuleValidationError as error:
+        report = invalid_report(source_type, error.reason_code)
+    _emit(report)
+    status = str(report["status"])
+    if status == ResolutionStatus.ALLOWED.value:
+        return int(ExitCode.PASS)
+    if status == ResolutionStatus.NOT_ASSESSED.value:
+        return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="guardian")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -834,6 +892,30 @@ def build_parser() -> argparse.ArgumentParser:
     elo_evaluate.add_argument("--baseline-result", required=True)
     elo_evaluate.add_argument("--candidate-result", required=True)
     elo_evaluate.set_defaults(handler=_elo_evaluate_command)
+
+    rules = commands.add_parser(
+        "rules",
+        help="Validate local usage rules as a non-authoritative preview.",
+    )
+    rules_commands = rules.add_subparsers(dest="rules_command", required=True)
+    rules_validate = rules_commands.add_parser("validate")
+    rules_validate.add_argument(
+        "--format",
+        dest="rule_format",
+        choices=("artifact", "figma-description"),
+        required=True,
+    )
+    rules_validate.add_argument("--input", required=True)
+    rules_validate.add_argument("--known-identities")
+    rules_validate.add_argument(
+        "--host-kind",
+        choices=("system", "category", "component", "icon", "token"),
+    )
+    rules_validate.add_argument("--host-identity")
+    rules_validate.add_argument("--figma-file-key")
+    rules_validate.add_argument("--figma-node-id")
+    rules_validate.add_argument("--figma-source-version")
+    rules_validate.set_defaults(handler=_rules_validate_command)
 
     migrate = commands.add_parser("migrate")
     migrate.add_argument("--profile", required=True)
