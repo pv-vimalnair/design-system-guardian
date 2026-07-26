@@ -17,6 +17,10 @@ from guardian_core.flutter_config import (
     _validate_config_document,
 )
 from guardian_core.flutter_adapter import normalize_flutter_adapter_result
+from guardian_core.flutter_toolchain import (
+    current_platform_id,
+    expected_dart_executable,
+)
 from adapters.flutter.tools.guardian_flutter_contract import (
     validate_adapter_config as validate_portable_config,
 )
@@ -24,6 +28,23 @@ from adapters.flutter.tools.guardian_flutter_contract import (
 
 DIGEST = "a" * 64
 WIDGET = "package:example_company_design_system/design.dart#ApprovedCard"
+
+
+def host_bound_fixture() -> dict[str, object]:
+    config = json.loads(
+        (ADAPTER_ROOT / "test/fixtures/config.valid.json").read_text()
+    )
+    platform_id = current_platform_id()
+    config["toolchain"] = {
+        "platformId": platform_id,
+        "dartSdk": {
+            "contentDigest": "d" * 64,
+            "executableRelativePath": expected_dart_executable(platform_id),
+        },
+    }
+    config.pop("configDigest")
+    config["configDigest"] = sha256_digest(config)
+    return config
 
 
 def mapping(symbol: str) -> dict[str, object]:
@@ -81,9 +102,7 @@ class FlutterUsageRuleContractTests(unittest.TestCase):
         coverage_status: str = "complete",
         inactive: list[dict[str, str]] | None = None,
     ) -> dict[str, object]:
-        config = json.loads(
-            (ADAPTER_ROOT / "test/fixtures/config.valid.json").read_text()
-        )
+        config = host_bound_fixture()
         inactive = [] if inactive is None else inactive
         config.update(
             {
@@ -222,7 +241,7 @@ class FlutterUsageRuleContractTests(unittest.TestCase):
     def test_v2_config_is_strict_and_v1_fixture_bytes_remain_unchanged(self) -> None:
         fixture_path = ADAPTER_ROOT / "test/fixtures/config.valid.json"
         before = fixture_path.read_bytes()
-        v1 = json.loads(before)
+        v1 = host_bound_fixture()
         self.assertEqual(_validate_config_document(v1), v1)
         self.assertEqual(fixture_path.read_bytes(), before)
 
