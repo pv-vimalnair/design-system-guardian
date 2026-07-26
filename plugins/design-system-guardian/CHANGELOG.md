@@ -2,6 +2,26 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.5 - 2026-07-26 - Permission-bound Safe Activation
+
+### Added
+
+- Added read-only `guardian rules activate preview` and permission-bound `guardian rules activate apply` for an exact externally signed catalog v2 candidate.
+- Added append-only rule snapshots, approval-sequence continuation, and a sealed rule high-water pointer in a parallel v2 namespace.
+- Added Flutter enforcement for `forbidden_identity_in_scope` and `max_instances_per_scope` at `compilation_unit` scope; other valid rules remain preserved and `not_assessed` until v0.3.6.
+- Added strict SemVer no-downgrade protection to the generic two-skill installer and weighted public Elo v5 cases for activation correctness, v1 preservation, coverage, authority separation, and downgrade safety.
+
+### Compatibility, security, and privacy
+
+- Preserved every v0.3.2 duplicate-file, v0.3.3 setup/Figma/UX, and v0.3.4 preview-rule capability, schema, and skill contract. Existing profile v1, snapshot v1, approval sequence, current pointer, run pin, and Flutter config v1 evidence is never migrated in place.
+- Permission enables the evaluator but does not approve rules. Rule content still requires the selected profile's pinned external catalog-authority signature.
+- Once v2 rule evidence exists, unavailable, malformed, incomplete, stale, replayed, or discontinuous v2 state blocks; protected rule work never falls back to v1.
+- Company catalogs, rules, profiles, run data, and user content remain local and are excluded from public source, artifacts, benchmarks, and update history.
+
+### Promotion status
+
+- This is a public source release candidate. It is not a trusted canary or stable promotion because the fixed external/WORM release-head provider and protected production authority remain unavailable.
+
 ## 0.3.4 - 2026-07-26 - Preview-only usage-rule foundation
 
 ### Added

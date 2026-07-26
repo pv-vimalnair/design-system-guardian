@@ -73,7 +73,7 @@ _EXCLUDED_DIRECTORIES = {
     "build",
     "coverage",
 }
-_CONFIG_KEYS = {
+_CONFIG_V1_KEYS = {
     "schemaVersion",
     "adapter",
     "adapterVersion",
@@ -88,10 +88,17 @@ _CONFIG_KEYS = {
     "approvedIdentities",
     "componentVariants",
 }
+_CONFIG_V2_KEYS = _CONFIG_V1_KEYS | {
+    "ruleSnapshotId",
+    "rulesDigest",
+    "activeUsageRules",
+    "usageRuleCoverage",
+}
 _GUARDIAN_CODES = {
     "guardian_unapproved_visual_primitive": ("components",),
     "guardian_unapproved_widget": ("components",),
     "guardian_unapproved_component_variant": ("components",),
+    "guardian_usage_rule": ("components",),
     "guardian_sentinel_present": ("components",),
     "guardian_unapproved_icon": ("icons",),
     "guardian_unapproved_color": ("colors",),
@@ -235,9 +242,19 @@ def _validate_config(path: Path, root: Path) -> tuple[dict[str, Any], bytes]:
         config = read_canonical_json(config_path)
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
         raise FlutterRunnerIntegrityError(f"Flutter adapter config is not canonical JSON: {error}") from error
-    if not isinstance(config, dict) or set(config) != _CONFIG_KEYS:
+    if not isinstance(config, dict):
+        raise FlutterRunnerIntegrityError("Flutter adapter config must be an object.")
+    schema_version = config.get("schemaVersion")
+    expected_keys = (
+        _CONFIG_V1_KEYS
+        if schema_version == 1
+        else _CONFIG_V2_KEYS
+        if schema_version == 2
+        else None
+    )
+    if expected_keys is None or set(config) != expected_keys:
         raise FlutterRunnerIntegrityError("Flutter adapter config has unknown or missing fields.")
-    if config.get("schemaVersion") != 1 or config.get("adapter") != "flutter" or config.get("adapterVersion") != _ADAPTER_VERSION:
+    if config.get("adapter") != "flutter" or config.get("adapterVersion") != _ADAPTER_VERSION:
         raise FlutterRunnerIntegrityError("Flutter adapter config schema or version is unsupported.")
     if not isinstance(config.get("profileId"), str) or not _PROFILE.fullmatch(config["profileId"]):
         raise FlutterRunnerIntegrityError("Flutter adapter config profileId is invalid.")
@@ -266,6 +283,15 @@ def _validate_config(path: Path, root: Path) -> tuple[dict[str, Any], bytes]:
         raise FlutterRunnerIntegrityError(
             f"Flutter adapter package provenance is invalid: {error}"
         ) from error
+    if schema_version == 2:
+        try:
+            from .flutter_config import FlutterConfigError, _validate_config_document
+
+            _validate_config_document(config)
+        except FlutterConfigError as error:
+            raise FlutterRunnerIntegrityError(
+                f"Flutter adapter usage-rule configuration is invalid: {error}"
+            ) from error
     return config, payload
 
 
@@ -697,16 +723,32 @@ def run_flutter_analysis(
     for diagnostic in diagnostics:
         for category in _GUARDIAN_CODES[diagnostic["code"]]:
             counts[category] += 1
+    usage_coverage_incomplete = (
+        config.get("schemaVersion") == 2
+        and config["usageRuleCoverage"]["status"] == "incomplete"
+    )
     coverage = {
-        category: {"status": "allowed", "method": "dart_analyzer_ast", "diagnosticCount": counts[category]}
+        category: {
+            "status": (
+                "not_assessed"
+                if usage_coverage_incomplete and category == "components"
+                else "allowed"
+            ),
+            "method": "dart_analyzer_ast",
+            "diagnosticCount": counts[category],
+        }
         for category in AUDIT_CATEGORIES
     }
-    production_ready = not diagnostics and not suppression_scan["findings"]
+    production_ready = (
+        not diagnostics
+        and not suppression_scan["findings"]
+        and not usage_coverage_incomplete
+    )
     adapter_result = {
         "schemaVersion": 1,
         "adapter": "flutter",
         "adapterVersion": _ADAPTER_VERSION,
-        "status": "allowed",
+        "status": "not_assessed" if usage_coverage_incomplete else "allowed",
         "binding": _binding(config),
         "analysis": {
             "method": "dart_analyzer_ast",

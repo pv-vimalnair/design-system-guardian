@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/rule-activation-snapshot.schema.json",
+  "title": "Design System Guardian immutable rule activation snapshot v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "profileId", "profileDigest", "policyDigest",
+    "snapshotId", "authoritySeal", "previousSnapshotId", "assessedAt",
+    "createdAt", "refreshAttemptedAt", "lastSuccessfulRefreshAt",
+    "sourceState", "sourceAvailable", "sourceComplete", "sourceEvidence",
+    "freshnessEvidence", "immutable", "sourceCut", "tokenProvenance",
+    "tokens", "resolver", "registry", "rules", "rulesDigest",
+    "ruleEvidence", "ruleValidation", "activatedCapabilities",
+    "activationEvaluatorId", "firstActivationPermissionDigest",
+    "catalogDigest", "catalogEvidence", "approvalSequence", "approvalKeyId",
+    "approvalIssuedAt", "approvalDigest"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "profileId": {"$ref": "snapshot.schema.json#/$defs/profileId"},
+    "profileDigest": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "policyDigest": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "snapshotId": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "authoritySeal": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "previousSnapshotId": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "assessedAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+    "createdAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+    "refreshAttemptedAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+    "lastSuccessfulRefreshAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+    "sourceState": {"$ref": "snapshot.schema.json#/$defs/sourceState"},
+    "sourceAvailable": {"type": "boolean"},
+    "sourceComplete": {"type": "boolean"},
+    "sourceEvidence": {"$ref": "snapshot.schema.json#/$defs/sourceEvidence"},
+    "freshnessEvidence": {"$ref": "snapshot.schema.json#/$defs/freshnessEvidence"},
+    "immutable": {"const": true},
+    "sourceCut": {"$ref": "snapshot.schema.json#/$defs/sourceCut"},
+    "tokenProvenance": {"$ref": "snapshot.schema.json#/$defs/tokenProvenance"},
+    "tokens": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"$ref": "snapshot.schema.json#/$defs/normalizedToken"}
+    },
+    "resolver": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "snapshot.schema.json#/$defs/normalizedResolver"}
+      ]
+    },
+    "registry": {"$ref": "snapshot.schema.json#/$defs/normalizedRegistry"},
+    "rules": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {"$ref": "rule.schema.json"}
+    },
+    "rulesDigest": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "ruleEvidence": {"$ref": "#/$defs/ruleEvidence"},
+    "ruleValidation": {"$ref": "#/$defs/ruleValidation"},
+    "activatedCapabilities": {
+      "const": [
+        {"predicate": "forbidden_identity_in_scope", "scope": "compilation_unit"},
+        {"predicate": "max_instances_per_scope", "scope": "compilation_unit"}
+      ]
+    },
+    "activationEvaluatorId": {"const": "guardian-flutter-usage-rules-v1"},
+    "firstActivationPermissionDigest": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "catalogDigest": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "catalogEvidence": {"$ref": "#/$defs/catalogEvidence"},
+    "approvalSequence": {"$ref": "snapshot.schema.json#/$defs/approvalSequence"},
+    "approvalKeyId": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "approvalIssuedAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+    "approvalDigest": {"$ref": "snapshot.schema.json#/$defs/digest"}
+  },
+  "$defs": {
+    "ruleEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captureAttempted", "sourceComplete"],
+      "properties": {
+        "captureAttempted": {"const": true},
+        "sourceComplete": {"type": "boolean"}
+      }
+    },
+    "ruleValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary", "reasonCodes"],
+      "properties": {
+        "status": {"enum": ["allowed", "invalid", "not_assessed"]},
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ok", "warnings", "errors", "notAssessed"],
+          "properties": {
+            "ok": {"type": "integer", "minimum": 0},
+            "warnings": {"type": "integer", "minimum": 0},
+            "errors": {"type": "integer", "minimum": 0},
+            "notAssessed": {"type": "integer", "minimum": 0}
+          }
+        },
+        "reasonCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "ok", "unmarked_text_ignored", "parse_failure",
+              "unknown_predicate", "invalid_value", "duplicate_rule_id",
+              "unknown_identity", "identity_not_assessed", "statement_missing",
+              "statement_forbidden", "predicate_forbidden", "unknown_field",
+              "input_too_large", "input_unavailable", "invalid_container",
+              "duplicate_json_key", "missing_metadata", "invalid_json",
+              "invalid_utf8", "invalid_identity_coverage", "invalid_source_type",
+              "no_rule_markers", "unsupported_predicate_scope",
+              "unsupported_rule_class"
+            ]
+          }
+        }
+      }
+    },
+    "catalogEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "profileId", "createdAt", "refreshAttemptedAt",
+        "lastSuccessfulRefreshAt", "sourceAvailable", "sourceComplete",
+        "sourceEvidence", "sourceCut", "tokenProvenance", "tokens", "registry",
+        "rules", "ruleEvidence", "approvalAttestation"
+      ],
+      "properties": {
+        "schemaVersion": {"const": 2},
+        "profileId": {"$ref": "snapshot.schema.json#/$defs/profileId"},
+        "createdAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+        "refreshAttemptedAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+        "lastSuccessfulRefreshAt": {"$ref": "snapshot.schema.json#/$defs/timestamp"},
+        "sourceAvailable": {"type": "boolean"},
+        "sourceComplete": {"type": "boolean"},
+        "sourceEvidence": {"$ref": "snapshot.schema.json#/$defs/sourceEvidence"},
+        "sourceCut": {"$ref": "snapshot.schema.json#/$defs/sourceCutInput"},
+        "tokenProvenance": {"$ref": "snapshot.schema.json#/$defs/tokenProvenance"},
+        "tokens": {"type": "object", "minProperties": 1},
+        "resolver": {"type": "object"},
+        "resolverContext": {"type": "object"},
+        "registry": {"$ref": "snapshot.schema.json#/$defs/registryInput"},
+        "rules": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {"type": "object"}
+        },
+        "ruleEvidence": {"$ref": "#/$defs/ruleEvidence"},
+        "approvalAttestation": {"$ref": "snapshot.schema.json#/$defs/approvalAttestation"}
+      }
+    }
+  }
+}

@@ -40,7 +40,7 @@ _TOP_KEYS = {
     "suppressionScan",
     "productionReady",
 }
-_CONFIG_KEYS = {
+_CONFIG_V1_KEYS = {
     "schemaVersion",
     "adapter",
     "adapterVersion",
@@ -54,6 +54,12 @@ _CONFIG_KEYS = {
     "approvedPackages",
     "approvedIdentities",
     "componentVariants",
+}
+_CONFIG_V2_KEYS = _CONFIG_V1_KEYS | {
+    "ruleSnapshotId",
+    "rulesDigest",
+    "activeUsageRules",
+    "usageRuleCoverage",
 }
 _BINDING_KEYS = {
     "profileId",
@@ -80,6 +86,7 @@ _CODE_CATEGORIES = {
     "guardian_unapproved_widget": ("components",),
     "guardian_unapproved_visual_primitive": ("components",),
     "guardian_unapproved_component_variant": ("components",),
+    "guardian_usage_rule": ("components",),
     "guardian_sentinel_present": ("components",),
     "guardian_unapproved_icon": ("icons",),
     "guardian_unapproved_color": ("colors",),
@@ -148,8 +155,18 @@ def _validate_run_pin(value: Any) -> dict[str, Any]:
 
 
 def _validate_config(value: Any, pin: dict[str, Any]) -> dict[str, Any]:
-    config = _exact_object(value, _CONFIG_KEYS, "Flutter adapter config")
-    if config.get("schemaVersion") != 1 or config.get("adapter") != "flutter" or config.get("adapterVersion") != "0.1.0":
+    if not isinstance(value, dict):
+        raise FlutterAdapterIntegrityError("Flutter adapter config must be an object.")
+    schema_version = value.get("schemaVersion")
+    expected_keys = (
+        _CONFIG_V1_KEYS
+        if schema_version == 1
+        else _CONFIG_V2_KEYS
+        if schema_version == 2
+        else set()
+    )
+    config = _exact_object(value, expected_keys, "Flutter adapter config")
+    if config.get("adapter") != "flutter" or config.get("adapterVersion") != "0.1.0":
         raise FlutterAdapterIntegrityError("Flutter adapter config schema or version is unsupported.")
     profile_id = config.get("profileId")
     if not isinstance(profile_id, str) or not _PROFILE_ID.fullmatch(profile_id):
@@ -205,6 +222,15 @@ def _validate_config(value: Any, pin: dict[str, Any]) -> dict[str, Any]:
             )
     except (FlutterPackageProvenanceError, FlutterToolchainIntegrityError) as error:
         raise FlutterAdapterIntegrityError(str(error)) from error
+    if schema_version == 2:
+        try:
+            from .flutter_config import FlutterConfigError, _validate_config_document
+
+            _validate_config_document(config)
+        except FlutterConfigError as error:
+            raise FlutterAdapterIntegrityError(
+                f"Flutter usage-rule configuration is invalid: {error}"
+            ) from error
     return copy.deepcopy(config)
 
 
@@ -411,10 +437,14 @@ def normalize_flutter_adapter_result(
     internal_categories: dict[str, dict[str, Any]] = {}
     for category in AUDIT_CATEGORIES:
         raw_status = lane_statuses[category]
-        if not complete_analysis or raw["status"] == "not_assessed":
+        if not complete_analysis:
+            status = "not_assessed"
+        elif config["schemaVersion"] == 1 and raw["status"] == "not_assessed":
             status = "not_assessed"
         elif raw_status == "unsupported":
             status = "unsupported"
+        elif raw_status == "not_assessed":
+            status = "not_assessed"
         else:
             status = "allowed"
         internal_categories[category] = {

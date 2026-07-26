@@ -1,6 +1,6 @@
 # Installing on Agent Hosts
 
-Design System Guardian has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Deep Code and other Agent Skills-compatible hosts use the integrity-bound generic installer.
+Design System Guardian has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the integrity-bound generic installer.
 
 Review and pin the full Git commit before installation. A movable branch name is convenient for discovery but is not release authority.
 
@@ -56,9 +56,9 @@ From Kimi Code, install the public GitHub repository and reload:
 
 The repository-root `kimi.plugin.json` points to the same nested canonical skills and Guardian package.
 
-## Deep Code and generic Agent Skills hosts
+## Qwen Code, terminal, Deep Code, and generic Agent Skills hosts
 
-DeepSeek is a model/API; Deep Code is one skills-capable host for it. Common skill roots include `~/.agents/skills/`, `<project>/.agents/skills/`, and `<project>/.deepcode/skills/`. Use the exact root documented by the host.
+DeepSeek is a model/API; Deep Code is one skills-capable host for it. Common skill roots include Qwen Code's `~/.qwen/skills/`, `~/.agents/skills/`, `<project>/.agents/skills/`, and `<project>/.deepcode/skills/`. A terminal agent uses the exact Agent Skills root it documents. Use only that host's real root; do not create a guessed copy.
 
 Clone the repository at a reviewed commit, then run the generic installer with an absolute Python executable. On PowerShell:
 
@@ -98,6 +98,8 @@ If Python, virtual-environment creation, pinned dependency installation, or veri
 
 For a project-local Deep Code install, replace the target with `<project>/.deepcode/skills`.
 
+For Qwen Code, replace the target with `$HOME\.qwen\skills` on Windows or `$HOME/.qwen/skills` on macOS/Linux. A terminal or another compatible host uses the same command with its documented target root.
+
 The installer exports only the two skill folders. Each installed skill receives a diagnostic launcher plus a drift-detection binding to the exact package, immutable policy, CLI, skill files, and absolute Python digest. It does not copy `guardian_core`, profiles, catalogs, trust anchors, or audit state. The generic route is diagnostic-only; a protected host boundary is still required for production authority.
 
 ## First use: simple for the user, strict underneath
@@ -109,6 +111,8 @@ The agent, not the ordinary user, runs these commands internally:
 3. The agent explains the exact local profile, Figma allowlist, and digests, then asks for permission.
 4. Only after permission, the agent creates the exact digest-bound permitted bundle and runs `guardian setup apply --input <permitted-bundle.json>`.
 5. The agent reruns `guardian setup status --profile <id>` and continues only when the result is ready.
+6. When a complete externally signed catalog v2 carries approved usage rules, the agent runs `guardian rules activate preview`, explains the exact activation, and asks permission.
+7. Only after permission, the agent runs `guardian rules activate apply` with the exact digest-bound bundle. Permission enables the evaluator; it does not approve rules.
 
 The candidate must contain the catalog authority public key path, one exact profile, and one signed complete catalog snapshot. Guardian cannot safely generate a company's catalog authority or decide that discovered Figma assets are approved. An authorized design-system owner prepares that candidate once; users do not install a second Guardian copy or manually copy a policy seal.
 
@@ -158,6 +162,7 @@ Kimi Code: rerun the repository install, then reload and inspect.
 
 For a generic install, check out the reviewed new commit and rerun the same installer command with `--replace`.
 - The installer replaces only an intact prior install from the same package root and refuses unknown or locally modified skill folders.
+- A normal update rejects a lower SemVer, malformed version, partial install, or divergent two-skill version before replacing either skill.
 - A journal rolls back prepared replacements or finishes committed cleanup after interruption.
 - Transient staging remains beside, never inside, the watched live skill root.
 - Rerun the installer after a Python upgrade so its exact path and digest are rebound.

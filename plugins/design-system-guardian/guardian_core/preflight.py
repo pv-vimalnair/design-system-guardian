@@ -50,6 +50,28 @@ def _unsigned_pin(pin: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in pin.items() if key != "authoritySeal"}
 
 
+def _rule_snapshot_status(snapshot: dict[str, Any]) -> ResolutionStatus | None:
+    if snapshot.get("schemaVersion") != 2:
+        return None
+    rule_evidence = snapshot.get("ruleEvidence")
+    rule_validation = snapshot.get("ruleValidation")
+    if not isinstance(rule_evidence, dict) or not isinstance(rule_validation, dict):
+        raise PreflightError("Rule-snapshot evidence is missing or malformed.")
+    if (
+        rule_evidence.get("captureAttempted") is not True
+        or rule_evidence.get("sourceComplete") is not True
+    ):
+        return ResolutionStatus.SOURCE_INCOMPLETE
+    validation_status = rule_validation.get("status")
+    if validation_status == ResolutionStatus.ALLOWED.value:
+        return None
+    if validation_status == ResolutionStatus.NOT_ASSESSED.value:
+        return ResolutionStatus.NOT_ASSESSED
+    if validation_status == ResolutionStatus.INVALID.value:
+        raise PreflightError("The current signed rule snapshot contains invalid rule evidence.")
+    raise PreflightError("The current signed rule snapshot has an unsupported validation status.")
+
+
 def _read_verified_pin(home: Path, profile_id: str, run_id: str) -> dict[str, Any]:
     path = _pin_path(home, profile_id, run_id)
     try:
@@ -142,7 +164,15 @@ def preflight_snapshot(
             except SnapshotValidationError as error:
                 raise PreflightError(str(error)) from error
             source_state = freshness["state"]
-            status = {
+            rule_status = _rule_snapshot_status(snapshot)
+            if rule_status is ResolutionStatus.SOURCE_INCOMPLETE:
+                source_state = "source_incomplete"
+                freshness = {
+                    "state": "source_incomplete",
+                    "ageHours": None,
+                    "degraded": False,
+                }
+            status = rule_status or {
                 "fresh": ResolutionStatus.ALLOWED,
                 "offline_grace": ResolutionStatus.ALLOWED,
                 "stale": ResolutionStatus.STALE,

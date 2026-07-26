@@ -37,6 +37,14 @@ Ordinary users should not have to copy commands. The two skills perform this seq
 
 This foundation is read-only and preview-only: it writes no Guardian or project state, reports `localChangesPerformed=false` and `productionReady=false`, and keeps missing identity coverage `not_assessed`. Rule results are not consumed by audit or finalization in v0.3.4 and cannot authorize production.
 
+## Permission-bound safe activation
+
+Version 0.3.5 keeps the preview path above and adds a separate local activation path. The agent first runs `guardian rules activate preview --profile <id> --input <signed-catalog-v2.json>`, explains the exact policy/profile/catalog/rules/evaluator binding, and asks the user for permission. Only the resulting exact permission-bound bundle may be passed to `guardian rules activate apply --input <permission-bound-bundle.json>`.
+
+Permission enables the evaluator; it does not approve rules. Rules are accepted only from the selected profile's externally signed catalog authority. Activation creates an append-only v2 rule snapshot and sequence in a parallel namespace; it does not edit or replace the existing v1 profile, snapshots, approval sequences, or current pointer.
+
+Version 0.3.5 enforces only `forbidden_identity_in_scope` + `compilation_unit` and `max_instances_per_scope` + `compilation_unit`. Other valid rules remain stored and previewable but `not_assessed` until v0.3.6. Once v2 evidence exists, Guardian never falls back to v1 if the v2 head or evidence is unavailable, corrupt, incomplete, or discontinuous.
+
 ## Figma evidence
 
 `guardian adapter figma config --profile <id> --run-id <id> --output <absolute-guardian-local-state-config.json>` derives the run-bound collector contract. The output must stay inside Guardian local state under `~/.design-system-guardian/`; never place it in the product tree, repository, or Git staging. The supported Figma collector reads the selected nodes back through the Plugin API. A version 2 audit accepts exact input shaped as:
@@ -113,6 +121,7 @@ The command surface is:
 - `preflight`
 - `resolve`
 - `rules validate`
+- `rules activate preview`, `rules activate apply`
 - `adapter flutter config`
 - `adapter figma config`
 - `ux checkpoint`
@@ -153,9 +162,9 @@ Plugin source updates use reviewed SemVer and deterministic migrations. Release 
 - rollback is a new signed restoration and never rewrites history;
 - private catalogs, trust anchors, run evidence, and release state remain outside the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.4 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.5 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
 
-Version 0.3.4 adds only the preview-only Usage Rules Lane foundation described above; production audit and finalization do not consume its results.
+Version 0.3.5 adds permission-bound Safe Activation for the two documented compilation-unit pairs. It preserves the complete v0.3.2-v0.3.4 surface, and local activation still cannot create protected production authority.
 
 See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md).
 

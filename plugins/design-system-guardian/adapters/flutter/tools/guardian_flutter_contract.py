@@ -56,7 +56,7 @@ _COVERAGE_LANE_KEYS = {"status", "method", "diagnosticCount"}
 _DIAGNOSTIC_KEYS = {"severity", "code", "path", "line", "column", "length", "message"}
 _SUPPRESSION_KEYS = {"schemaVersion", "method", "astProof", "findings"}
 _SUPPRESSION_FINDING_KEYS = {"path", "line", "text", "kind"}
-_CONFIG_KEYS = {
+_CONFIG_V1_KEYS = {
     "schemaVersion",
     "adapter",
     "adapterVersion",
@@ -70,6 +70,12 @@ _CONFIG_KEYS = {
     "requiredPackages",
     "approvedIdentities",
     "componentVariants",
+}
+_CONFIG_V2_KEYS = _CONFIG_V1_KEYS | {
+    "ruleSnapshotId",
+    "rulesDigest",
+    "activeUsageRules",
+    "usageRuleCoverage",
 }
 _IDENTITY_CATEGORIES = {
     "colors",
@@ -85,11 +91,13 @@ _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 _CODE_IDENTITY = re.compile(r"^(?:dart|package):[^#\s]+#[A-Za-z_$][A-Za-z0-9_$.]*$")
 _PACKAGE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _REPOSITORY_COMMIT = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+_RULE_ID = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 
 _CODE_CATEGORIES = {
     "guardian_unapproved_widget": ("components",),
     "guardian_unapproved_visual_primitive": ("components",),
     "guardian_unapproved_component_variant": ("components",),
+    "guardian_usage_rule": ("components",),
     "guardian_sentinel_present": ("components",),
     "guardian_unapproved_icon": ("icons",),
     "guardian_unapproved_color": ("colors",),
@@ -221,9 +229,111 @@ def _identity_package(value: str, label: str) -> str:
     return package_name
 
 
+def _validate_usage_rule_config(
+    config: Mapping[str, Any],
+    approved_widgets: tuple[str, ...],
+) -> None:
+    if (
+        config.get("ruleSnapshotId") != config.get("snapshotId")
+        or not isinstance(config.get("ruleSnapshotId"), str)
+        or not _DIGEST.fullmatch(config["ruleSnapshotId"])
+        or not isinstance(config.get("rulesDigest"), str)
+        or not _DIGEST.fullmatch(config["rulesDigest"])
+    ):
+        raise ContractError("v2 rule snapshot bindings are invalid")
+    active = config.get("activeUsageRules")
+    if not isinstance(active, list):
+        raise ContractError("activeUsageRules must be an array")
+    active_ids: list[str] = []
+    for item in active:
+        if not isinstance(item, dict):
+            raise ContractError("activeUsageRules contains a malformed rule")
+        predicate = item.get("predicate")
+        expected = {"ruleId", "predicate", "scope", "constructorIdentities"}
+        if predicate == "max_instances_per_scope":
+            expected.add("max")
+        if (
+            set(item) != expected
+            or predicate
+            not in {"forbidden_identity_in_scope", "max_instances_per_scope"}
+            or item.get("scope") != "compilation_unit"
+        ):
+            raise ContractError("activeUsageRules contains an unsupported predicate")
+        rule_id = item.get("ruleId")
+        if not isinstance(rule_id, str) or not _RULE_ID.fullmatch(rule_id):
+            raise ContractError("activeUsageRules contains an invalid ruleId")
+        constructors = _validate_identity_list(
+            item.get("constructorIdentities"),
+            f"activeUsageRules.{rule_id}.constructorIdentities",
+            allow_empty=False,
+        )
+        if any(identity not in approved_widgets for identity in constructors):
+            raise ContractError("activeUsageRules constructor is not an approved widget")
+        maximum = item.get("max")
+        if predicate == "max_instances_per_scope" and (
+            isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0
+        ):
+            raise ContractError("activeUsageRules maximum is invalid")
+        active_ids.append(rule_id)
+    if active_ids != sorted(set(active_ids)):
+        raise ContractError("activeUsageRules must be sorted and unique")
+    coverage = config.get("usageRuleCoverage")
+    if not isinstance(coverage, dict) or set(coverage) != {
+        "status",
+        "activeRuleIds",
+        "inactive",
+        "informativeRuleIds",
+    }:
+        raise ContractError("usageRuleCoverage has unknown or missing fields")
+    if coverage.get("activeRuleIds") != active_ids:
+        raise ContractError("usageRuleCoverage activeRuleIds differs from compiled rules")
+    informative = coverage.get("informativeRuleIds")
+    if (
+        not isinstance(informative, list)
+        or any(not isinstance(item, str) or not _RULE_ID.fullmatch(item) for item in informative)
+        or informative != sorted(set(informative))
+    ):
+        raise ContractError("usageRuleCoverage informativeRuleIds is invalid")
+    inactive = coverage.get("inactive")
+    if not isinstance(inactive, list):
+        raise ContractError("usageRuleCoverage inactive must be an array")
+    inactive_ids: list[str] = []
+    for item in inactive:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"ruleId", "reasonCode"}
+            or not isinstance(item.get("ruleId"), str)
+            or not _RULE_ID.fullmatch(item["ruleId"])
+            or item.get("reasonCode")
+            not in {
+                "identity_not_mapped",
+                "unsupported_predicate_scope",
+                "unsupported_rule_class",
+            }
+        ):
+            raise ContractError("usageRuleCoverage inactive metadata is invalid")
+        inactive_ids.append(item["ruleId"])
+    if inactive_ids != sorted(set(inactive_ids)):
+        raise ContractError("usageRuleCoverage inactive rules must be sorted and unique")
+    all_ids = active_ids + inactive_ids + informative
+    if len(all_ids) != len(set(all_ids)):
+        raise ContractError("usageRuleCoverage rule classes overlap")
+    expected_status = "incomplete" if inactive else "complete"
+    if coverage.get("status") != expected_status:
+        raise ContractError("usageRuleCoverage status differs from inactive evidence")
+
+
 def validate_adapter_config(config: Mapping[str, Any]) -> dict[str, Any]:
-    _require_exact_keys(config, _CONFIG_KEYS, "Flutter adapter config")
-    if config.get("schemaVersion") != 1 or config.get("adapter") != "flutter" or config.get("adapterVersion") != "0.1.0":
+    schema_version = config.get("schemaVersion")
+    expected_keys = (
+        _CONFIG_V1_KEYS
+        if schema_version == 1
+        else _CONFIG_V2_KEYS
+        if schema_version == 2
+        else set()
+    )
+    _require_exact_keys(config, expected_keys, "Flutter adapter config")
+    if config.get("adapter") != "flutter" or config.get("adapterVersion") != "0.1.0":
         raise ContractError("Flutter adapter config schema or version is unsupported")
     profile_id = config.get("profileId")
     if not isinstance(profile_id, str) or not _PROFILE_ID.fullmatch(profile_id):
@@ -297,6 +407,8 @@ def validate_adapter_config(config: Mapping[str, Any]) -> dict[str, Any]:
         used_packages.add(widget_package)
     if used_packages != set(normalized_packages):
         raise ContractError("approvedPackages must exactly bind all approved identities")
+    if schema_version == 2:
+        _validate_usage_rule_config(config, normalized_identities["widgets"])
     return json.loads(_canonical_json_bytes(config))
 
 def _validate_run_pin(run_pin: Mapping[str, Any]) -> dict[str, Any]:
