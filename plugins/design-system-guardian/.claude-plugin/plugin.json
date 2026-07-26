@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "design-system-guardian",
   "displayName": "Design System Guardian",
-  "version": "0.3.2",
-  "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
+  "version": "0.3.3",
+  "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, and fail-closed evidence.",
   "author": {
     "name": "Pv Vimal Nair"
   },

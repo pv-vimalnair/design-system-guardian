@@ -2,6 +2,35 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.3 - 2026-07-26 - Plug-and-play Figma and UX enforcement
+
+### Added
+
+- Added agent-driven `guardian setup status`, `setup preview`, and permission-bound `setup apply`, so ordinary users approve one plain-language local change instead of manually installing trust files.
+- Added exact Figma Plugin API read-back for bound variables, text styles, component instances, variants, properties, source versions, and signed duplicate-working-file lineage.
+- Added a non-authoritative quick screen checkpoint and a final-flow UX/accessibility evaluator whose result is derived from evidence rather than caller-authored status.
+- Added version 2 audit routing for Flutter and Figma while preserving backward-compatible version 1 Flutter requests.
+- Added portable two-skill guidance while stating that installation does not create automatic routing, unprotected hosts cannot prevent raw-tool bypass, and no sealed Guardian manifest means not Guardian-approved.
+
+### Fixed
+
+- Split design-system compliance, UX/accessibility quality, and protected production authority so a failure or unknown in one lane cannot be projected as success in another.
+- Documented fixed Figma API safeguards for default frame fills, layout-parent ordering, read-only collections, font loading, async APIs, component properties, and node-kind verification.
+- Replaced manual onboarding instructions with a digest-bound preview-and-permission flow and clear unsupported/source blockers.
+- Hardened the audit and attestation boundary so direct local Figma or UX positive claims cannot create false-green lanes, while proven violations and gaps remain visible.
+- Hardened generic installation with an exact three-package lock, dependency resolution disabled, read-only host verification, and symlink/junction/reparse rejection for Guardian-owned runtime storage.
+
+### Security and privacy
+
+- The immutable policy digest and exactly two visible skills are unchanged.
+- Company profiles, catalogs, setup candidates, generated Figma configs/observations, audit evidence, prompts, product source, credentials, user activity, and local Elo history remain inside Guardian local state and are excluded from product/Git paths and public artifacts.
+- Local Figma and UX evidence is diagnostic: violations and gaps can fail, but clean caller-carried evidence remains `not_assessed` until protected host/CI attestation, with `productionReady=false`.
+- The Usage Rules Lane remains out of scope and is planned for 0.3.4.
+
+### Promotion status
+
+- This is a public source release candidate. It is not a trusted canary or stable promotion because the fixed external/WORM release-head provider and protected production authority remain unavailable.
+
 ## 0.3.2 - 2026-07-24 - Watched-root installer compatibility
 
 ### Fixed

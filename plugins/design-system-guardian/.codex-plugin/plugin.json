@@ -1,7 +1,7 @@
 {
   "name": "design-system-guardian",
-  "version": "0.3.2",
-  "description": "Enforces exact approved design-system identities and produces fail-closed compliance evidence.",
+  "version": "0.3.3",
+  "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, and fail-closed evidence.",
   "author": {
     "name": "Pv Vimal Nair",
     "url": "https://github.com/pv-vimalnair"
@@ -14,13 +14,13 @@
   "interface": {
     "displayName": "Design System Guardian",
     "shortDescription": "Exact approved identities only, with fail-closed auditing.",
-    "longDescription": "Build with approved design-system identities, independently audit pinned evidence, and expose proven gaps through conspicuous sentinels that can never pass production readiness.",
+    "longDescription": "Set up locally with permission, build from exact Figma-bound design-system identities, audit UX/accessibility separately, and expose proven gaps through conspicuous sentinels.",
     "developerName": "Pv Vimal Nair",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write"],
     "defaultPrompt": [
-      "Build this UI using only exact approved design-system identities.",
-      "Audit this implementation against the pinned design-system snapshot."
+      "When Guardian is explicitly invoked, check local setup with permission and build only from exact approved bindings.",
+      "Audit exact design-system and UX evidence; no sealed Guardian manifest means not Guardian-approved."
     ],
     "brandColor": "#3157D8",
     "composerIcon": "./assets/brand/guardian-mark.svg",

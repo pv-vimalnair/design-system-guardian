@@ -242,6 +242,121 @@ def _one_line(value: Any) -> str:
     return str(value).replace("\r", " ").replace("\n", " ")
 
 
+def _workspace_labels(adapter: Any) -> dict[str, str]:
+    """Describe local evidence without confusing it with the assessed surface."""
+
+    if adapter == "flutter":
+        return {
+            "root": "Intended project",
+            "identity": "Project root identity",
+            "tree": "Assessed tree",
+            "inputs": "Analysis inputs",
+            "commit": "Git commit (local observation)",
+        }
+    if adapter == "figma":
+        return {
+            "root": "Bound local evidence workspace",
+            "identity": "Local workspace identity",
+            "tree": "Assessed evidence tree",
+            "inputs": "Analysis input bundle",
+            "commit": "Workspace Git commit (local observation)",
+        }
+    return {
+        "root": "Bound local workspace",
+        "identity": "Local workspace identity",
+        "tree": "Assessed evidence tree",
+        "inputs": "Analysis inputs",
+        "commit": "Workspace Git commit (local observation)",
+    }
+
+
+def _ux_checks_by_scope(
+    checks: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Partition trusted scoped checks while retaining v0.3.2 unscoped evidence."""
+
+    screen: list[dict[str, Any]] = []
+    flow: list[dict[str, Any]] = []
+    legacy: list[dict[str, Any]] = []
+    for item in checks:
+        evidence = item.get("evidence")
+        scope = evidence.get("scope") if isinstance(evidence, dict) else None
+        if scope == "screen":
+            screen.append(item)
+        elif scope == "flow":
+            flow.append(item)
+        else:
+            legacy.append(item)
+    return screen, flow, legacy
+
+
+def _next_action(
+    *,
+    audit: dict[str, Any],
+    design_lane: dict[str, Any],
+    ux_lane: dict[str, Any],
+    coverage: dict[str, Any],
+    authority_lane: dict[str, Any],
+) -> str:
+    """Return one fixed, deterministic action without projecting raw evidence."""
+
+    design_status = design_lane.get("status")
+    if design_status == "invalid":
+        return "Repair the invalid Guardian policy or evidence, then run the final audit again."
+    if design_status in {"stale", "source_unavailable", "source_incomplete"}:
+        return "Restore a fresh, complete approved catalog snapshot, then run the final audit again."
+
+    violations = design_lane.get("violations")
+    if isinstance(violations, list) and violations:
+        return "Fix the reported design-system violations, then run the final audit again."
+    gaps = design_lane.get("gaps")
+    sentinel_count = design_lane.get("sentinelCount")
+    if (isinstance(gaps, list) and gaps) or (
+        isinstance(sentinel_count, int)
+        and not isinstance(sentinel_count, bool)
+        and sentinel_count > 0
+    ):
+        return (
+            "Request the missing design-system assets without substituting them, "
+            "then run the final audit again."
+        )
+    if design_status == "conflict":
+        return "Resolve the reported design-system conflicts, then run the final audit again."
+    if coverage.get("supported") is not True or coverage.get("complete") is not True:
+        return "Complete supported adapter coverage, then run the final audit again."
+    if design_status in {"unsupported", "not_assessed"}:
+        return "Complete the design-system assessment with a supported adapter."
+
+    ux_status = ux_lane.get("status")
+    if ux_status == "conflict":
+        return "Fix the reported UX/accessibility gaps, then run the final-flow evaluation again."
+    if ux_status != "allowed":
+        return "Complete the final screen-and-flow UX/accessibility evaluation."
+    if authority_lane.get("status") != "allowed":
+        return "Run the sealed result through a host with protected production authority."
+    if audit.get("productionReady") is True:
+        return "None; this sealed audit is production-ready."
+    return "Resolve the remaining blocking lane, then run the final audit again."
+
+
+def _append_checks(
+    lines: list[str],
+    *,
+    title: str,
+    checks: list[dict[str, Any]],
+    empty_message: str,
+) -> None:
+    lines.extend(["", f"### {title}", ""])
+    if not checks:
+        lines.append(empty_message)
+        return
+    for item in checks:
+        lines.append(
+            f"- [{_one_line(item.get('status'))}] {_one_line(item.get('checkId'))}: "
+            f"{_one_line(item.get('message'))}"
+        )
+
+
 def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
     """Render a readable projection only from verified canonical audit evidence."""
 
@@ -266,6 +381,10 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
         )
     except EnforcementAuthorityIntegrityError as error:
         raise RunArtifactIntegrityError(f"Readable report authority lane is invalid: {error}") from error
+    adapter = coverage.get("adapter")
+    if not isinstance(adapter, str) or not adapter:
+        raise RunArtifactIntegrityError("Readable report adapter must be a non-empty string.")
+    workspace_labels = _workspace_labels(adapter)
     lines = [
         "# Design System Guardian Audit",
         "",
@@ -273,21 +392,20 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
         f"Profile: {_one_line(audit.get('profileId'))}",
         f"Snapshot: {_one_line(audit.get('snapshotId'))}",
         f"Policy: {_one_line(audit.get('policyDigest'))}",
-        f"Intended project: {_one_line(project['canonicalRoot'])}",
-        f"Project root identity: {_one_line(project['rootIdentity'])}",
-        f"Assessed tree: {_one_line(project['assessedTreeDigest'])}",
-        f"Analysis inputs: {_one_line(project['analysisInputsDigest'])}",
-        f"Git commit (local observation): {_one_line(project['gitCommit'])}",
-        f"Source cut: {_one_line(design_lane.get('sourceCutDigest'))}",
-        f"Adapter config: {_one_line(coverage.get('configDigest'))}",
-        f"Protected enforcement authority: {_one_line(authority_lane['status'])}",
-        f"Authority provider: {_one_line(authority_lane['provider'])}",
-        f"Authority attestation: {_one_line(authority_lane['attestation'])}",
-        f"Design-system compliance: {_one_line(design_lane.get('status'))}",
-        f"UX/accessibility: {_one_line(ux_lane.get('status'))}",
-        f"Production ready: {'yes' if audit.get('productionReady') is True else 'no'}",
+        f"{workspace_labels['root']}: {_one_line(project['canonicalRoot'])}",
+        f"{workspace_labels['identity']}: {_one_line(project['rootIdentity'])}",
+        f"{workspace_labels['tree']}: {_one_line(project['assessedTreeDigest'])}",
+        f"{workspace_labels['inputs']}: {_one_line(project['analysisInputsDigest'])}",
+        f"{workspace_labels['commit']}: {_one_line(project['gitCommit'])}",
         "",
-        "## Coverage",
+        "## Design-system compliance lane",
+        "",
+        f"Design-system compliance: {_one_line(design_lane.get('status'))}",
+        f"Source cut: {_one_line(design_lane.get('sourceCutDigest'))}",
+        f"Adapter: {_one_line(adapter)}",
+        f"Adapter config: {_one_line(coverage.get('configDigest'))}",
+        "",
+        "### Coverage",
         "",
     ]
     for category in AUDIT_CATEGORIES:
@@ -302,7 +420,7 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
         values = design_lane.get(key)
         if not isinstance(values, list):
             raise RunArtifactIntegrityError(f"Audit {key} must be an array.")
-        lines.extend(["", f"## {title}", ""])
+        lines.extend(["", f"### {title}", ""])
         if not values:
             lines.append("None.")
         else:
@@ -313,20 +431,62 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
                     f"- [{_one_line(item.get('category'))}] "
                     f"{_one_line(item.get('diagnosticId'))}: {_one_line(item.get('message'))}"
                 )
-    lines.extend(["", "## UX/accessibility checks", ""])
     checks = ux_lane.get("checks")
     if not isinstance(checks, list):
         raise RunArtifactIntegrityError("UX/accessibility checks must be an array.")
-    if not checks:
-        lines.append("Not assessed.")
-    else:
-        for item in checks:
-            if not isinstance(item, dict):
-                raise RunArtifactIntegrityError("UX/accessibility check entries must be objects.")
+    for item in checks:
+        if not isinstance(item, dict):
+            raise RunArtifactIntegrityError("UX/accessibility check entries must be objects.")
+    screen_checks, flow_checks, legacy_checks = _ux_checks_by_scope(checks)
+    lines.extend(
+        [
+            "",
+            "## UX/accessibility lane",
+            "",
+            f"UX/accessibility: {_one_line(ux_lane.get('status'))}",
+        ]
+    )
+    _append_checks(
+        lines,
+        title="Screen checks",
+        checks=screen_checks,
+        empty_message="Not assessed.",
+    )
+    _append_checks(
+        lines,
+        title="Final-flow checks",
+        checks=flow_checks,
+        empty_message="Not assessed.",
+    )
+    if legacy_checks:
+        lines.extend(["", "Legacy evaluator status:", ""])
+        for item in legacy_checks:
             lines.append(
                 f"- [{_one_line(item.get('status'))}] {_one_line(item.get('checkId'))}: "
                 f"{_one_line(item.get('message'))}"
             )
+    lines.extend(
+        [
+            "",
+            "## Protected production authority lane",
+            "",
+            f"Protected enforcement authority: {_one_line(authority_lane['status'])}",
+            f"Authority provider: {_one_line(authority_lane['provider'])}",
+            f"Authority attestation: {_one_line(authority_lane['attestation'])}",
+            f"Production ready: {'yes' if audit.get('productionReady') is True else 'no'}",
+            "",
+            "## Next action",
+            "",
+            "Next action: "
+            + _next_action(
+                audit=audit,
+                design_lane=design_lane,
+                ux_lane=ux_lane,
+                coverage=coverage,
+                authority_lane=authority_lane,
+            ),
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 

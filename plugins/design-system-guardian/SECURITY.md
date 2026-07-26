@@ -25,7 +25,7 @@ Catalog approval and release authority roles must use distinct Ed25519 keys.
 
 Every catalog load, historical run-pin load, and ingestion enumerates and verifies the complete locally retained pair of immutable snapshots and sealed approval-sequence records. The two histories must have exactly the same approval sequences and exact pointer fields, and retained sequences must be contiguous from the first locally observed approval through the high-water. The sealed current pointer must equal the highest retained valid approval; an existing lower pointer is a replay and fails closed. A missing pointer is recovered only when both retained histories align exactly.
 
-This local check detects deletion or truncation of either side while its counterpart remains, including deletion of the newest sequence record while the newer immutable snapshot is retained. It does not claim rollback resistance against coordinated deletion of both the newest immutable snapshot and its matching sequence record followed by replay of an older sealed pointer. Account-owned files are not WORM storage, and version 0.3.2 deliberately does not add an external catalog-head service. Deployments that must resist that coordinated deletion require an independently preserved monotonic/WORM catalog approval head in a future reviewed release.
+This local check detects deletion or truncation of either side while its counterpart remains, including deletion of the newest sequence record while the newer immutable snapshot is retained. It does not claim rollback resistance against coordinated deletion of both the newest immutable snapshot and its matching sequence record followed by replay of an older sealed pointer. Account-owned files are not WORM storage, and version 0.3.3 deliberately does not add an external catalog-head service. Deployments that must resist that coordinated deletion require an independently preserved monotonic/WORM catalog approval head in a future reviewed release.
 
 ## Release integrity
 
@@ -53,29 +53,28 @@ CI repeats committed-tree and reachable-history checks with `--ci`. CI cannot in
 
 ## Filesystem integrity
 
-Guardian rejects redirected trust and state paths, non-canonical JSON, duplicate JSON keys, invalid seals, replayed channel pointers while the complete local archive is retained, broken history chains, non-monotonic or future timestamps, and attempts to rewrite local append-only projections. A stale transaction lock blocks rather than being guessed safe to remove.
+Guardian rejects redirected trust and state paths, non-canonical JSON, duplicate JSON keys, invalid seals, replayed channel pointers while the complete local archive is retained, broken history chains, non-monotonic or future timestamps, and attempts to rewrite local append-only projections. Generic-host runtime storage additionally rejects symlinks, Windows junctions, and all reparse-point redirects, and the production default is anchored under the real account-local `~/.design-system-guardian/runtimes/` path. A stale transaction lock blocks rather than being guessed safe to remove.
 
 Local account-owned files are not WORM storage and cannot detect coordinated deletion of a sealed tail plus its archived manifest. They are never production channel authority. Trusted reads and actions require one fixed host adapter backed by independently preserved/WORM storage, authenticated latest-head semantics, and monotonic compare-and-swap. Arbitrary paths, environment-selected providers, caller-supplied JSON, and in-process/local substitutes are forbidden.
 
-The private pilot ships the provider protocol but no resolver or production implementation. Production channel reads, promotions, and restorations fail closed unconditionally. Configuration alone cannot unblock them; a future reviewed Guardian code release must integrate the fixed host adapter and its authenticated latest-head/CAS checks.
+The public source release ships the provider protocol but no resolver or production implementation. Production channel reads, promotions, and restorations fail closed unconditionally. Configuration alone cannot unblock them; a future reviewed Guardian code release must integrate the fixed host adapter and its authenticated latest-head/CAS checks.
 
 ## Reporting a vulnerability
 
-Do not include company catalogs, private profiles, credentials, unpublished Figma data, or authority material in a public report. Preserve the exact error, affected digest, and minimal reproduction, then send it through the private security channel designated by the plugin owner. No public security contact has been configured for this private pilot.
+Do not include company catalogs, private profiles, credentials, unpublished Figma data, or authority material in a public report. Preserve the exact error, affected digest, and minimal reproduction, then send it through the private security channel designated by the plugin owner. No public security contact has been configured for this source release.
 
 ## Audit integrity
 
 Catalog outcomes are re-resolved from the verified pinned snapshot at audit and finalization. Caller-declared statuses or selected identities are never authority.
 
-For Flutter, `guardian audit` owns analyzer execution and accepts a project root, resolution requests, and contextual UX checks; it does not accept a caller-authored adapter result. It binds the canonical project root, complete Dart source manifest, analyzer-influencing inputs, analyzer executable, shipped adapter bundle, run pin, generated config, sentinel expectations, and one diagnostic attestation per compilation unit. Finalization reopens the sealed analysis attestation and rejects changed or replayed source evidence.
+For Flutter, `guardian audit` owns analyzer execution and never accepts caller-authored analyzer status. Backward-compatible version 1 requests remain readable; version 2 binds the selected adapter, project root, resolutions, final-flow UX evidence, and `adapterEvidence:null`. It binds the canonical project root, complete Dart source manifest, analyzer inputs and executable, shipped adapter bundle, run pin, generated config, sentinel expectations, and one diagnostic attestation per compilation unit. For Figma, version 2 requires the fixed Plugin API collector observation bound to the run config, exact file version, nodes, variables, text styles, components, variants/properties, and signed duplicate-file lineage. Finalization rejects changed, unbound, or replayed evidence.
 
 Phase-local success is never labeled production readiness. Snapshot ingestion
 reports `snapshotUsable`; preflight reports `pinCreated`. Only protected
 finalization may emit `productionReady=true`.
 
-Version 0.3.2 deliberately has no trusted UX/accessibility evaluator. User-supplied UX assertions are not proof; the lane is forced to `not_assessed`, exit `4`, and `productionReady=false`.
+Version 0.3.3 includes diagnostic Figma read-back and screen/final-flow UX evaluation. Proven violations or gaps can fail, but clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. These local mechanisms cannot issue `allowed` or prevent raw-tool bypass. Design-system compliance, UX/accessibility, and protected production authority stay separate, and `productionReady=false` without the protected lane.
 
+## Supported source release
 
-## Supported pilot
-
-The current source declares version `0.3.2`. It is a pilot candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, or skill loading alone do not constitute a signed production release.
+The current source declares version `0.3.3`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.

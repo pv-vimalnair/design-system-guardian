@@ -222,7 +222,7 @@ class AuditEvaluationTest(unittest.TestCase):
             verified_snapshot=sample_snapshot(),
         )
 
-        self.assertEqual(result.exit_code, ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+        self.assertEqual(result.exit_code, ExitCode.VIOLATION_OR_SENTINEL)
         self.assertFalse(result.result["productionReady"])
         self.assertEqual(
             [item["diagnosticId"] for item in result.result["designSystemLane"]["violations"]],
@@ -265,7 +265,7 @@ class AuditEvaluationTest(unittest.TestCase):
         self.assertNotIn("replacement", gap["evidence"])
         self.assertEqual(result.result["uxAccessibilityLane"]["status"], "not_assessed")
 
-    def test_exit_precedence_is_integrity_then_source_then_coverage_then_violation(self) -> None:
+    def test_exit_precedence_is_integrity_then_source_then_violation_then_coverage(self) -> None:
         from guardian_core.audit import AuditIntegrityError, evaluate_audit
         from guardian_core.contracts import ExitCode
 
@@ -339,7 +339,7 @@ class AuditEvaluationTest(unittest.TestCase):
             project_evidence=sample_project_evidence(),
             verified_snapshot=sample_snapshot(),
         )
-        self.assertEqual(result.exit_code, ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+        self.assertEqual(result.exit_code, ExitCode.VIOLATION_OR_SENTINEL)
         self.assertFalse(result.result["productionReady"])
         self.assertEqual(result.result["designSystemLane"]["sentinelCount"], 1)
 

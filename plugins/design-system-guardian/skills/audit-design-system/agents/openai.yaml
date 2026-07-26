@@ -1,4 +1,4 @@
 interface:
   display_name: "Audit Design System"
-  short_description: "Audit exact design-system compliance"
-  default_prompt: "Use $audit-design-system to run a read-only compliance and UX audit against the pinned design-system snapshot."
+  short_description: "Audit exact design-system and UX evidence"
+  default_prompt: "When explicitly invoked, use $audit-design-system to keep the product read-only, inspect exact Figma or code evidence, and report diagnostic lanes honestly. Do not claim this prompt creates an always-on protected route."

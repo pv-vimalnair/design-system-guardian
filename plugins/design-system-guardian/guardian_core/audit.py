@@ -24,6 +24,11 @@ from .project_binding import (
 from .resolver import _resolve_verified_snapshot_identity
 from .sentinels import SentinelIntegrityError, validate_sentinel
 from .snapshot import SnapshotValidationError, classify_source_state
+from .ux_evaluator import (
+    REQUIRED_FLOW_AREAS,
+    REQUIRED_SCREEN_AREAS,
+    UX_EVALUATOR_CONTRACT_DIGEST,
+)
 
 
 AUDIT_CATEGORIES = (
@@ -52,6 +57,19 @@ _ADAPTER_KEYS = {
 _CATEGORY_KEYS = {"status", "assessedItems", "totalItems"}
 _DIAGNOSTIC_KEYS = {"diagnosticId", "category", "kind", "message", "evidence"}
 _UX_CHECK_KEYS = {"checkId", "area", "status", "message", "evidence"}
+_TRUSTED_UX_EVIDENCE_KEYS = {
+    "scope",
+    "targetDigest",
+    "evidenceDigest",
+    "reasonCode",
+    "evaluatorDigest",
+    "sourceCutDigest",
+}
+_TRUSTED_UX_MESSAGES = {
+    "allowed": "UX/accessibility evidence satisfied the required check.",
+    "gap": "UX/accessibility evidence did not satisfy the required check.",
+    "not_assessed": "Required UX/accessibility evidence was unavailable for this check.",
+}
 _DESIGN_LANE_KEYS = {"status", "sourceCutDigest", "violations", "gaps", "sentinelCount", "resolutionSummary"}
 _UX_LANE_KEYS = {"status", "checks"}
 _COVERAGE_KEYS = {"schemaVersion", "adapter", "supported", "configDigest", "complete", "status", "categories", "assessedFiles", "totalFiles"}
@@ -261,6 +279,36 @@ def _validate_adapter(adapter_result: Any, source_cut: dict[str, Any]) -> tuple[
     return coverage, _sorted_objects(normalized_diagnostics)
 
 
+def adapter_audit_projection(
+    adapter_result: Any,
+    source_cut: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Return the fail-closed audit projection for one normalized adapter result.
+
+    Portable Figma observations are caller-carried local evidence in v0.3.3.
+    Exact violations remain useful, but a clean observation cannot authorize an
+    ``allowed`` coverage claim until a protected host receipt exists.
+    """
+
+    coverage, diagnostics = _validate_adapter(adapter_result, source_cut)
+    if coverage["adapter"] != "figma":
+        return coverage, diagnostics
+
+    categories = copy.deepcopy(coverage["categories"])
+    for evidence in categories.values():
+        if evidence["status"] == "allowed":
+            evidence["status"] = "not_assessed"
+    coverage["categories"] = categories
+    coverage["complete"] = False
+    coverage["status"] = (
+        "unsupported"
+        if coverage["supported"] is False
+        or any(item["status"] == "unsupported" for item in categories.values())
+        else "not_assessed"
+    )
+    return coverage, diagnostics
+
+
 def _validate_ux_checks(ux_checks: Any) -> tuple[list[dict[str, Any]], str]:
     if not isinstance(ux_checks, list):
         raise AuditIntegrityError("UX/accessibility checks must be an array.")
@@ -284,6 +332,114 @@ def _validate_ux_checks(ux_checks: Any) -> tuple[list[dict[str, Any]], str]:
     # never certify this lane. Keep the canonical output idempotent so sealed
     # artifacts revalidate deterministically during finalization.
     return [copy.deepcopy(_UNTRUSTED_UX_RESULT)], ResolutionStatus.NOT_ASSESSED.value
+
+
+def _validate_trusted_ux_checks(
+    ux_checks: Any,
+    *,
+    source_cut_digest: str,
+) -> tuple[list[dict[str, Any]], str]:
+    if not isinstance(source_cut_digest, str) or not _HEX_64.fullmatch(source_cut_digest):
+        raise AuditIntegrityError("Trusted UX checks require the pinned source-cut digest.")
+    if not isinstance(ux_checks, list) or not ux_checks:
+        raise AuditIntegrityError("Trusted final UX evaluation must contain checks.")
+    normalized: list[dict[str, Any]] = []
+    check_ids: set[str] = set()
+    covered: set[tuple[str, str]] = set()
+    targets: dict[str, dict[str, set[str]]] = {"screen": {}, "flow": {}}
+    for item in ux_checks:
+        if not isinstance(item, dict) or set(item) != _UX_CHECK_KEYS:
+            raise AuditIntegrityError("Trusted UX checks have unknown or missing fields.")
+        check_id = _require_nonempty_string(item.get("checkId"), "trusted UX checkId")
+        if check_id in check_ids:
+            raise AuditIntegrityError("Trusted UX check IDs must be unique.")
+        check_ids.add(check_id)
+        status = item.get("status")
+        if status not in _TRUSTED_UX_MESSAGES or item.get("message") != _TRUSTED_UX_MESSAGES[status]:
+            raise AuditIntegrityError("Trusted UX check status or fixed message is invalid.")
+        evidence = item.get("evidence")
+        if not isinstance(evidence, dict) or set(evidence) != _TRUSTED_UX_EVIDENCE_KEYS:
+            raise AuditIntegrityError("Trusted UX check evidence has unknown or missing fields.")
+        scope = evidence.get("scope")
+        if scope not in {"screen", "flow"}:
+            raise AuditIntegrityError("Trusted UX check scope is invalid.")
+        target_digest = evidence.get("targetDigest")
+        if not isinstance(target_digest, str) or not _HEX_64.fullmatch(target_digest):
+            raise AuditIntegrityError("Trusted UX targetDigest must be a SHA-256 digest.")
+        if evidence.get("evaluatorDigest") != UX_EVALUATOR_CONTRACT_DIGEST:
+            raise AuditIntegrityError("Trusted UX check uses another evaluator contract.")
+        if evidence.get("sourceCutDigest") != source_cut_digest:
+            raise AuditIntegrityError("Trusted UX check differs from the pinned source cut.")
+        reason_code = evidence.get("reasonCode")
+        evidence_digest = evidence.get("evidenceDigest")
+        expected_reason = None if status == "allowed" else f"ux_{scope}_{'gap' if status == 'gap' else 'not_assessed'}"
+        if reason_code != expected_reason:
+            raise AuditIntegrityError("Trusted UX check has the wrong fixed reason code.")
+        if status == "not_assessed":
+            if evidence_digest is not None:
+                raise AuditIntegrityError("Unassessed UX check cannot claim evidence.")
+        elif not isinstance(evidence_digest, str) or not _HEX_64.fullmatch(evidence_digest):
+            raise AuditIntegrityError("Assessed UX check requires an evidence digest.")
+        area = _require_nonempty_string(item.get("area"), "trusted UX area")
+        required = REQUIRED_SCREEN_AREAS if scope == "screen" else REQUIRED_FLOW_AREAS
+        if area not in required:
+            raise AuditIntegrityError("Trusted UX check area is outside its scope.")
+        coverage_key = (target_digest, area)
+        if coverage_key in covered:
+            raise AuditIntegrityError("Trusted UX evaluation repeats a target area.")
+        covered.add(coverage_key)
+        targets[scope].setdefault(target_digest, set()).add(area)
+        normalized.append(copy.deepcopy(item))
+    if not targets["screen"] or len(targets["flow"]) != 1:
+        raise AuditIntegrityError("Trusted final UX evaluation must cover screens and one flow.")
+    for scope, scoped_targets in targets.items():
+        required = set(REQUIRED_SCREEN_AREAS if scope == "screen" else REQUIRED_FLOW_AREAS)
+        if any(areas != required for areas in scoped_targets.values()):
+            raise AuditIntegrityError("Trusted UX target coverage is incomplete.")
+    # The built-in portable evaluator validates structure and detects proven
+    # gaps, but its observations remain caller-carried local evidence. Preserve
+    # every gap while canonicalizing positive claims to not_assessed.
+    for item in normalized:
+        if item["status"] != "allowed":
+            continue
+        scope = item["evidence"]["scope"]
+        item["status"] = "not_assessed"
+        item["message"] = _TRUSTED_UX_MESSAGES["not_assessed"]
+        item["evidence"]["evidenceDigest"] = None
+        item["evidence"]["reasonCode"] = f"ux_{scope}_not_assessed"
+    normalized = _sorted_objects(normalized)
+    if any(item["status"] == "gap" for item in normalized):
+        return normalized, ResolutionStatus.CONFLICT.value
+    if any(item["status"] == "not_assessed" for item in normalized):
+        return normalized, ResolutionStatus.NOT_ASSESSED.value
+    return normalized, ResolutionStatus.ALLOWED.value
+
+
+def _validate_final_ux_checks(
+    ux_checks: Any,
+    *,
+    source_cut_digest: str,
+) -> tuple[list[dict[str, Any]], str]:
+    if (
+        isinstance(ux_checks, list)
+        and len(ux_checks) == 1
+        and isinstance(ux_checks[0], dict)
+        and ux_checks[0].get("checkId") == _UNTRUSTED_UX_RESULT["checkId"]
+    ):
+        return _validate_ux_checks(ux_checks)
+    return _validate_trusted_ux_checks(
+        ux_checks,
+        source_cut_digest=source_cut_digest,
+    )
+
+
+def canonical_untrusted_ux_lane() -> dict[str, Any]:
+    """Return the sole valid UX lane for an attestation without UX evidence."""
+
+    return {
+        "status": ResolutionStatus.NOT_ASSESSED.value,
+        "checks": [copy.deepcopy(_UNTRUSTED_UX_RESULT)],
+    }
 
 
 def _authoritatively_resolve(
@@ -418,10 +574,10 @@ def _select_exit_code(
         return ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY
     if source_blocked:
         return ExitCode.SOURCE_UNAVAILABLE_STALE_OR_INCOMPLETE
-    if coverage_blocked:
-        return ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE
     if violated:
         return ExitCode.VIOLATION_OR_SENTINEL
+    if coverage_blocked:
+        return ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE
     return ExitCode.PASS
 
 
@@ -487,10 +643,13 @@ def derive_audit_exit_code(result: Any) -> ExitCode:
         "categories": coverage.get("categories"),
         "diagnostics": normalized_violations + normalized_gaps,
     }
-    normalized_coverage, _ = _validate_adapter(adapter_proxy, {})
+    normalized_coverage, _ = adapter_audit_projection(adapter_proxy, {})
     if coverage != normalized_coverage:
         raise AuditIntegrityError("Final coverage summary differs from its assessed evidence.")
-    normalized_ux, ux_status = _validate_ux_checks(ux.get("checks"))
+    normalized_ux, ux_status = _validate_final_ux_checks(
+        ux.get("checks"),
+        source_cut_digest=str(design.get("sourceCutDigest")),
+    )
     if ux.get("status") != ux_status or ux.get("checks") != normalized_ux:
         raise AuditIntegrityError("UX/accessibility summary differs from its checks.")
     normalized_resolutions, resolution_counts, sentinel_count = _validate_resolutions(
@@ -511,19 +670,26 @@ def derive_audit_exit_code(result: Any) -> ExitCode:
     if design_status in _SOURCE_STATUSES:
         source_statuses.add(design_status)
     coverage_resolution_statuses = statuses & _COVERAGE_STATUSES
-    violated = bool(normalized_violations or normalized_gaps or sentinel_count or ux_status == "conflict" or statuses & _VIOLATION_STATUSES)
+    design_violated = bool(
+        normalized_violations
+        or normalized_gaps
+        or sentinel_count
+        or statuses & _VIOLATION_STATUSES
+    )
+    ux_violated = ux_status == "conflict"
+    violated = design_violated or ux_violated
     if invalid:
         expected_design_status = ResolutionStatus.INVALID.value
     elif source_statuses:
         expected_design_status = next(status for status in _SOURCE_STATUS_ORDER if status in source_statuses)
+    elif design_violated:
+        expected_design_status = ResolutionStatus.CONFLICT.value
     elif coverage["complete"] is not True:
         expected_design_status = coverage["status"]
     elif ResolutionStatus.UNSUPPORTED.value in coverage_resolution_statuses:
         expected_design_status = ResolutionStatus.UNSUPPORTED.value
     elif ResolutionStatus.NOT_ASSESSED.value in coverage_resolution_statuses:
         expected_design_status = ResolutionStatus.NOT_ASSESSED.value
-    elif violated:
-        expected_design_status = ResolutionStatus.CONFLICT.value
     else:
         expected_design_status = ResolutionStatus.ALLOWED.value
     if design_status != expected_design_status:
@@ -550,6 +716,7 @@ def evaluate_audit(
     project_evidence: dict[str, Any],
     verified_snapshot: dict[str, Any] | None = None,
     analysis_attestation_digest: str | None = None,
+    trusted_ux_checks: list[dict[str, Any]] | None = None,
 ) -> AuditEvaluation:
     """Evaluate supplied evidence without writing source code or host state."""
 
@@ -582,13 +749,21 @@ def evaluate_audit(
         raise AuditIntegrityError(
             f"Pinned snapshot freshness evidence is invalid: {error}"
         ) from error
-    coverage, diagnostics = _validate_adapter(adapter_result, pin["sourceCut"])
+    coverage, diagnostics = adapter_audit_projection(
+        adapter_result, pin["sourceCut"]
+    )
     normalized_resolutions, resolution_counts, sentinel_count = _authoritatively_resolve(
         resolutions,
         pin=pin,
         verified_snapshot=verified_snapshot,
     )
-    normalized_ux, ux_status = _validate_ux_checks(ux_checks)
+    if trusted_ux_checks is None:
+        normalized_ux, ux_status = _validate_ux_checks(ux_checks)
+    else:
+        normalized_ux, ux_status = _validate_trusted_ux_checks(
+            trusted_ux_checks,
+            source_cut_digest=sha256_digest(pin["sourceCut"]),
+        )
     violations = [item for item in diagnostics if item["kind"] == "violation"]
     gaps = [item for item in diagnostics if item["kind"] == "design_system_gap"]
 
@@ -607,13 +782,14 @@ def evaluate_audit(
         or enforcement_lane["status"] != "allowed"
         or bool(resolution_statuses & _COVERAGE_STATUSES)
     )
-    violated = bool(
+    design_violated = bool(
         violations
         or gaps
         or sentinel_count
-        or ux_status == "conflict"
         or resolution_statuses & _VIOLATION_STATUSES
     )
+    ux_violated = ux_status == "conflict"
+    violated = design_violated or ux_violated
     exit_code = _select_exit_code(
         invalid=invalid,
         source_blocked=source_blocked,
@@ -627,14 +803,14 @@ def evaluate_audit(
         design_status = next(
             status for status in _SOURCE_STATUS_ORDER if status in source_statuses
         )
+    elif design_violated:
+        design_status = ResolutionStatus.CONFLICT.value
     elif coverage["complete"] is not True:
         design_status = coverage["status"]
     elif ResolutionStatus.UNSUPPORTED.value in resolution_statuses:
         design_status = ResolutionStatus.UNSUPPORTED.value
     elif ResolutionStatus.NOT_ASSESSED.value in resolution_statuses:
         design_status = ResolutionStatus.NOT_ASSESSED.value
-    elif violated:
-        design_status = ResolutionStatus.CONFLICT.value
     else:
         design_status = ResolutionStatus.ALLOWED.value
 

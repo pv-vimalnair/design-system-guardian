@@ -90,7 +90,7 @@ class PublicationContractTests(unittest.TestCase):
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "design-system-guardian")
-        self.assertEqual(manifest["version"], "0.3.2")
+        self.assertEqual(manifest["version"], "0.3.3")
         self.assertEqual(manifest["license"], "MIT")
         self.assertNotIn("hooks", manifest)
         self.assertEqual(manifest["interface"]["brandColor"], "#3157D8")
@@ -103,7 +103,45 @@ class PublicationContractTests(unittest.TestCase):
         self.assertEqual(skills, ["audit-design-system", "build-with-design-system"])
         from guardian_core.release import RUNTIME_VERSION
         self.assertEqual(RUNTIME_VERSION, manifest["version"])
-        self.assertIn("version: 0.3.2", (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8"))
+        self.assertIn("version: 0.3.3", (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8"))
+
+    def test_v033_release_page_describes_supported_lanes_and_deferred_scope(self) -> None:
+        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        for phrase in (
+            "exact Figma binding",
+            "approved duplicate",
+            "quick screen checkpoint",
+            "final-flow",
+            "protected production authority",
+            "Usage Rules Lane is planned for 0.3.4",
+            "Skills are portable; automatic routing is not.",
+            "Guardian cannot prevent raw-tool bypass",
+            "Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation.",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, readme)
+
+        plugin_readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("inside Guardian local state", plugin_readme)
+        self.assertNotIn('"projectRoot": null', plugin_readme)
+
+    def test_release_pages_describe_opt_in_runtime_bootstrap_honestly(self) -> None:
+        pages = {
+            "root": (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8"),
+            "plugin": (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8"),
+        }
+        for page_name, page in pages.items():
+            with self.subTest(page=page_name):
+                self.assertIn("--bootstrap-runtime", page)
+                self.assertIn("explicit permission", page)
+                self.assertIn("Python 3.11", page)
+                self.assertIn("isolated Guardian-owned virtual environment", page)
+                self.assertIn("bundled `requirements.txt`", page)
+                self.assertIn("host remains `unsupported`", page)
+                self.assertIn("fail closed", page)
+                self.assertIn("does not create an always-on protected route", page)
+                self.assertNotIn("zero prerequisites", page.lower())
+                self.assertNotIn("no prerequisites", page.lower())
 
     def test_repository_page_and_mit_license(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")

@@ -26,7 +26,7 @@ class FlutterConfigCliTest(unittest.TestCase):
             home.mkdir()
             project = create_minimal_flutter_project(root)
             pin = provision_pin(home, fully_mapped_catalog(), run_id="run-cli-config", project_root=project)
-            output = root / "guardian_flutter_config.json"
+            output = home / "private" / "guardian_flutter_config.json"
             stdout = io.StringIO()
             stderr = io.StringIO()
 

@@ -189,7 +189,7 @@ class CatalogAuthorityBoundaryTest(unittest.TestCase):
 
     def test_runtime_dependency_is_pinned(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        self.assertEqual((root / "requirements.txt").read_text(encoding="utf-8").strip(), "cryptography==46.0.7")
+        self.assertEqual((root / "requirements.txt").read_text(encoding="utf-8").strip(), "cryptography==46.0.7\ncffi==2.1.0\npycparser==3.0")
 
 
 if __name__ == "__main__":

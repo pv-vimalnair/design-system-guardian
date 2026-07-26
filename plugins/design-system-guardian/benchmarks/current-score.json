@@ -10,7 +10,7 @@
     "model": "guardian-weighted-elo-v1",
     "schemaVersion": 3,
     "score": 1,
-    "suiteDigest": "546c02d9c207d7108b4bb477c31e28541de83f63a2ee5fd2433fee163579cdf4",
+    "suiteDigest": "debcf5e126a100144209a47303d86463e0f9f1f9a3374bb9a2c4274e7071dde7",
     "suiteSnapshot": {
         "achievements": [
             {
@@ -100,6 +100,46 @@
                 "caseModuleId": "guardian-public-cases-v1",
                 "caseFunction": "case_performance_bounded_runtime",
                 "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+            },
+            {
+                "achievementId": "synthetic-correctness-figma-bound-duplicates",
+                "category": "correctness",
+                "weight": 6,
+                "caseModuleId": "guardian-public-cases-v3",
+                "caseFunction": "case_correctness_figma_bound_duplicates",
+                "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+            },
+            {
+                "achievementId": "synthetic-reliability-ux-positive-downgrade",
+                "category": "reliability",
+                "weight": 4,
+                "caseModuleId": "guardian-public-cases-v3",
+                "caseFunction": "case_reliability_ux_positive_downgrade",
+                "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+            },
+            {
+                "achievementId": "synthetic-safety-private-figma-evidence",
+                "category": "safety_privacy_integrity",
+                "weight": 6,
+                "caseModuleId": "guardian-public-cases-v3",
+                "caseFunction": "case_safety_private_figma_evidence",
+                "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+            },
+            {
+                "achievementId": "synthetic-usability-permission-bound-onboarding",
+                "category": "portability_usability_performance",
+                "weight": 4,
+                "caseModuleId": "guardian-public-cases-v3",
+                "caseFunction": "case_usability_permission_bound_onboarding",
+                "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+            },
+            {
+                "achievementId": "synthetic-portability-permissioned-runtime-bootstrap",
+                "category": "portability_usability_performance",
+                "weight": 5,
+                "caseModuleId": "guardian-public-cases-v3",
+                "caseFunction": "case_portability_permissioned_runtime_bootstrap",
+                "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
             }
         ],
         "caseModules": [
@@ -108,11 +148,17 @@
                 "path": "benchmarks/elo_cases_v1.py",
                 "moduleDigest": "94471dbca69ecd8e1e008ead6fdc192f6f8024d7c719c12d8851ea2488f356b3",
                 "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+            },
+            {
+                "moduleId": "guardian-public-cases-v3",
+                "path": "benchmarks/elo_cases_v3.py",
+                "moduleDigest": "751ca9c6c7fd63e66a34f70ee9fb2a2111e92aef40d790c1f1d173afce9f4300",
+                "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
             }
         ],
         "model": "guardian-weighted-elo-v1",
         "schemaVersion": 2,
         "suiteId": "guardian-public-synthetic-v1",
-        "suiteVersion": 2
+        "suiteVersion": 3
     }
 }

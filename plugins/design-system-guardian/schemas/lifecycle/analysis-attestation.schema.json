@@ -24,9 +24,116 @@
     "configDigest": {"$ref": "#/$defs/digest"},
     "runnerEvidenceDigest": {"$ref": "#/$defs/digest"},
     "runnerEvidence": {"type": "object"},
-    "auditResultDigest": {"$ref": "#/$defs/digest"}
+    "auditResultDigest": {"$ref": "#/$defs/digest"},
+    "uxTarget": {"$ref": "#/$defs/uxTarget"},
+    "uxEvaluation": {"$ref": "#/$defs/uxEvaluation"},
+    "uxEvaluationDigest": {"$ref": "#/$defs/digest"}
   },
+  "oneOf": [
+    {
+      "not": {
+        "anyOf": [
+          {"required": ["uxTarget"]},
+          {"required": ["uxEvaluation"]},
+          {"required": ["uxEvaluationDigest"]}
+        ]
+      }
+    },
+    {
+      "required": ["uxTarget", "uxEvaluation", "uxEvaluationDigest"]
+    }
+  ],
   "$defs": {
-    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "uxTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["flowDigest", "screenDigests"],
+      "properties": {
+        "flowDigest": {"$ref": "#/$defs/digest"},
+        "screenDigests": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "uxEvaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "scope",
+        "status",
+        "complete",
+        "evaluatorDigest",
+        "sourceCutDigest",
+        "targetDigest",
+        "checks",
+        "reasonCodes",
+        "canAuthorizeProduction"
+      ],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "scope": {"const": "final_flow"},
+        "status": {"enum": ["allowed", "conflict", "not_assessed"]},
+        "complete": {"type": "boolean"},
+        "evaluatorDigest": {"$ref": "#/$defs/digest"},
+        "sourceCutDigest": {"$ref": "#/$defs/digest"},
+        "targetDigest": {"$ref": "#/$defs/digest"},
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/uxCheck"}
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/reasonCode"}
+        },
+        "canAuthorizeProduction": {"const": false}
+      }
+    },
+    "uxCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkId",
+        "targetScope",
+        "targetDigest",
+        "area",
+        "status",
+        "reasonCode",
+        "evidenceDigest"
+      ],
+      "properties": {
+        "checkId": {"type": "string", "minLength": 1},
+        "targetScope": {"enum": ["screen", "flow"]},
+        "targetDigest": {"$ref": "#/$defs/digest"},
+        "area": {"type": "string", "minLength": 1},
+        "status": {"enum": ["allowed", "gap", "not_assessed"]},
+        "reasonCode": {
+          "oneOf": [
+            {"type": "null"},
+            {"enum": ["ux_screen_gap", "ux_screen_not_assessed", "ux_flow_gap", "ux_flow_not_assessed"]}
+          ]
+        },
+        "evidenceDigest": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/digest"}
+          ]
+        }
+      }
+    },
+    "reasonCode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reasonCode", "count"],
+      "properties": {
+        "reasonCode": {"enum": ["ux_screen_gap", "ux_screen_not_assessed", "ux_flow_gap", "ux_flow_not_assessed"]},
+        "count": {"type": "integer", "minimum": 1}
+      }
+    }
   }
 }

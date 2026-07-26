@@ -8,6 +8,14 @@ Guardian evolves in three separate layers:
 | Company catalog | Each approved source change creates a new immutable snapshot under its one profile. Profiles never blend. |
 | Plugin logic | Reviewed SemVer release, deterministic one-version migration, canary verification, then stable promotion. |
 
+## 0.3.3 release boundary
+
+Version 0.3.3 adds permission-bound setup, exact Figma read-back, approved duplicate-file lineage, built-in screen/final-flow UX evaluation, three separate result lanes, and portable two-skill packaging with host-controlled routing. It preserves the immutable policy digest and exactly two visible skills. The Usage Rules Lane is deferred to 0.3.4.
+
+Every public update starts from a clean source checkout. Company profiles, design-system catalogs, setup candidates, generated Figma configs/observations, run evidence, prompts, product source, credentials, user activity, and local Elo history remain under `~/.design-system-guardian/` or another private input location and must not enter the commit, artifact, or Git history.
+
+The public source update does not create automatic routing or protected production authority. Figma and UX evidence can fail on violations or gaps, but clean caller-carried evidence remains `not_assessed` until a reviewed protected host or CI attests it.
+
 ## Local development refresh is not a release
 
 Codex may require a build-metadata cachebuster to reload an edited local plugin. Use the plugin-creator `update_plugin_cachebuster.py` helper and reinstall from the configured personal marketplace. That cachebuster is only a local pickup mechanism. It does not advance SemVer precedence, sign an artifact, create channel history, or authorize production. Claude Code, OpenClaw, Kimi Code, and generic Agent Skills installations use their documented host refresh paths instead.
@@ -28,7 +36,7 @@ Any failure blocks publication. Never copy local company data into a release to 
 
 ## Release preparation
 
-This section records the intended future production flow. Version 0.3.2 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
+This section records the intended future production flow. Version 0.3.3 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
 
 1. Review the entire change and select the next strict SemVer. Normal promotion must be greater than every normal version previously promoted in that channel, including versions followed by a restoration.
 2. Run the complete unit/adversarial suite, plugin validator, skill validators, Python compilation, schema validation, and whitespace checks.
@@ -37,7 +45,7 @@ This section records the intended future production flow. Version 0.3.2 can prep
 5. Record one full lowercase Git object ID: 40 characters for SHA-1 repositories or 64 for SHA-256 repositories. Abbreviated commits are forbidden.
 6. Create a release manifest conforming to `schemas/release/release-manifest.schema.json`. The signed policy digest must remain `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`.
 7. Have the designated external release authority sign the exact bytes returned by `guardian_core.release.release_signing_payload`. Guardian does not sign and never receives the private key.
-8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.3.2 this call always blocks and accepts no configuration workaround.
+8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.3.3 this call always blocks and accepts no configuration workaround.
 
 The first production enrollment supplies only the external authority's public PEM to `enroll_release_authority`. Enrollment is create-once, and the release key must differ from the pinned catalog approval key. A different key is an integrity failure, not an automatic rotation.
 
@@ -60,7 +68,7 @@ Stable state and every stable history event retain the SHA-256 of the exact seal
 
 ## Migrations
 
-A home created by version 0.2 has exactly five verified trust files and no Elo enrollment evidence. After installing version 0.3.2, migrate that home once with:
+A home created by version 0.2 has exactly five verified trust files and no Elo enrollment evidence. After installing version 0.3.3, migrate that home once with:
 
 ```powershell
 guardian elo migrate
@@ -78,7 +86,7 @@ Never edit migration history or a backup in place. Restoration creates a new app
 
 ## Rollback
 
-The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.3.2 always blocks the public rollback call.
+The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.3.3 always blocks the public rollback call.
 
 Rollback is an externally authorized release action, not a file copy or version decrement.
 

@@ -175,7 +175,7 @@ class LifecycleCliTest(unittest.TestCase):
             raw["coverage"]["motion"]["status"] = "unsupported"
 
         cases = (
-            ("violation", 4, violation, "clean"),
+            ("violation", 1, violation, "clean"),
             ("caller-source-claim", 2, None, "source"),
             ("unsupported", 4, unsupported, "clean"),
             ("cross-profile", 2, None, "cross-profile"),

@@ -96,6 +96,7 @@ def attested_audit(
     root: Path,
     *,
     resolutions: list[dict] | None = None,
+    expected_exit: int = 4,
 ) -> tuple[dict, Path]:
     from tests.flutter_runner_test_support import runner_side_effect
     from tests.test_cli_lifecycle_dsg003 import invoke, write_canonical
@@ -122,8 +123,10 @@ def attested_audit(
                 "--input", str(request_path),
             ],
         )
-    if code != 4:
-        raise AssertionError(f"Expected fail-closed UX audit exit 4, received {code}: {audit}")
+    if code != expected_exit:
+        raise AssertionError(
+            f"Expected fail-closed audit exit {expected_exit}, received {code}: {audit}"
+        )
     return audit, project
 
 
@@ -484,7 +487,13 @@ class FinalizationTest(unittest.TestCase):
                     },
                 )
             self.assertEqual(missing["status"], "missing")
-            audit, _ = attested_audit(home, pin, root, resolutions=[missing])
+            audit, _ = attested_audit(
+                home,
+                pin,
+                root,
+                resolutions=[missing],
+                expected_exit=1,
+            )
             audit["productionReady"] = True
 
             with patch("guardian_core.resolver._utc_now", return_value=NOW):

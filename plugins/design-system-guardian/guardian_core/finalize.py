@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .adapter_dispatch import build_pinned_adapter_config
 from .audit import AuditIntegrityError, derive_audit_exit_code
 from .audit_attestation import AnalysisAttestationIntegrityError, verify_analysis_attestation
 from .canonical import canonical_json_bytes, sha256_digest
@@ -16,7 +17,7 @@ from .enforcement_authority import (
     EnforcementAuthorityIntegrityError,
     canonicalize_enforcement_authority_lane,
 )
-from .flutter_config import _generate_flutter_adapter_config_at_home
+
 from .post_run import build_post_run_assessment
 from .preflight import PreflightError, load_run_pin
 from .project_binding import ProjectBindingError, project_evidence_matches_binding
@@ -160,8 +161,6 @@ def _audit(
     except AuditIntegrityError as error:
         raise FinalizationError(str(error)) from error
     result["productionReady"] = code == ExitCode.PASS
-    if code == ExitCode.VIOLATION_OR_SENTINEL and lane.get("status") == "allowed":
-        lane["status"] = "conflict"
     return result, code
 
 def _rel(home: Path, path: Path) -> str:
@@ -184,11 +183,13 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
     except SnapshotValidationError as error:
         raise FinalizationError(f"Pinned snapshot freshness evidence is invalid: {error}") from error
     audit, audit_code = _audit(audit_result, pin, snapshot)
+    adapter = audit.get("coverage", {}).get("adapter")
     try:
-        expected_adapter_config = _generate_flutter_adapter_config_at_home(
+        _, expected_adapter_config = build_pinned_adapter_config(
             home,
             profile_id=profile_id,
             run_id=run_id,
+            adapter=adapter,
         )
     except (OSError, ValueError) as error:
         raise FinalizationError(f"Pinned adapter config cannot be regenerated: {error}") from error
@@ -206,6 +207,8 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
             run_pin=pin,
             config_digest=expected_adapter_config["configDigest"],
             audit_result=audit_result,
+            verified_snapshot=snapshot,
+            adapter_config=expected_adapter_config,
         )
     except (RunArtifactIntegrityError, AnalysisAttestationIntegrityError, KeyError) as error:
         raise FinalizationError(

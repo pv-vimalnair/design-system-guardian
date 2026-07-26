@@ -7,9 +7,9 @@ Design System Guardian is one updatable cross-agent bundle with exactly two visi
 - `build-with-design-system` composes product UI with UX reasoning while enforcing exact approved identities.
 - `audit-design-system` independently audits compliance and UX/accessibility without changing product files.
 
-Everything else in this directory is shared plugin infrastructure. It is not another skill or plugin.
+Setup, adapter dispatch, Figma collection, UX evaluation, schemas, sentinels, and release code are shared internal infrastructure. They are not additional skills or plugins.
 
-## The immutable rule
+## Immutable rule
 
 Only exact, explicitly approved identities from one selected company profile and one pinned, complete catalog snapshot may be selected. Similar names, nearest colors, equal-value literals, framework defaults, wrappers, substitutes, community assets, generated icons, manual recreation, rounding, and name-based guessing are not approval.
 
@@ -19,93 +19,153 @@ Policy precedence is:
 
 `immutable policy -> evolving validators -> selected company profile -> pinned catalog`
 
-Deny always wins. The create-once policy digest is:
+Deny always wins. The unchanged create-once policy digest is:
 
 `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`
 
-## Trust and data boundaries
+## Permission-bound setup
 
-Replaceable bundle code contains validators, schemas, adapters, and skills. Private and append-only state lives outside every agent's replaceable plugin cache under the canonical account-owned root:
+An agent first runs `guardian setup status` without modifying anything. When setup is needed, an authorized design-system owner supplies one local candidate containing the catalog authority public key, exact profile, and signed complete catalog. The agent runs `guardian setup preview --input <candidate.json>`, explains the exact profile, Figma allowlist, and digests in plain language, and asks the user once.
 
-`~/.design-system-guardian/`
+Only after explicit permission does the agent add the preview's exact digest binding and run `guardian setup apply --input <permitted-bundle.json>`. Apply validates in isolation and promotes the complete local state atomically. It never invents a catalog authority, approves Figma discovery, replaces a different profile revision, or uploads company data.
 
-That root holds the immutable policy anchor, pinned public authorities, isolated company profiles, immutable snapshots, sealed run evidence, migration history, and archived releases. Production CLI entry points do not accept a redirected Guardian home.
+Ordinary users should not have to copy commands. The two skills perform this sequence internally and surface only the permission request or exact blocker.
 
-The existing Figma connection is reused for discovery and refresh. Guardian does not add another Figma credential store or claim that Figma search alone proves approval.
+## Figma evidence
 
-### Duplicate working files
+`guardian adapter figma config --profile <id> --run-id <id> --output <absolute-guardian-local-state-config.json>` derives the run-bound collector contract. The output must stay inside Guardian local state under `~/.design-system-guardian/`; never place it in the product tree, repository, or Git staging. The supported Figma collector reads the selected nodes back through the Plugin API. A version 2 audit accepts exact input shaped as:
 
-A duplicated Figma working file is supported only when an `INSTANCE` remains linked to the exact approved published main component. The selected local profile must explicitly authorize the working file, and the catalog authority must pin its version and sign the exact instance locator, canonical component key, variant, properties, and empty unapproved-override set into the profile snapshot. `guardian resolve` then accepts the exact `figmaInstance` locator while returning the canonical identity.
+```json
+{
+  "schemaVersion": 2,
+  "adapter": "figma",
+  "projectRoot": "<exact-local-workspace-root>",
+  "resolutions": [],
+  "uxEvidence": {"target": {}, "observations": []},
+  "adapterEvidence": {}
+}
+```
 
-Detached instances, cloned component definitions, local components, modified overrides, names, screenshots, hashes, and visual similarity remain invalid. They never become `missing`, because the canonical asset exists and unproven lineage is not absence. A snapshot containing any working-file binding is deliberately fail-closed for every component and icon selection: each requires an exact bound locator. Use a canonical-only snapshot with no working-file authority for tasks that are not operating on a duplicate.
+The `projectRoot` must match the exact local workspace bound at preflight. The actual `adapterEvidence` must be the fixed collector observation bound to the policy, profile, snapshot, source cut, adapter config, file version, and selected nodes. Caller-written status is not accepted. Guardian verifies:
+
+- variable aliases by stable key, type, collection, and mode;
+- exact text-style binding or complete text-range bindings;
+- actual `INSTANCE` nodes, remote main-component keys, variants, component properties, and empty unapproved overrides;
+- exact source file version and node locator;
+- raw, sampled, inferred, or equal-looking values as violations.
+
+### Approved duplicate working files
+
+A duplicate working file is supported only when its exact `INSTANCE` remains linked to the approved published main component. The local profile authorizes the working file, and the signed snapshot pins its source version, file/node locator, canonical component key, variant, properties, and override evidence. Detached instances, cloned/local component definitions, changed overrides, names, screenshots, hashes, and visual similarity are invalid lineage.
+
+### Fixed Plugin API safeguards
+
+The build skill requires the host agent to use these established safeguards; the collector remains read-only and exposes off-system residue where it is observable:
+
+- clear or bind a new frame's default white fill;
+- attach a node to a layout parent before setting a fill layout mode;
+- clone and reassign read-only paint, effect, and other Plugin API collections;
+- load every font before changing text;
+- use asynchronous page/node APIs when required by the document mode;
+- read and set variants with supported component properties and `setProperties`;
+- verify actual node and component object kinds before instantiation or mutation.
+
+A Plugin API mismatch blocks or reports the affected operation. It never authorizes a raw fallback. Read-back cannot prove historical call ordering or font loading unless the host supplies separately attested execution evidence, so those checks remain `not_assessed` rather than guessed.
+
+## UX/accessibility evaluation
+
+`guardian ux checkpoint --profile <id> --run-id <id> --input <json>` accepts `{schemaVersion:1,target,observations}` for a non-authoritative quick screen checkpoint. The evaluator derives each check result; callers cannot submit a pass.
+
+The final version 2 `guardian audit` accepts `uxEvidence` and reruns the final-flow evaluation across every selected screen plus navigation, reachability, errors, recovery, and cross-screen state. A proven violation or gap can fail the run. Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation.
+
+Guardian reports three independent lanes:
+
+1. design-system compliance;
+2. UX/accessibility quality;
+3. protected production authority.
+
+A compliant design can still fail UX, and an accessible unauthorized substitute still fails design-system compliance. Local Figma and UX evidence is diagnostic: violations and gaps can fail, but clean evidence cannot pass. Never label those local lanes `allowed`; without protected host or CI attestation they remain `not_assessed` and `productionReady=false`.
+
+An inaccessible approved asset is a design-system gap. Guardian never silently changes its color, size, motion, or behavior.
+
+## Flutter compatibility
+
+Version 2 audit requests also support `adapter: "flutter"`, `adapterEvidence: null`, and the exact project root. Guardian owns analyzer execution, derives a run-bound allowlist, verifies the profile-bound Dart SDK and package closure, hashes source and analyzer input, analyzes an external staging copy, requires one attestation per compilation unit, scans suppressions, and seals the result.
+
+Backward-compatible version 1 Flutter audit requests remain readable. A project or host without a supported adapter returns `unsupported`; incomplete coverage never passes.
 
 ## Portable CLI
 
-The portable CLI implementation is `scripts/guardian.py`. A protected gate must use an authority-bound absolute interpreter or signed standalone executable. Private-pilot diagnostics may use a host-supplied absolute Python executable after recording its path and SHA-256, but those results can never confer production authority. The POSIX and Windows convenience wrappers deliberately exit `4` instead of discovering Python from `PATH`.
+The CLI implementation is `scripts/guardian.py`. Protected gating requires an authority-bound absolute interpreter or signed standalone executable. A private-pilot diagnostic may use a host-supplied absolute Python executable after recording its path and digest, but it cannot grant production authority. Convenience wrappers deliberately exit `4` instead of discovering Python from `PATH`.
 
 The command surface is:
 
+- `setup status`, `setup preview`, `setup apply`
 - `doctor`
 - `profile validate`
 - `snapshot ingest`
 - `preflight`
 - `resolve`
 - `adapter flutter config`
+- `adapter figma config`
+- `ux checkpoint`
 - `audit`
 - `finalize`
 - `self-check`
 - `migrate`
-- `elo show`
-- `elo migrate`
-- `elo benchmark`
-- `elo evaluate`
+- `elo show`, `elo migrate`, `elo benchmark`, `elo evaluate`
 
-`guardian elo migrate` is only for an exact pre-Elo 0.2 trust home. It creates a new local ledger and reports `ledgerId`, `newLedger`, `continuityReset`, and `continuityFromPriorLedgerProven`; these origin fields remain stable on an idempotent rerun, and it does not claim continuity through total local erasure.
+Exit codes are deterministic: `1` reports violations or sentinels, `2` policy/configuration/integrity failure, `3` unavailable/stale/incomplete source, and `4` unsupported or not-assessed coverage. Exit `0` requires supported protected host attestation; clean caller-carried Figma or UX evidence cannot produce it.
 
-Exit codes are deterministic: `0` pass, `1` violations or sentinels, `2` policy/configuration/integrity failure, `3` unavailable/stale/incomplete source, and `4` unsupported adapter or incomplete coverage.
+## Trust and private data
+
+Replaceable bundle code contains validators, schemas, adapters, and skills. Private state lives outside every agent's replaceable plugin cache under `~/.design-system-guardian/`: policy trust, public authorities, isolated company profiles, immutable snapshots, run evidence, migrations, release history, and local Elo history.
+
+Guardian reuses the host's existing Figma connection and adds no credential store. Profiles, design-system data, setup candidates, snapshots, observations, audit records, prompts, product source, credentials, and user activity must never enter this public repository or a plugin update.
+
+No sealed Guardian manifest means the work is not Guardian-approved.
 
 ## Cross-agent installation
 
 Codex, Claude Code, OpenClaw, and Kimi Code use host manifests over this same directory. Deep Code and generic Agent Skills hosts use the integrity-bound installer without duplicating `guardian_core`. See [Installing on Agent Hosts](docs/INSTALLING.md).
 
+On generic hosts, `--bootstrap-runtime` is opt-in. The agent must explain the exact local change and obtain explicit permission before using it. An absolute Python 3.11+ executable remains required. The flag creates an isolated Guardian-owned virtual environment under `~/.design-system-guardian/runtimes/` and installs exactly `cryptography==46.0.7`, `cffi==2.1.0`, and `pycparser==3.0` from the bundled `requirements.txt` with dependency resolution disabled; without the flag, the installer never creates a virtual environment or invokes `pip`. It first performs a read-only exact-version and import check in the selected host Python, while permitting unrelated host distributions; a mismatch blocks with an explicit permission-bound `--bootstrap-runtime` hint.
+
+If bootstrap creation, pinned installation, or verification is unavailable or fails, installation blocks and the host remains `unsupported`; Guardian must fail closed. This diagnostic bootstrap does not create an always-on protected route.
+
+Skills are portable; automatic routing is not. Installing them on Claude Code, Kimi Code, OpenClaw, or a generic host does not create an always-on protected route. A host is enforceable only when it independently invokes Guardian before raw tools and protects the resulting evidence. Otherwise use is diagnostic or `unsupported`, and Guardian cannot prevent raw-tool bypass.
+
 ## Release and update model
 
-Plugin source updates use reviewed SemVer and deterministic migrations. Release authority is separate from agent behavior:
+Plugin source updates use reviewed SemVer and deterministic migrations. Release authority remains separate from source distribution:
 
-- Guardian pins exactly one externally held Ed25519 release authority's public key.
-- Production code verifies signatures only; it has no private-key generator, private-key import, or signing command.
-- `canary` and `stable` have independent contiguous sequences.
-- Stable promotion requires the exact version, full Git commit, artifact digest, policy digest, state schema, and compatibility range already present in canary history.
-- A normal promotion must exceed every SemVer previously promoted on that channel. A downgrade is accepted only as a new externally signed restoration action that names an archived, previously promoted release.
-- Signed manifests, package bytes, channel pointers, and append-only history are stored under `~/.design-system-guardian/releases/`, not in the replaceable cache.
+- production code verifies one externally held Ed25519 release authority;
+- Guardian has no private-key generator, import, or signing command;
+- `canary` and `stable` retain independent contiguous sequences;
+- stable requires the exact canary version, full commit, artifact digest, policy digest, schema, and compatibility range;
+- rollback is a new signed restoration and never rewrites history;
+- private catalogs, trust anchors, run evidence, and release state remain outside the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned development install; it does not create a canary or stable release. In 0.3.2 the provider is an unconditional compile-time stub: configuration cannot unblock it, and every public trusted channel read, promotion, and restoration fails closed. A future reviewed code release must integrate and invoke one fixed external/WORM provider's authenticated latest-head, checkpoint, and monotonic compare-and-swap operations before trusted releases can operate.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.3 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
 
+The Usage Rules Lane is deferred to version 0.3.4.
 
-See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md). No real stable promotion is implied by a host manifest version.
-
-## Flutter pilot
-
-Version 0.3.2 is Flutter-first. `guardian audit` owns analyzer execution: it derives a run-bound allowlist, hashes every relevant Dart source and analyzer input, analyzes an external staging copy, requires one config-bound attestation per compilation unit, scans suppression attempts, and seals the resulting evidence. Caller-authored analyzer results are not audit inputs.
-
-The adapter uses Dart's supported analyzer-plugin structure and emits exact diagnostics for unapproved visual identities and suppression attempts. The selected profile must pin the full Dart SDK artifact for the current platform plus exact `flutter` and other package-config dependencies. Ambient `PATH` is discovery only: Guardian verifies and stages the bound SDK, runs it with a minimal environment, verifies and stages the complete Dart package-config closure, and rechecks both evidence sets during finalization. Local Git identity is read directly from bounded repository metadata; Guardian never executes a `git` binary selected from `PATH`.
-
-The private pilot does not yet include a trusted UX/accessibility evaluator. UX checks supplied in an audit request are context only: Guardian canonicalizes that lane to `not_assessed`, exits `4`, and refuses a production pass. A future reviewed release must add host-attested UX evidence before exit `0` is possible.
+See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md).
 
 ## Repository map
 
-- `.codex-plugin/plugin.json` — Codex plugin metadata accepted by the target validator.
-- `.claude-plugin/plugin.json` — Claude Code metadata over the same skill root.
-- `../../kimi.plugin.json` — Kimi Code metadata over the same nested package.
-- `skills/` — exactly the two visible skills.
-- `scripts/install_agent_skills.py` — generic Agent Skills installer bound to this one package.
-- `guardian_core/` — deterministic policy, catalog, audit, migration, and release enforcement.
-- `adapters/flutter/` — Flutter analyzer adapter and fixed sentinel widget.
-- `schemas/` — canonical JSON contracts.
-- `policy/` — shipped immutable policy seed.
-- `sentinels/` — fixed diagnostic sentinel contract.
-- `tests/` — unit, integrity, adversarial, and packaging tests.
+- `.codex-plugin/plugin.json` - Codex metadata.
+- `.claude-plugin/plugin.json` - Claude Code metadata.
+- `../../kimi.plugin.json` - Kimi Code metadata.
+- `skills/` - exactly the two visible Agent Skills.
+- `guardian_core/` - deterministic setup, policy, catalog, audit, UX, migration, and release enforcement.
+- `adapters/figma/` - Figma collector contract and fixed Plugin API safeguards.
+- `adapters/flutter/` - Flutter analyzer adapter and fixed sentinel widget.
+- `schemas/` - canonical JSON contracts.
+- `policy/` - immutable policy seed.
+- `sentinels/` - fixed diagnostic sentinel contract.
+- `tests/` - unit, integrity, adversarial, privacy, and packaging tests.
 
 ## Security
 
-Read [SECURITY.md](SECURITY.md) before enrolling an authority or promoting a release. A missing external release authority or missing signature is a deliberate blocker, not a setup detail Guardian may bypass.
+Read [SECURITY.md](SECURITY.md) before enrolling an authority or promoting a release. Missing external authority, source evidence, signature, or protected execution is a blocker, not a setup detail Guardian may bypass.
