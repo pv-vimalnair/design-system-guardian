@@ -8,8 +8,8 @@
     {
       "name": "design-system-guardian",
       "source": "./plugins/design-system-guardian",
-      "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, and fail-closed evidence.",
-      "version": "0.3.3",
+      "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, and fail-closed evidence.",
+      "version": "0.3.4",
       "author": {
         "name": "Pv Vimal Nair"
       },
@@ -17,7 +17,7 @@
       "repository": "https://github.com/pv-vimalnair/design-system-guardian",
       "license": "MIT",
       "category": "Developer Tools",
-      "tags": ["design-system", "figma", "flutter", "audit", "ux"],
+      "tags": ["design-system", "figma", "flutter", "audit", "ux", "rules"],
       "strict": true
     }
   ]

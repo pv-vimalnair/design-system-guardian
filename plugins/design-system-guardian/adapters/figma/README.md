@@ -52,9 +52,9 @@ content. A mismatch with the source cut is `stale`; unreadable or insufficient
 source evidence is `source_unavailable` or `source_incomplete`. None of those
 states is converted to `missing`.
 
-### v0.3.3 authority boundary
+### Portable authority boundary
 
-The v0.3.3 portable host has no protected receipt proving that the shipped
+The portable host has no protected receipt proving that the shipped
 collector executable produced caller-carried JSON. Therefore exact run and
 project bindings prevent replay, and exact violations remain actionable
 diagnostics, but clean Figma categories are deliberately `not_assessed`. They

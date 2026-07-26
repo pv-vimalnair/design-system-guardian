@@ -90,7 +90,7 @@ class PublicationContractTests(unittest.TestCase):
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "design-system-guardian")
-        self.assertEqual(manifest["version"], "0.3.3")
+        self.assertEqual(manifest["version"], "0.3.4")
         self.assertEqual(manifest["license"], "MIT")
         self.assertNotIn("hooks", manifest)
         self.assertEqual(manifest["interface"]["brandColor"], "#3157D8")
@@ -103,9 +103,11 @@ class PublicationContractTests(unittest.TestCase):
         self.assertEqual(skills, ["audit-design-system", "build-with-design-system"])
         from guardian_core.release import RUNTIME_VERSION
         self.assertEqual(RUNTIME_VERSION, manifest["version"])
-        self.assertIn("version: 0.3.3", (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8"))
+        pubspec = (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8")
+        self.assertIn("version: 0.3.4", pubspec)
+        self.assertIn("analyzer_testing: 0.3.3", pubspec)
 
-    def test_v033_release_page_describes_supported_lanes_and_deferred_scope(self) -> None:
+    def test_v034_release_page_describes_supported_lanes_and_preview_scope(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
         for phrase in (
             "exact Figma binding",
@@ -113,7 +115,10 @@ class PublicationContractTests(unittest.TestCase):
             "quick screen checkpoint",
             "final-flow",
             "protected production authority",
-            "Usage Rules Lane is planned for 0.3.4",
+            "preview-only",
+            "guardian rules validate",
+            "not consumed by audit or finalization",
+            "productionReady=false",
             "Skills are portable; automatic routing is not.",
             "Guardian cannot prevent raw-tool bypass",
             "Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation.",
@@ -123,7 +128,12 @@ class PublicationContractTests(unittest.TestCase):
 
         plugin_readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("inside Guardian local state", plugin_readme)
+        self.assertIn("guardian rules validate", plugin_readme)
+        self.assertIn("not consumed by audit or finalization", plugin_readme)
         self.assertNotIn('"projectRoot": null', plugin_readme)
+
+        changelog = (PLUGIN_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertLess(changelog.index("## 0.3.4"), changelog.index("## 0.3.3"))
 
     def test_release_pages_describe_opt_in_runtime_bootstrap_honestly(self) -> None:
         pages = {

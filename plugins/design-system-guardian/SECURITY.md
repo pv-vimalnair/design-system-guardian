@@ -25,7 +25,7 @@ Catalog approval and release authority roles must use distinct Ed25519 keys.
 
 Every catalog load, historical run-pin load, and ingestion enumerates and verifies the complete locally retained pair of immutable snapshots and sealed approval-sequence records. The two histories must have exactly the same approval sequences and exact pointer fields, and retained sequences must be contiguous from the first locally observed approval through the high-water. The sealed current pointer must equal the highest retained valid approval; an existing lower pointer is a replay and fails closed. A missing pointer is recovered only when both retained histories align exactly.
 
-This local check detects deletion or truncation of either side while its counterpart remains, including deletion of the newest sequence record while the newer immutable snapshot is retained. It does not claim rollback resistance against coordinated deletion of both the newest immutable snapshot and its matching sequence record followed by replay of an older sealed pointer. Account-owned files are not WORM storage, and version 0.3.3 deliberately does not add an external catalog-head service. Deployments that must resist that coordinated deletion require an independently preserved monotonic/WORM catalog approval head in a future reviewed release.
+This local check detects deletion or truncation of either side while its counterpart remains, including deletion of the newest sequence record while the newer immutable snapshot is retained. It does not claim rollback resistance against coordinated deletion of both the newest immutable snapshot and its matching sequence record followed by replay of an older sealed pointer. Account-owned files are not WORM storage, and version 0.3.4 deliberately does not add an external catalog-head service. Deployments that must resist that coordinated deletion require an independently preserved monotonic/WORM catalog approval head in a future reviewed release.
 
 ## Release integrity
 
@@ -73,8 +73,14 @@ Phase-local success is never labeled production readiness. Snapshot ingestion
 reports `snapshotUsable`; preflight reports `pinCreated`. Only protected
 finalization may emit `productionReady=true`.
 
-Version 0.3.3 includes diagnostic Figma read-back and screen/final-flow UX evaluation. Proven violations or gaps can fail, but clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. These local mechanisms cannot issue `allowed` or prevent raw-tool bypass. Design-system compliance, UX/accessibility, and protected production authority stay separate, and `productionReady=false` without the protected lane.
+Version 0.3.4 includes diagnostic Figma read-back, screen/final-flow UX evaluation, and preview-only usage-rule validation. Proven violations or gaps can fail, but clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. These local mechanisms cannot issue `allowed` or prevent raw-tool bypass. Design-system compliance, UX/accessibility, and protected production authority stay separate, and `productionReady=false` without the protected lane.
+
+## Usage-rule preview boundary
+
+`guardian rules validate` accepts explicit local Figma-description markers or a local rule artifact. It writes no Guardian or project state and cannot affect audit, finalization, or production authority in version 0.3.4. Its canonical report includes only rule IDs/classes, result tiers, reason codes, counts, and digests; it does not expose statements, source paths, or Figma identities. The local CLI emits only that privacy-preserving report. The in-process validator normalizes rules for deterministic evaluation, but those local inputs are neither uploaded nor added to a public update.
+
+Missing identity evidence remains `not_assessed`; invalid or incomplete inputs fail closed. Every result uses `authority=preview_only`, `localChangesPerformed=false`, and `productionReady=false`.
 
 ## Supported source release
 
-The current source declares version `0.3.3`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.
+The current source declares version `0.3.4`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.

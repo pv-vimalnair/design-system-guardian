@@ -15,7 +15,7 @@ from unittest import mock
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
-EXPECTED_VERSION = "0.3.3"
+EXPECTED_VERSION = "0.3.4"
 EXPECTED_SKILLS = {"audit-design-system", "build-with-design-system"}
 
 
@@ -79,6 +79,21 @@ class CrossAgentPackagingTests(unittest.TestCase):
             manifests["codex"]["description"],
             manifests["kimi"]["description"],
         )
+        self.assertIn(
+            "preview-only rule validation",
+            str(manifests["codex"]["description"]),
+        )
+        self.assertEqual(
+            manifests["codex"]["interface"]["longDescription"],
+            manifests["kimi"]["interface"]["longDescription"],
+        )
+        self.assertIn(
+            "preview-only rule validation",
+            str(manifests["codex"]["interface"]["longDescription"]),
+        )
+        for host, manifest in manifests.items():
+            with self.subTest(host=host):
+                self.assertIn("rules", manifest["keywords"])
 
     def test_claude_marketplace_points_to_the_canonical_plugin(self) -> None:
         marketplace = load_json(REPOSITORY_ROOT / ".claude-plugin" / "marketplace.json")
@@ -88,6 +103,12 @@ class CrossAgentPackagingTests(unittest.TestCase):
         entry = marketplace["plugins"][0]
         self.assertEqual(entry["name"], "design-system-guardian")
         self.assertEqual(entry["source"], "./plugins/design-system-guardian")
+        self.assertEqual(entry["version"], EXPECTED_VERSION)
+        self.assertEqual(
+            entry["description"],
+            load_json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json")["description"],
+        )
+        self.assertIn("rules", entry["tags"])
         self.assertTrue(entry["strict"])
 
     def test_all_hosts_reuse_exactly_two_canonical_agent_skills(self) -> None:
@@ -129,6 +150,23 @@ class CrossAgentPackagingTests(unittest.TestCase):
         self.assertIn("explicitly invoked", instructions)
         self.assertIn("cannot prevent raw-tool bypass", instructions)
         self.assertNotIn("route through one of the two Guardian skills", instructions)
+
+    def test_install_guide_documents_host_refresh_commands(self) -> None:
+        guide = (PLUGIN_ROOT / "docs" / "INSTALLING.md").read_text(encoding="utf-8")
+        for phrase in (
+            "codex plugin marketplace upgrade pv-vimalnair-design-system-guardian --json",
+            "codex plugin add design-system-guardian@pv-vimalnair-design-system-guardian --json",
+            "claude plugin marketplace update pv-vimalnair-design-system-guardian",
+            "claude plugin update design-system-guardian@pv-vimalnair-design-system-guardian",
+            "openclaw plugins update design-system-guardian --dry-run",
+            "openclaw plugins update design-system-guardian",
+            "/plugins install https://github.com/pv-vimalnair/design-system-guardian",
+            "/reload",
+            "/plugins info design-system-guardian",
+            "--replace",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
 
     def test_all_agent_guidance_is_fail_closed_and_setup_is_agent_driven(self) -> None:
         guide = (PLUGIN_ROOT / "docs" / "INSTALLING.md").read_text(encoding="utf-8")

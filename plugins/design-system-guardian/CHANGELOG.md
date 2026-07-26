@@ -2,6 +2,24 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.4 - 2026-07-26 - Preview-only usage-rule foundation
+
+### Added
+
+- Added `guardian rules validate` for explicit Figma description markers and local rule artifacts, with strict parsing and six supported machine predicates.
+- Added canonical rule and validation-report schemas plus deterministic privacy-preserving result codes.
+- Expanded the canonical public Elo benchmark suite with v4 rule, privacy, and release-contract cases.
+
+### Security and privacy
+
+- Rule validation is read-only and preview-only. It writes no Guardian or project state. Its canonical report does not echo rule statements, source paths, or Figma identities and always reports `localChangesPerformed=false` and `productionReady=false`.
+- Missing identity coverage remains `not_assessed`; invalid or incomplete inputs fail closed. Rule results are not consumed by audit or finalization in this release.
+- The immutable policy digest, company-state boundary, and exactly two visible skills are unchanged. Version 0.3.4 requires no state migration.
+
+### Promotion status
+
+- This is a public source release candidate. It is not a trusted canary or stable promotion because the fixed external/WORM release-head provider and protected production authority remain unavailable.
+
 ## 0.3.3 - 2026-07-26 - Plug-and-play Figma and UX enforcement
 
 ### Added
