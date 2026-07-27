@@ -181,7 +181,7 @@ class FlutterTrustedRunnerTests(unittest.TestCase):
 
         def invoke(command, **kwargs):
             if "--version" in command:
-                return subprocess.CompletedProcess(command, 0, "Dart SDK version: 3.11.0", "")
+                return subprocess.CompletedProcess(command, 0, "Dart SDK version: 3.12.0", "")
             stage = Path(kwargs["cwd"])
             self.assertNotEqual(stage.resolve(), project.resolve())
             options = (stage / "analysis_options.yaml").read_text(encoding="utf-8")

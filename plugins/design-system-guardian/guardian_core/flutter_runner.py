@@ -492,8 +492,8 @@ def _probe_analyzer_version(
             "Staged profile-bound Dart runtime did not report a compatible version."
         )
     major, minor = (int(match.group(1)), int(match.group(2)))
-    if (major, minor) < (3, 11):
-        raise FlutterRunnerUnsupportedError("Dart 3.11 or newer is required by the pinned analyzer 14 adapter.")
+    if (major, minor) < (3, 12):
+        raise FlutterRunnerUnsupportedError("Dart 3.12 or newer is required by the stable Flutter 3.44 adapter line.")
     return sha256_digest(version_text.encode("utf-8"))
 
 

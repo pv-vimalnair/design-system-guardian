@@ -105,9 +105,11 @@ class PublicationContractTests(unittest.TestCase):
         self.assertEqual(RUNTIME_VERSION, manifest["version"])
         pubspec = (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8")
         self.assertIn("version: 0.3.6", pubspec)
-        self.assertIn("sdk: '>=3.11.0 <4.0.0'", pubspec)
-        self.assertIn("flutter: '>=3.41.0'", pubspec)
-        self.assertIn("analyzer_testing: 0.3.3", pubspec)
+        self.assertIn("sdk: '>=3.12.0 <4.0.0'", pubspec)
+        self.assertIn("flutter: '>=3.44.0'", pubspec)
+        self.assertIn("analyzer: 13.0.0", pubspec)
+        self.assertIn("analysis_server_plugin: 0.3.15", pubspec)
+        self.assertIn("analyzer_testing: 0.2.6", pubspec)
         self.assertIn("test: 1.31.2", pubspec)
 
     def test_v035_release_page_preserves_supported_lanes_and_describes_safe_activation(self) -> None:
@@ -209,7 +211,7 @@ class PublicationContractTests(unittest.TestCase):
         )
         self.assertIn("flutter-adapter:", workflow)
         self.assertEqual(workflow.count("os: [windows-latest, ubuntu-latest]"), 2)
-        self.assertIn("44a626f4f0027bc38a46dc68aed5964b05a83c18", workflow)
+        self.assertIn("559ffa3f75e7402d65a8def9c28389a9b2e6fe42", workflow)
         self.assertIn("https://github.com/flutter/flutter.git", workflow)
         for command in (
             "flutter pub get",

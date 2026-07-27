@@ -17,7 +17,7 @@ All notable changes use SemVer. Entries describe source candidates. Local signed
 
 - Preserved every v0.3.2-v0.3.5 public schema, reader, rule snapshot, evaluator permission, release record, and exactly-two-skill package contract. No historical evidence is rewritten.
 - Permission changes evaluator capability only; externally signed catalog authority still approves rules. Missing permission, incomplete relationships, unsupported adapters, judgment rules, or source blockers remain fail-closed and never become a guessed pass.
-- Corrected the executable adapter floor to Flutter 3.41+/Dart 3.11+, as required by the already-pinned analyzer 14 line, and added official full-commit Flutter checks for package resolution, formatting, analysis, and Dart tests on Windows and Ubuntu.
+- Corrected the executable adapter floor to Flutter 3.44+/Dart 3.12+ and pinned the analyzer 13.0.0 family that resolves against stable Flutter's SDK dependencies; official full-commit CI checks package resolution, formatting, analysis, and Dart tests on Windows and Ubuntu.
 - Company profiles, catalogs, rules, source locators, prompts, product source, run evidence, local Elo scores/results/history, credentials, and user activity remain outside the public repository and package.
 - Codex, Claude Code, OpenClaw, Kimi Code, Qwen Code, terminal, and generic Agent Skills surfaces continue to use one canonical Guardian core and the same two visible skills.
 

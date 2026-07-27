@@ -1,6 +1,6 @@
 # Design System Guardian Flutter adapter
 
-This package is the Flutter-first enforcement adapter for Design System Guardian. It uses Dart's supported analyzer-plugin system introduced in Dart 3.10. The pinned analyzer 14 dependency line requires Flutter 3.41+/Dart 3.11+. It is not a legacy analyzer plugin and it does not use `custom_lint`.
+This package is the Flutter-first enforcement adapter for Design System Guardian. It uses Dart's supported analyzer-plugin system introduced in Dart 3.10. The stable-compatible pinned line requires Flutter 3.44+/Dart 3.12+. It is not a legacy analyzer plugin and it does not use `custom_lint`.
 
 The package registers default-on warning rules through a top-level `plugin`, `Plugin.register`, `AnalysisRule`, `SimpleAstVisitor<void>`, and `PluginRegistry.registerWarningRule`. This follows the current [Dart analyzer-plugin guide](https://dart.dev/tools/analyzer-plugins) and the Dart SDK's [rule-authoring contract](https://github.com/dart-lang/sdk/blob/main/pkg/analysis_server_plugin/doc/writing_rules.md).
 
@@ -92,7 +92,7 @@ Copy the structure from `analysis_options.example.yaml` into the target project'
 
 ## Optional runtime verification commands
 
-These commands require Flutter 3.41+/Dart 3.11+. The public release workflow runs the same package resolution, formatting, analysis, and Dart tests on both Windows and Ubuntu.
+These commands require Flutter 3.44+/Dart 3.12+. The public release workflow runs the same package resolution, formatting, analysis, and Dart tests on both Windows and Ubuntu.
 
 ```powershell
 flutter pub get
@@ -108,11 +108,11 @@ For rule-level Dart tests, use the current analyzer test harness documented in t
 
 The private pilot pins one tested dependency line instead of accepting analyzer-major drift:
 
-- `analysis_server_plugin 0.3.19`
-- `analyzer 14.0.0`
-- `analyzer_plugin 0.14.13`
-- `analyzer_testing 0.3.3`
+- `analysis_server_plugin 0.3.15`
+- `analyzer 13.0.0`
+- `analyzer_plugin 0.14.9`
+- `analyzer_testing 0.2.6`
 - `crypto 3.0.7`
 - `test 1.31.2`
 
-The `analysis_server_plugin 0.3.19` changelog explicitly binds it to analyzer 14.0.0 and analyzer_plugin 0.14.13. A future Guardian release must update and runtime-test the complete set together.
+The `analysis_server_plugin 0.3.15` package binds analyzer 13.0.0 and analyzer_plugin 0.14.9. This is the newest line compatible with stable Flutter 3.44.0's exact `meta 1.18.0` SDK pin. A future Guardian release must update and runtime-test the complete set together.

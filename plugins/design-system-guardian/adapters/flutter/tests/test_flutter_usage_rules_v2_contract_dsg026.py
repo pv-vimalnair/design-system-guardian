@@ -16,6 +16,10 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
 from guardian_core.flutter_adapter import normalize_flutter_adapter_result
+from guardian_core.flutter_toolchain import (
+    current_platform_id,
+    expected_dart_executable,
+)
 TOOL_PATH = ADAPTER_ROOT / "tools" / "guardian_flutter_contract.py"
 EVALUATOR_DIGEST = (
     "24b38e5b0a7ffe35da9cb368613c693e42e95937d599922491aac2fced411846"
@@ -79,6 +83,7 @@ class FlutterUsageRulesV2ContractTest(unittest.TestCase):
         companion = "package:app/design.dart#ApprovedCompanion"
         container = "package:app/design.dart#ApprovedContainer"
         variant = "package:app/design.dart#ApprovedCardVariant.compact"
+        platform_id = current_platform_id()
         config = {
             "schemaVersion": 3,
             "adapter": "flutter",
@@ -88,10 +93,10 @@ class FlutterUsageRulesV2ContractTest(unittest.TestCase):
             "snapshotId": run_pin["snapshotId"],
             "sourceCutDigest": canonical_digest(source_cut),
             "toolchain": {
-                "platformId": "windows-x64",
+                "platformId": platform_id,
                 "dartSdk": {
                     "contentDigest": "d" * 64,
-                    "executableRelativePath": "bin/dart.exe",
+                    "executableRelativePath": expected_dart_executable(platform_id),
                 },
             },
             "requiredPackages": {

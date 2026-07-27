@@ -19,12 +19,12 @@ class FlutterAdapterStructureTests(unittest.TestCase):
     def test_pubspec_pins_supported_analyzer_plugin_stack(self) -> None:
         pubspec = self.read("pubspec.yaml")
         self.assertIn("name: design_system_guardian_flutter", pubspec)
-        self.assertIn("sdk: '>=3.11.0 <4.0.0'", pubspec)
-        self.assertIn("flutter: '>=3.41.0'", pubspec)
-        self.assertIn("analysis_server_plugin: 0.3.19", pubspec)
-        self.assertIn("analyzer: 14.0.0", pubspec)
-        self.assertIn("analyzer_plugin: 0.14.13", pubspec)
-        self.assertIn("analyzer_testing: 0.3.3", pubspec)
+        self.assertIn("sdk: '>=3.12.0 <4.0.0'", pubspec)
+        self.assertIn("flutter: '>=3.44.0'", pubspec)
+        self.assertIn("analysis_server_plugin: 0.3.15", pubspec)
+        self.assertIn("analyzer: 13.0.0", pubspec)
+        self.assertIn("analyzer_plugin: 0.14.9", pubspec)
+        self.assertIn("analyzer_testing: 0.2.6", pubspec)
         self.assertIn("test: 1.31.2", pubspec)
         self.assertNotIn("custom_lint", pubspec)
 
@@ -246,7 +246,7 @@ class FlutterAdapterStructureTests(unittest.TestCase):
             "guardian_flutter_contract.py normalize",
         ):
             self.assertIn(command, readme)
-        self.assertIn("flutter 3.41+/dart 3.11+", readme.lower())
+        self.assertIn("flutter 3.44+/dart 3.12+", readme.lower())
         self.assertIn("windows and ubuntu", readme.lower())
         self.assertIn("regex is not ast proof", readme.lower())
 

@@ -118,14 +118,14 @@ jobs:
           git diff --check "$base" "$head"
 
   flutter-adapter:
-    name: Flutter adapter / ${{ matrix.os }} / Flutter 3.41.0
+    name: Flutter adapter / ${{ matrix.os }} / Flutter 3.44.0
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     env:
-      FLUTTER_COMMIT: 44a626f4f0027bc38a46dc68aed5964b05a83c18
+      FLUTTER_COMMIT: 559ffa3f75e7402d65a8def9c28389a9b2e6fe42
 
     steps:
       - name: Check out Guardian
@@ -135,7 +135,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --filter=blob:none --no-checkout --depth 1 --branch 3.41.0 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          git clone --filter=blob:none --no-checkout --depth 1 --branch 3.44.0 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           git -C "$RUNNER_TEMP/flutter" checkout --detach "$FLUTTER_COMMIT"
           test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "$FLUTTER_COMMIT"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
