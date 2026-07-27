@@ -84,6 +84,55 @@ class EnforcementAuthorityLaneTest(unittest.TestCase):
         self.assertNotIn("shutil.which", source)
         self.assertNotIn("entry_points", source)
 
+    def test_judgment_approval_cannot_supply_protected_authority(self) -> None:
+        from guardian_core.canonical import sha256_digest
+        from guardian_core.judgment_assessment import (
+            JudgmentAssessmentIntegrityError,
+            build_judgment_assessment,
+            derive_effective_judgment,
+        )
+        from tests.test_judgment_decisions_dsg027 import candidate, provision_home
+
+        temporary, _, context = provision_home()
+        self.addCleanup(temporary.cleanup)
+        assessment = build_judgment_assessment(
+            run_pin=context["runPin"],
+            rule_snapshot=context["ruleSnapshot"],
+            analysis_attestation=context["analysisAttestation"],
+            audit_result=context["auditResult"],
+            candidate_results=candidate()["candidateResults"],
+        )
+        decision = {
+            "active": True,
+            "assessmentDigest": sha256_digest(assessment),
+            "selectedFindingIds": sorted(
+                finding["findingId"]
+                for instance in assessment["instances"]
+                for finding in instance["findings"]
+            ),
+        }
+        projection = derive_effective_judgment(
+            assessment,
+            decision,
+            enforcement_authority_lane=context["runManifest"][
+                "enforcementAuthorityLane"
+            ],
+        )
+        self.assertEqual(projection["effectiveStatus"], "allowed")
+        self.assertEqual(projection["enforcementAuthorityStatus"], "not_assessed")
+        self.assertFalse(projection["productionReady"])
+
+        with self.assertRaises(JudgmentAssessmentIntegrityError):
+            derive_effective_judgment(
+                assessment,
+                decision,
+                enforcement_authority_lane={
+                    "schemaVersion": 1,
+                    "status": "allowed",
+                    "provider": "caller-local",
+                    "attestation": "a" * 64,
+                },
+            )
 
 if __name__ == "__main__":
     unittest.main()

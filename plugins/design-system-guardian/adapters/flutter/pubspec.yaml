@@ -1,6 +1,6 @@
 name: design_system_guardian_flutter
 description: Strict Flutter analyzer adapter for Design System Guardian.
-version: 0.3.6
+version: 0.3.7
 publish_to: none
 
 environment:

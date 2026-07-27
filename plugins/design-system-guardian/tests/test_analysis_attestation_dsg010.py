@@ -207,6 +207,52 @@ class AnalysisAttestationTest(unittest.TestCase):
                 adapter_config={},
             )
 
+    def test_judgment_projection_keeps_sealed_analysis_and_ux_bytes_immutable(self) -> None:
+        from guardian_core.canonical import canonical_json_bytes, sha256_digest
+        from guardian_core.judgment_assessment import (
+            build_judgment_assessment,
+            derive_effective_judgment,
+        )
+        from tests.test_judgment_decisions_dsg027 import candidate, provision_home
+
+        temporary, _, context = provision_home()
+        self.addCleanup(temporary.cleanup)
+        before_attestation = canonical_json_bytes(context["analysisAttestation"])
+        before_ux = canonical_json_bytes(
+            context["analysisAttestation"]["uxEvaluation"]
+        )
+        assessment = build_judgment_assessment(
+            run_pin=context["runPin"],
+            rule_snapshot=context["ruleSnapshot"],
+            analysis_attestation=context["analysisAttestation"],
+            audit_result=context["auditResult"],
+            candidate_results=candidate()["candidateResults"],
+        )
+        conflicts = sorted(
+            finding["findingId"]
+            for instance in assessment["instances"]
+            for finding in instance["findings"]
+        )
+        derive_effective_judgment(
+            assessment,
+            {
+                "active": True,
+                "assessmentDigest": sha256_digest(assessment),
+                "selectedFindingIds": conflicts,
+            },
+            enforcement_authority_lane=context["runManifest"][
+                "enforcementAuthorityLane"
+            ],
+        )
+
+        self.assertEqual(
+            canonical_json_bytes(context["analysisAttestation"]),
+            before_attestation,
+        )
+        self.assertEqual(
+            canonical_json_bytes(context["analysisAttestation"]["uxEvaluation"]),
+            before_ux,
+        )
 
 if __name__ == "__main__":
     unittest.main()

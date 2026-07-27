@@ -1,6 +1,6 @@
 # Installing on Agent Hosts
 
-Design System Guardian 0.3.6 has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the integrity-bound generic installer.
+Design System Guardian 0.3.7 has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the integrity-bound generic installer.
 
 Review and pin the full Git commit before installation. A movable branch name is convenient for discovery but is not release authority.
 
@@ -21,7 +21,7 @@ codex plugin marketplace add pv-vimalnair/design-system-guardian --ref main --js
 codex plugin add design-system-guardian@pv-vimalnair-design-system-guardian --json
 ```
 
-Start a new task and confirm version `0.3.6` and only `build-with-design-system` and `audit-design-system` are exposed. An install command without this read-back is not a completed reload.
+Start a new task and confirm version `0.3.7` and only `build-with-design-system` and `audit-design-system` are exposed. An install command without this read-back is not a completed reload.
 
 ## Claude Code
 
@@ -30,7 +30,7 @@ claude plugin marketplace add pv-vimalnair/design-system-guardian
 claude plugin install design-system-guardian@pv-vimalnair-design-system-guardian
 ```
 
-Start a new Claude Code session. Confirm version `0.3.6`; the same two skills must be namespaced under `design-system-guardian`.
+Start a new Claude Code session. Confirm version `0.3.7`; the same two skills must be namespaced under `design-system-guardian`.
 
 ## OpenClaw
 
@@ -42,7 +42,7 @@ openclaw plugins install design-system-guardian --marketplace pv-vimalnair/desig
 openclaw plugins inspect design-system-guardian
 ```
 
-Restart the Gateway or start a new session. Inspection must report version `0.3.6` and a compatible bundle with exactly the two Guardian skills.
+Restart the Gateway or start a new session. Inspection must report version `0.3.7` and a compatible bundle with exactly the two Guardian skills.
 
 ## Kimi Code
 
@@ -54,7 +54,7 @@ From Kimi Code, install the public GitHub repository and reload:
 /plugins info design-system-guardian
 ```
 
-The repository-root `kimi.plugin.json` points to version `0.3.6`, the same nested canonical skills, and the same Guardian package. `/reload` plus `/plugins info` is required read-back.
+The repository-root `kimi.plugin.json` points to version `0.3.7`, the same nested canonical skills, and the same Guardian package. `/reload` plus `/plugins info` is required read-back.
 
 ## Qwen Code, terminal, Deep Code, and generic Agent Skills hosts
 
@@ -116,6 +116,21 @@ The agent, not the ordinary user, runs these commands internally:
 8. The agent runs `guardian rules list --profile <id>` read-only and explains the effective rule capability without exposing rule prose or company content.
 9. If v2 evaluator coverage is needed, the agent runs `guardian rules upgrade preview --profile <id>` without writing, explains that Guardian can check all six approved machine-rule types including `widget_class`, and asks whether it may save that exact evaluator permission locally.
 10. Only after permission, the agent runs `guardian rules upgrade apply --input <permission-bound-bundle.json>`, reruns `guardian rules list`, and keeps design-system, Usage Rules, UX/accessibility, and protected-authority results separate.
+
+## First use: exact-run judgment decisions
+
+After completing an assessment, the agent explains every finding before asking. It preserves raw findings and shows the effective result separately. For a selected conflict, the build skill offers **Fix and evaluate again** or **Approve this exact version anyway**; the user may add an optional reason.
+
+The same four CLI forms work on every supported host that can invoke the bundled Guardian CLI:
+
+    guardian judgment preview --profile <profile-id> --run-id <run-id> --input <candidate.json>
+    guardian judgment apply --input <granted-bundle.json>
+    guardian judgment status --profile <profile-id> --run-id <run-id>
+    guardian judgment revoke --input <granted-revocation.json>
+
+The agent runs these commands for the user. Preview and status are read-only. Apply and revoke require separate explicit permission for the exact local operation, followed by status read-back. An approval is limited to selected conflicts in one exact run; it is reevaluated for every new screen or flow and never carries to a duplicate file, future run, or new version.
+
+This decision layer is additive over v0.3.6. It never changes raw evidence or design-system, Usage Rules, sentinel, stale/incomplete, unsupported, not-assessed, or protected-authority results. Assessments, reasons, decisions, revocations, and company evidence remain local and never enter Git, Elo, or telemetry.
 
 The candidate must contain the catalog authority public key path, one exact profile, and one signed complete catalog snapshot. Guardian cannot safely generate a company's catalog authority or decide that discovered Figma assets are approved. An authorized design-system owner prepares that candidate once; users do not install a second Guardian copy or manually copy a policy seal.
 
@@ -180,7 +195,7 @@ Status is one of `current`, `update_required`, `reload_required`, or `invalid`. 
 - Rerun the installer after a Python upgrade so its exact path and digest are rebound.
 - If atomic promotion is blocked by a Windows watcher, Guardian restores the prior intact installation and returns `reload_required` with `host_restart_required`. Close or restart only the named agent host, rerun the same verified `--replace` command, start a new task or session, and rerun `--status`. Guardian never kills a process or overwrites the watched root in place.
 
-After every native or generic update, read back version `0.3.6` and exactly the two canonical skills. Do not claim a host is updated while it reports an older version, `update_required`, `reload_required`, or `invalid`.
+After every native or generic update, read back version `0.3.7` and exactly the two canonical skills. Do not claim a host is updated while it reports an older version, `update_required`, `reload_required`, or `invalid`.
 
 Every update must preserve the immutable policy digest. A missing or changed policy, package, interpreter, skill, launcher, or binding blocks execution. Updates never include local profiles, catalogs, Figma observations, audit history, prompts, product source, credentials, or user activity.
 

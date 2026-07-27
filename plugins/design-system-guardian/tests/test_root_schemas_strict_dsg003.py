@@ -184,6 +184,11 @@ class StrictRootSchemasTest(unittest.TestCase):
             "run-manifest.schema.json",
             "run-manifest-v2.schema.json",
             "usage-rules-evidence.schema.json",
+            "judgment-assessment.schema.json",
+            "judgment-effective-projection.schema.json",
+            "judgment-decision-permission.schema.json",
+            "judgment-history-record.schema.json",
+            "judgment-history-head.schema.json",
             "snapshot.schema.json",
         }
         self.assertEqual({path.name for path in SCHEMA_ROOT.glob("*.schema.json")}, expected)

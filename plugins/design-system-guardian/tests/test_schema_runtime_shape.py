@@ -9,6 +9,23 @@ from pathlib import Path
 
 
 class RuntimeSchemaShapeTest(unittest.TestCase):
+    def test_judgment_sidecar_schemas_pin_raw_and_effective_fields_separately(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        assessment = json.loads(
+            (root / "schemas" / "judgment-assessment.schema.json").read_text(encoding="utf-8")
+        )
+        projection = json.loads(
+            (root / "schemas" / "judgment-effective-projection.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("rawStatus", assessment["required"])
+        self.assertNotIn("effectiveStatus", assessment["properties"])
+        self.assertNotIn("productionReady", assessment["properties"])
+        self.assertIn("rawStatus", projection["required"])
+        self.assertIn("effectiveStatus", projection["required"])
+        self.assertIn("productionReady", projection["required"])
+
     def test_snapshot_schema_describes_runtime_profile_and_registry_evidence(self) -> None:
         root = Path(__file__).resolve().parents[1]
         schema = json.loads((root / "schemas" / "snapshot.schema.json").read_text(encoding="utf-8"))

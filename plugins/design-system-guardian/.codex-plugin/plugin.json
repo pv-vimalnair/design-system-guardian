@@ -1,7 +1,7 @@
 {
   "name": "design-system-guardian",
-  "version": "0.3.6",
-  "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, permission-bound machine-rule evaluation, and fail-closed evidence.",
+  "version": "0.3.7",
+  "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, permission-bound machine-rule evaluation, exact-run judgment exceptions, and fail-closed evidence.",
   "author": {
     "name": "Pv Vimal Nair",
     "url": "https://github.com/pv-vimalnair"
@@ -14,7 +14,7 @@
   "interface": {
     "displayName": "Design System Guardian",
     "shortDescription": "Exact approved identities only, with fail-closed auditing.",
-    "longDescription": "Set up locally with permission, build from exact Figma-bound design-system identities, perform preview-only rule validation, list and explicitly authorize machine-checkable usage rules, audit design-system, Usage Rules, and UX/accessibility evidence separately, and expose proven gaps through conspicuous sentinels.",
+    "longDescription": "Set up locally with permission, build from exact Figma-bound design-system identities, perform preview-only rule validation, authorize machine-checkable usage rules, explain subjective judgment findings before offering exact-run exceptions, audit raw and effective results separately, and expose proven gaps through conspicuous sentinels.",
     "developerName": "Pv Vimal Nair",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write"],

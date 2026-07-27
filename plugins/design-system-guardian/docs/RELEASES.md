@@ -1,12 +1,23 @@
 # Release Evidence Contract
 
-## v0.3.6 source coordinates
+## v0.3.7 source coordinates
 
-The current public source candidate is `0.3.6`. The Codex, Claude Code, Kimi Code, Flutter package, and generic Agent Skills binding versions must match `guardian_core.release.RUNTIME_VERSION`; OpenClaw reuses the compatible Codex/Claude bundle and Qwen Code uses the same two integrity-bound Agent Skills. Every surface resolves to one Guardian core and exactly `build-with-design-system` and `audit-design-system`.
+The current public source candidate is 0.3.7. Codex, Claude Code, Kimi Code, the Flutter package, and generic Agent Skills bindings must match guardian_core.release.RUNTIME_VERSION. OpenClaw reuses the compatible Codex/Claude bundle and Qwen Code uses the same two integrity-bound Agent Skills. Every surface resolves to one Guardian core and exactly build-with-design-system and audit-design-system.
 
-This source candidate adds separately permissioned evaluator-v2 authorization, zero-write `guardian rules list`, all six machine predicates, a separate Usage Rules lane, and recoverable generic-host reload status. It does not rewrite any v0.3.2-v0.3.5 manifest, authorization, channel event, score, or history record. Public Elo v6 cases are synthetic; local Elo scores, benchmark results, and append-only history remain under `~/.design-system-guardian/` and outside Git.
+This source candidate adds complete subjective judgment assessment plus selected exact-run conflict exceptions. Guardian explains every finding first, preserves raw findings, derives an effective result separately, accepts an optional reason, and supports append-only revocation through these exact portable forms:
 
-A host reporting `update_required`, `reload_required`, or `invalid` has not loaded v0.3.6. `reload_required` with `host_restart_required` means the prior intact installation was restored; restart the exact watching host, rerun the same verified update, start a new task or session, and require version and two-skill read-back. This installation state is not release authority.
+    guardian judgment preview --profile <profile-id> --run-id <run-id> --input <candidate.json>
+    guardian judgment apply --input <granted-bundle.json>
+    guardian judgment status --profile <profile-id> --run-id <run-id>
+    guardian judgment revoke --input <granted-revocation.json>
+
+An exception never transfers to a duplicate file, new screen or flow, later run, or future version. It never overrides design-system compliance, Usage Rules, sentinels, stale/incomplete evidence, unsupported or not-assessed coverage, or protected production authority.
+
+Version 0.3.7 preserves every v0.3.2-v0.3.6 manifest, schema, authorization, channel event, score, history record, and exactly-two-skill contract. The inherited v0.3.6 guardian rules list, permission-bound evaluator-v2 flow, and separate Usage Rules lane remain available. Public Elo v7 cases are synthetic. Assessments, reasons, decisions, revocations, company evidence, local Elo scores, benchmark results, and append-only history stay local and never enter Git, Elo, or telemetry.
+
+A host reporting update_required, reload_required, or invalid has not loaded v0.3.7. reload_required with host_restart_required means the prior intact installation was restored; restart the exact watching host, rerun the same verified update, start a new task or session, and require version 0.3.7 plus two-skill read-back. This installation state is not release authority, and portable packaging does not prove automatic routing or an untested host runtime.
+
+A public release must come from a clean authenticated public lineage. If a development branch contains internal planning artifacts or private local-path evidence, publish from the canonical public v0.3.6 lineage and replay only approved public source changes; do not rewrite that development history in place. The current public docs and manifests contain no absolute local path.
 
 ## Signed action manifest
 

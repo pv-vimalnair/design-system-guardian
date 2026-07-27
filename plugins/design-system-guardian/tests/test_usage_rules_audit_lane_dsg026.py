@@ -644,6 +644,62 @@ class UsageRulesAuditLaneTest(unittest.TestCase):
                         build_plan=None,
                     )
 
+    def test_judgment_projection_cannot_hide_or_rewrite_machine_usage_rules(self) -> None:
+        from guardian_core.canonical import canonical_json_bytes, sha256_digest
+        from guardian_core.judgment_assessment import (
+            build_judgment_assessment,
+            derive_effective_judgment,
+        )
+        from tests.test_judgment_decisions_dsg027 import (
+            attested_audit_digest,
+            candidate,
+            provision_home,
+        )
+
+        temporary, _, context = provision_home()
+        self.addCleanup(temporary.cleanup)
+        context["auditResult"]["usageRulesLane"] = {
+            "status": "conflict",
+            "violatedRuleIds": ["rule.machine.maximum"],
+            "suppressions": ["ignore: rule.machine.maximum"],
+        }
+        context["analysisAttestation"]["auditResultDigest"] = attested_audit_digest(
+            context["auditResult"]
+        )
+        before_audit = canonical_json_bytes(context["auditResult"])
+        before_lane = canonical_json_bytes(context["auditResult"]["usageRulesLane"])
+        assessment = build_judgment_assessment(
+            run_pin=context["runPin"],
+            rule_snapshot=context["ruleSnapshot"],
+            analysis_attestation=context["analysisAttestation"],
+            audit_result=context["auditResult"],
+            candidate_results=candidate()["candidateResults"],
+        )
+        conflicts = sorted(
+            finding["findingId"]
+            for instance in assessment["instances"]
+            for finding in instance["findings"]
+        )
+        projection = derive_effective_judgment(
+            assessment,
+            {
+                "active": True,
+                "assessmentDigest": sha256_digest(assessment),
+                "selectedFindingIds": conflicts,
+            },
+            enforcement_authority_lane=context["runManifest"][
+                "enforcementAuthorityLane"
+            ],
+        )
+
+        self.assertEqual(projection["effectiveStatus"], "allowed")
+        self.assertFalse(projection["nonJudgmentBlockersClear"])
+        self.assertFalse(projection["productionReady"])
+        self.assertEqual(canonical_json_bytes(context["auditResult"]), before_audit)
+        self.assertEqual(
+            canonical_json_bytes(context["auditResult"]["usageRulesLane"]),
+            before_lane,
+        )
 
 if __name__ == "__main__":
     unittest.main()

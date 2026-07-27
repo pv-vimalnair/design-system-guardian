@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -29,6 +30,24 @@ class GuardianLauncherSecurityTests(unittest.TestCase):
         self.assertIn("exit 4", lowered)
         self.assertIn("host-pinned", lowered)
         self.assertNotIn(b"\r", (PLUGIN_ROOT / "scripts" / "guardian").read_bytes())
+
+    def test_direct_launcher_exposes_portable_judgment_namespace(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(PLUGIN_ROOT / "scripts" / "guardian.py"),
+                "judgment",
+                "--help",
+            ],
+            cwd=PLUGIN_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        for command in ("preview", "apply", "status", "revoke"):
+            self.assertIn(command, completed.stdout)
 
     @unittest.skipUnless(__import__("os").name == "nt", "Windows launcher test")
     def test_windows_convenience_launcher_fails_closed(self) -> None:

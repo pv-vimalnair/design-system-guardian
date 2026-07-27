@@ -8,10 +8,9 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
-VERSION = "0.3.6"
 POLICY_DIGEST = "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f"
 SKILL_NAMES = {"audit-design-system", "build-with-design-system"}
-SCHEMA_INVENTORY = {
+V036_SCHEMA_INVENTORY = {
     "adapters/figma/contracts/figma-observation.schema.json",
     "adapters/flutter/contracts/flutter-adapter-config-v2.schema.json",
     "adapters/flutter/contracts/flutter-adapter-config-v3.schema.json",
@@ -60,7 +59,7 @@ def _json(path: Path) -> dict[str, object]:
 
 
 class V036PublicContractTest(unittest.TestCase):
-    def test_every_versioned_public_manifest_is_exactly_v036_and_mit(self) -> None:
+    def test_public_manifest_shape_and_license_remain_compatible(self) -> None:
         claude_marketplace = _json(
             REPOSITORY_ROOT / ".claude-plugin" / "marketplace.json"
         )
@@ -74,18 +73,21 @@ class V036PublicContractTest(unittest.TestCase):
             "codex": _json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json"),
             "claude": _json(PLUGIN_ROOT / ".claude-plugin" / "plugin.json"),
         }
+        versions = set()
         for host, manifest in manifests.items():
             with self.subTest(host=host):
                 self.assertEqual(manifest["name"], "design-system-guardian")
-                self.assertEqual(manifest["version"], VERSION)
+                self.assertRegex(manifest["version"], r"^0\.3\.[0-9]+$")
                 self.assertEqual(manifest["license"], "MIT")
+                versions.add(manifest["version"])
+        self.assertEqual(len(versions), 1)
 
         self.assertEqual(
             {manifest["description"] for manifest in manifests.values()},
             {
                 "Enforces exact approved design-system identities with Figma "
                 "read-back, UX checks, preview-only rule validation, "
-                "permission-bound machine-rule evaluation, and fail-closed evidence."
+                "permission-bound machine-rule evaluation, exact-run judgment exceptions, and fail-closed evidence."
             },
         )
         self.assertEqual(manifests["codex"]["skills"], "./skills/")
@@ -174,13 +176,13 @@ class V036PublicContractTest(unittest.TestCase):
         self.assertLess(changelog.index("## 0.3.6"), changelog.index("## 0.3.5"))
         self.assertLess(changelog.index("## 0.3.5"), changelog.index("## 0.3.4"))
 
-    def test_current_schema_inventory_is_exact_and_json_parses(self) -> None:
+    def test_v036_schema_inventory_remains_available_and_json_parses(self) -> None:
         actual = {
             path.relative_to(PLUGIN_ROOT).as_posix()
             for path in PLUGIN_ROOT.rglob("*.schema.json")
         }
-        self.assertEqual(len(actual), 38)
-        self.assertEqual(actual, SCHEMA_INVENTORY)
+        self.assertGreaterEqual(len(actual), len(V036_SCHEMA_INVENTORY))
+        self.assertTrue(V036_SCHEMA_INVENTORY.issubset(actual))
         for relative in sorted(actual):
             with self.subTest(schema=relative):
                 _json(PLUGIN_ROOT / relative)

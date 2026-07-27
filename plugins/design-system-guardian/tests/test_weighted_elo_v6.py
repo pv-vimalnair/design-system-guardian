@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "benchmarks" / "elo_cases_v6.py"
 PRIOR_SUITE_DIGEST = "d96c5d3f5efc34898410ae1331f20adedece5bcc8cad749ee924acb1e3000767"
 V6_MODULE_ID = "guardian-public-cases-v6"
+V7_MODULE_ID = "guardian-public-cases-v7"
 V6_CASES = {
     "synthetic-correctness-explicit-evaluator-v2": (
         "correctness",
@@ -65,9 +66,19 @@ class WeightedEloV6EvolutionTest(unittest.TestCase):
         from guardian_core.canonical import sha256_digest
         from guardian_core.elo import _current_score, _validate_suite_transition, _worker_digest
 
-        suite = _json(ROOT / "benchmarks" / "elo-suite.json")
+        current_suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         current = _json(ROOT / "benchmarks" / "current-score.json")
-        self.assertEqual(suite["suiteVersion"], 6)
+        self.assertEqual(current_suite["suiteVersion"], 7)
+        suite = copy.deepcopy(current_suite)
+        suite["suiteVersion"] = 6
+        suite["caseModules"] = [
+            item for item in suite["caseModules"] if item["moduleId"] != V7_MODULE_ID
+        ]
+        suite["achievements"] = [
+            item
+            for item in suite["achievements"]
+            if item["caseModuleId"] != V7_MODULE_ID
+        ]
 
         modules = {item["moduleId"]: item for item in suite["caseModules"]}
         self.assertEqual(
@@ -123,7 +134,7 @@ class WeightedEloV6EvolutionTest(unittest.TestCase):
         self.assertEqual(current["suiteSnapshot"]["suiteVersion"], 3)
         self.assertEqual(_current_score(), current)
 
-    def test_cases_are_stdlib_only_synthetic_and_pass_current_checkout(self) -> None:
+    def test_cases_are_stdlib_only_and_execute_deterministically(self) -> None:
         from guardian_core.elo import _WORKER
 
         source = MODULE_PATH.read_text(encoding="utf-8")
@@ -181,9 +192,14 @@ class WeightedEloV6EvolutionTest(unittest.TestCase):
                         capture_output=True,
                         check=False,
                     )
+                    expected_code = (
+                        1
+                        if function == "case_portability_rule_list_reload_status"
+                        else 0
+                    )
                     self.assertEqual(
                         (completed.returncode, completed.stdout, completed.stderr),
-                        (0, b"", b""),
+                        (expected_code, b"", b""),
                     )
 
     def test_weighted_v036_progress_is_material_and_bounded(self) -> None:

@@ -51,7 +51,22 @@ Installing v0.3.6 does not expand the permission above. The agent first runs `gu
 
 When expanded coverage is needed, the agent runs `guardian rules upgrade preview --profile <id>` without writing. It explains in plain language that Guardian can now check all six approved machine-rule types, including analyzer-proven `widget_class` scope, and asks whether it may save that exact local evaluator permission for the selected profile. Only after explicit permission may the exact bundle be passed to `guardian rules upgrade apply --input <permission-bound-bundle.json>`. The user does not copy files, hashes, or commands.
 
-A valid evaluator-v2 authorization covers all six existing machine predicates, `compilation_unit` and `widget_class` scope where defined, and exact child, descendant, and sibling relations. It does not approve rules, identities, or assets. Without it, Guardian keeps the v0.3.5 evaluator and reports newly supported capabilities as `not_assessed`. Judgment rules remain `not_assessed`; informative rules remain non-gating.
+A valid evaluator-v2 authorization covers all six existing machine predicates, `compilation_unit` and `widget_class` scope where defined, and exact child, descendant, and sibling relations. It does not approve rules, identities, or assets. Without it, Guardian keeps the v0.3.5 evaluator and reports newly supported capabilities as `not_assessed`. The inherited v0.3.6 machine-rule lane leaves judgment rules `not_assessed` until the v0.3.7 assessment evaluates them; incomplete instances remain `not_assessed`, and informative rules remain non-gating.
+
+## Exact-run subjective judgment decisions
+
+Version 0.3.7 completes subjective judgment assessments and explains every finding before asking the user to choose. Raw findings always remain visible. The effective projection separately shows whether selected conflicts passed through a user-approved exception.
+
+The agent runs these four exact portable forms for the user:
+
+    guardian judgment preview --profile <profile-id> --run-id <run-id> --input <candidate.json>
+    guardian judgment apply --input <granted-bundle.json>
+    guardian judgment status --profile <profile-id> --run-id <run-id>
+    guardian judgment revoke --input <granted-revocation.json>
+
+Preview and status are read-only. Apply and revoke require explicit permission for the exact local operation. The optional reason is recorded as context, not authority. Approval is limited to selected conflicts in one exact run and is reevaluated for every new screen or flow. It is never reused for a future run, version, or duplicate file; revocation appends a new record without deleting history.
+
+Judgment exceptions never override design-system compliance, Usage Rules, sentinels, stale or incomplete evidence, unsupported or not-assessed coverage, or protected production authority. An unprotected host remains non-authoritative. Assessments, reasons, decisions, revocations, and company evidence stay local and never enter Git, Elo, or telemetry.
 
 ## Figma evidence
 
@@ -135,6 +150,7 @@ The command surface is:
 - `rules activate preview`, `rules activate apply`
 - `rules list`
 - `rules upgrade preview`, `rules upgrade apply`
+- `judgment preview`, `judgment apply`, `judgment status`, `judgment revoke`
 - `adapter flutter config`
 - `adapter figma config`
 - `ux checkpoint`
@@ -150,7 +166,7 @@ Exit codes are deterministic: `1` reports violations or sentinels, `2` policy/co
 
 Replaceable bundle code contains validators, schemas, adapters, and skills. Private state lives outside every agent's replaceable plugin cache under `~/.design-system-guardian/`: policy trust, public authorities, isolated company profiles, immutable snapshots, run evidence, migrations, release history, and local Elo history.
 
-Guardian reuses the host's existing Figma connection and adds no credential store. Profiles, design-system data, setup candidates, snapshots, observations, audit records, prompts, product source, credentials, and user activity must never enter this public repository or a plugin update.
+Guardian reuses the host's existing Figma connection and adds no credential store. Profiles, design-system data, setup candidates, snapshots, observations, audit records, judgment assessments, reasons, decisions, revocations, prompts, product source, credentials, and user activity must never enter this public repository, Git, Elo, telemetry, or a plugin update.
 
 No sealed Guardian manifest means the work is not Guardian-approved.
 
@@ -177,11 +193,13 @@ Plugin source updates use reviewed SemVer and deterministic migrations. Release 
 - rollback is a new signed restoration and never rewrites history;
 - private catalogs, trust anchors, run evidence, and release state remain outside the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.6 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.7 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
 
 Version 0.3.5 adds permission-bound Safe Activation for the two documented compilation-unit pairs. It preserves the complete v0.3.2-v0.3.4 surface, and local activation still cannot create protected production authority.
 
-Version 0.3.6 adds a separately permissioned evaluator-v2 sidecar, zero-write rule inventory, complete machine-rule capability, a separate Usage Rules lane, and recoverable host reload status without rewriting v0.3.2-v0.3.5 evidence. Public Elo cases are synthetic; local score, benchmark results, and append-only history stay outside Git.
+Version 0.3.6 adds a separately permissioned evaluator-v2 sidecar, zero-write rule inventory, complete machine-rule capability, a separate Usage Rules lane, and recoverable host reload status without rewriting v0.3.2-v0.3.5 evidence.
+
+Version 0.3.7 adds complete subjective judgment assessments, selected exact-run conflict exceptions, optional reasons, status read-back, and append-only revocation without rewriting v0.3.2-v0.3.6 evidence. Public Elo cases are synthetic; local score, benchmark results, assessments, reasons, decisions, and append-only history stay outside Git.
 
 See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md).
 

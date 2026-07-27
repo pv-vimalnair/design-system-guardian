@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/judgment-history-record.schema.json",
+  "title": "Design System Guardian append-only judgment history record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "recordType", "profileId", "runId", "sequence", "previousRecordDigest", "assessmentDigest", "decisionDigest", "revokedDecisionDigest", "selectedFindings", "reason", "decidedAt", "bindings", "permissionBinding", "permissionDigest", "authoritySeal"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "recordType": {"enum": ["approval", "revocation"]},
+    "profileId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "runId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "sequence": {"type": "integer", "minimum": 1, "maximum": 99999999},
+    "previousRecordDigest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "assessmentDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decisionDigest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "revokedDecisionDigest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "selectedFindings": {
+      "type": "array", "maxItems": 8192,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["findingId", "rawStatus"],
+        "properties": {
+          "findingId": {"type": "string", "pattern": "^finding-[0-9a-f]{24}$"},
+          "rawStatus": {"const": "conflict"}
+        }
+      }
+    },
+    "reason": {"type": ["string", "null"], "maxLength": 1024},
+    "decidedAt": {"type": "string", "format": "date-time"},
+    "bindings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runPinDigest", "profileDigest", "policyDigest", "snapshotDigest", "sourceCutDigest", "ruleSnapshotDigest", "activeRuleSetDigest", "evaluatorContractDigest", "analysisAttestationDigest", "auditResultDigest", "targetDigest", "evidenceDigest", "runManifestDigest", "evaluatorAuthorizationDigest"],
+      "properties": {
+        "runPinDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "profileDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "snapshotDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sourceCutDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ruleSnapshotDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "activeRuleSetDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "evaluatorContractDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "analysisAttestationDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "auditResultDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "targetDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "evidenceDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "runManifestDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "evaluatorAuthorizationDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "permissionBinding": {"$ref": "judgment-decision-permission.schema.json"},
+    "permissionDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authoritySeal": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

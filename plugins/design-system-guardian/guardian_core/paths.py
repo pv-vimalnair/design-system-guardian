@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 PROFILE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,62}$")
+RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class PathIntegrityError(ValueError):
@@ -126,6 +127,12 @@ def validate_profile_id(profile_id: str) -> str:
     return profile_id
 
 
+def validate_run_id(run_id: str) -> str:
+    if not isinstance(run_id, str) or not RUN_ID_PATTERN.fullmatch(run_id):
+        raise ValueError("runId must be an exact safe identifier of at most 128 characters.")
+    return run_id
+
+
 @dataclass(frozen=True)
 class GuardianPaths:
     home: Path
@@ -193,6 +200,14 @@ class GuardianPaths:
 
     def audits(self, profile_id: str) -> Path:
         return self.profile(profile_id) / "audits"
+
+    def judgment_history(self, profile_id: str, run_id: str) -> Path:
+        path = self.audits(profile_id) / validate_run_id(run_id) / "judgment-history"
+        return assert_guardian_storage_path(self.home, path)
+
+    def current_judgment_history(self, profile_id: str, run_id: str) -> Path:
+        path = self.audits(profile_id) / validate_run_id(run_id) / "current-judgment-history.json"
+        return assert_guardian_storage_path(self.home, path)
 
     def migrations(self, profile_id: str) -> Path:
         return self.profile(profile_id) / "migrations"

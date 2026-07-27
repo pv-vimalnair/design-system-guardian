@@ -33,6 +33,14 @@ Version 0.3.5 adds an append-only rule snapshot, sequence continuation, and seal
 
 Activation permission is digest-bound authorization to perform one local change; it is not rule approval. Every activated rule and its evidence must already be present in the complete catalog v2 signed by the selected profile's pinned external catalog authority. Once any v2 evidence exists, missing, corrupt, incomplete, replayed, or discontinuous v2 state blocks protected rule work and never falls back to v1.
 
+## Judgment-decision integrity
+
+Version 0.3.7 stores one immutable complete judgment assessment for an exact sealed run and a separate append-only, authority-sealed decision/revocation history. Guardian explains every raw finding before permission is requested and derives the effective judgment projection without rewriting the source assessment.
+
+Preview and status are read-only. Apply and revoke accept only an exact digest-bound permission bundle. A decision may cover selected conflict findings only; not-assessed instances are never approvable. Every new screen or flow requires a new assessment, and no decision transfers to a duplicate file, changed source evidence, later run, or future version.
+
+A decision cannot change design-system compliance, Usage Rules, sentinel, stale/incomplete, unsupported, not-assessed, or protected-authority evidence. It cannot make an unprotected host production-ready. Assessments, optional reasons, decisions, revocations, and company evidence remain under canonical local Guardian state and never enter Git, public Elo cases, or telemetry.
+
 ## Release integrity
 
 A release action fails closed unless all of these are exact:
@@ -53,7 +61,7 @@ Normal downgrades, same-version replacements, unsigned manifests, wrong-key sign
 
 ## Public-source privacy gate
 
-Every public update must pass `python scripts/check_public_release.py --repository-root . --history` from a clean committed tree before push. The checker reads committed Git objects, rejects unapproved paths and object modes, runtime-state shapes, absolute account homes, high-confidence secret material, and matches against local Guardian file digests and high-confidence design-system identifiers. Its output contains reason codes only; it never prints private values or local paths.
+Every public update must pass `python scripts/check_public_release.py --repository-root . --history` from a clean committed tree before push. The checker reads committed Git objects, rejects unapproved paths and object modes, runtime-state shapes including judgment decisions and reasons, absolute account homes, high-confidence secret material, and matches against local Guardian file digests and high-confidence design-system identifiers. Its output contains reason codes only; it never prints private values or local paths.
 
 CI repeats committed-tree and reachable-history checks with `--ci`. CI cannot inspect account-local Guardian data, so the local-data-aware pre-push run remains mandatory. The gate also authenticates the prior canonical public Elo suite and permits only additive benchmark evolution; absence is accepted only for the exact authenticated 0.2.0 bootstrap commit.
 
@@ -89,4 +97,4 @@ Missing identity evidence remains `not_assessed`; invalid or incomplete inputs f
 
 ## Supported source release
 
-The current source declares version `0.3.5`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.
+The current source declares version `0.3.7`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.
