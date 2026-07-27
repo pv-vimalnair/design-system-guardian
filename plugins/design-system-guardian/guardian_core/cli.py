@@ -15,7 +15,11 @@ from .adapter_dispatch import (
     build_pinned_adapter_config,
     select_adapter,
 )
-from .audit import _authoritatively_resolve, evaluate_audit
+from .audit import (
+    _authoritatively_resolve,
+    evaluate_audit,
+    project_audit_result_v1,
+)
 from .audit_attestation import build_analysis_attestation
 from .canonical import atomic_write_json, canonical_json_text, read_canonical_json, read_json, sha256_digest
 from .catalog_authority import verify_pinned_catalog_authority, verify_runtime_dependency
@@ -23,6 +27,14 @@ from .contracts import ExitCode, ResolutionStatus
 from .dtcg import DtcgValidationError
 from .elo import benchmark_elo, evaluate_elo, read_elo_state
 from .errors import GuardianError, PolicyIntegrityError
+from .evaluator_upgrade import (
+    EvaluatorUpgradeCoverageError,
+    EvaluatorUpgradeError,
+    EvaluatorUpgradeSourceError,
+    apply_evaluator_upgrade,
+    list_rules,
+    preview_evaluator_upgrade,
+)
 from .finalize import finalize_run
 from .figma_adapter import (
     FigmaAdapterIntegrityError,
@@ -456,12 +468,17 @@ def _audit_command(args: argparse.Namespace) -> int:
         verified_snapshot=context["snapshot"],
         analysis_attestation_digest=runner_digest,
         project_evidence=project_evidence,
+        usage_rules_evidence=(
+            normalized.get("usageRulesEvidence")
+            if requested_adapter == "flutter"
+            else None
+        ),
     )
     attestation = build_analysis_attestation(
         run_pin=context["pin"],
         config_digest=expected_config["configDigest"],
         runner_evidence=runner_evidence,
-        audit_result=evaluation.result,
+        audit_result=project_audit_result_v1(evaluation.result),
         ux_target=ux_target,
         ux_evaluation=ux_evaluation,
         adapter_config=expected_config,
@@ -796,6 +813,98 @@ def _rules_activate_apply_command(args: argparse.Namespace) -> int:
     return int(ExitCode.PASS)
 
 
+def _emit_evaluator_failure(
+    error: EvaluatorUpgradeSourceError | EvaluatorUpgradeCoverageError,
+    *,
+    stage: str,
+) -> int:
+    if isinstance(error, EvaluatorUpgradeSourceError):
+        status = error.status
+        code = ExitCode.SOURCE_UNAVAILABLE_STALE_OR_INCOMPLETE
+        reason_code = f"rule_source_{status}"
+    else:
+        status = ResolutionStatus.UNSUPPORTED.value
+        code = ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE
+        reason_code = "evaluator_v2_unsupported"
+    _emit(
+        {
+            "schemaVersion": 1,
+            "status": status,
+            "stage": stage,
+            "reasonCode": reason_code,
+            "message": str(error),
+            "localChangesPerformed": False,
+            "productionReady": False,
+        },
+        error=True,
+    )
+    return int(code)
+
+
+def _emit_evaluator_integrity_failure(*, stage: str) -> int:
+    _emit(
+        {
+            "schemaVersion": 1,
+            "status": ResolutionStatus.INVALID.value,
+            "stage": stage,
+            "reasonCode": "evaluator_authorization_invalid",
+            "message": "Evaluator authorization or rule inventory integrity is invalid.",
+            "localChangesPerformed": False,
+            "productionReady": False,
+        },
+        error=True,
+    )
+    return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
+
+
+def _rules_upgrade_preview_command(args: argparse.Namespace) -> int:
+    try:
+        result = preview_evaluator_upgrade(
+            default_guardian_home(),
+            profile_id=args.profile,
+        )
+    except (EvaluatorUpgradeSourceError, EvaluatorUpgradeCoverageError) as error:
+        return _emit_evaluator_failure(error, stage="rules_upgrade")
+    except (EvaluatorUpgradeError, GuardianError, OSError, ValueError):
+        return _emit_evaluator_integrity_failure(stage="rules_upgrade")
+    _emit(result)
+    return (
+        int(ExitCode.PASS)
+        if result["status"] == ResolutionStatus.ALLOWED.value
+        else int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    )
+
+
+def _rules_upgrade_apply_command(args: argparse.Namespace) -> int:
+    try:
+        result = apply_evaluator_upgrade(
+            default_guardian_home(),
+            read_json(Path(args.input)),
+        )
+    except (EvaluatorUpgradeSourceError, EvaluatorUpgradeCoverageError) as error:
+        return _emit_evaluator_failure(error, stage="rules_upgrade")
+    except (EvaluatorUpgradeError, GuardianError, OSError, ValueError):
+        return _emit_evaluator_integrity_failure(stage="rules_upgrade")
+    _emit(result)
+    return int(ExitCode.PASS)
+
+
+def _rules_list_command(args: argparse.Namespace) -> int:
+    try:
+        result = list_rules(
+            default_guardian_home(),
+            profile_id=args.profile,
+        )
+    except (EvaluatorUpgradeSourceError, EvaluatorUpgradeCoverageError) as error:
+        return _emit_evaluator_failure(error, stage="rules_list")
+    except (EvaluatorUpgradeError, GuardianError, OSError, ValueError):
+        return _emit_evaluator_integrity_failure(stage="rules_list")
+    _emit(result)
+    if result["evaluatorState"] in {"pre_activation", "legacy_v1"}:
+        return int(ExitCode.PASS)
+    return _exit_for_status(str(result["status"]))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="guardian")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -928,9 +1037,35 @@ def build_parser() -> argparse.ArgumentParser:
 
     rules = commands.add_parser(
         "rules",
-        help="Validate local usage rules as a non-authoritative preview.",
+        help="Inspect, validate, or explicitly authorize local usage-rule evaluation.",
     )
     rules_commands = rules.add_subparsers(dest="rules_command", required=True)
+    rules_list = rules_commands.add_parser(
+        "list",
+        help="List effective usage-rule capability without changing local state.",
+    )
+    rules_list.add_argument("--profile", required=True)
+    rules_list.set_defaults(handler=_rules_list_command)
+    rules_upgrade = rules_commands.add_parser(
+        "upgrade",
+        help="Preview or apply explicit evaluator-v2 authorization.",
+    )
+    rules_upgrade_commands = rules_upgrade.add_subparsers(
+        dest="rules_upgrade_command",
+        required=True,
+    )
+    rules_upgrade_preview = rules_upgrade_commands.add_parser(
+        "preview",
+        help="Return the exact evaluator-v2 permission binding without writes.",
+    )
+    rules_upgrade_preview.add_argument("--profile", required=True)
+    rules_upgrade_preview.set_defaults(handler=_rules_upgrade_preview_command)
+    rules_upgrade_apply = rules_upgrade_commands.add_parser(
+        "apply",
+        help="Apply one exact granted evaluator-v2 permission bundle.",
+    )
+    rules_upgrade_apply.add_argument("--input", required=True)
+    rules_upgrade_apply.set_defaults(handler=_rules_upgrade_apply_command)
     rules_validate = rules_commands.add_parser("validate")
     rules_validate.add_argument(
         "--format",

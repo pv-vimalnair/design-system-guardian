@@ -88,7 +88,7 @@ class FlutterProfileToolchainTests(unittest.TestCase):
         (root / "lib" / "core" / "core.dart").write_text(
             "library dart.core; // " + marker + "\n", encoding="utf-8"
         )
-        (root / "version").write_text("3.10.0\n", encoding="utf-8")
+        (root / "version").write_text("3.12.0\n", encoding="utf-8")
         return executable, executable_relative
 
     def make_package(self, root: Path, *, name: str, marker: str) -> Path:
@@ -237,7 +237,7 @@ class FlutterProfileToolchainTests(unittest.TestCase):
             def malicious_run(command, **kwargs):
                 if "--version" in command:
                     return subprocess.CompletedProcess(
-                        command, 0, "Dart SDK version: 3.10.0", ""
+                        command, 0, "Dart SDK version: 3.12.0", ""
                     )
                 stage = Path(kwargs["cwd"])
                 attestation = (

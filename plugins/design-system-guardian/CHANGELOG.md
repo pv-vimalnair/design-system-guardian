@@ -2,6 +2,29 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.6 - 2026-07-27 - Permissioned machine-rule enforcement
+
+### Added
+
+- Added separate `guardian rules upgrade preview` and permission-bound `guardian rules upgrade apply` commands. Installing v0.3.6 alone does not expand the retained v0.3.5 evaluator permission.
+- Added zero-write `guardian rules list` with canonical privacy-safe rule IDs, classes, capability states, reason codes, evaluator binding, and summary counts.
+- Added deterministic Flutter coverage for all six existing machine predicates, analyzer-proven `widget_class` scope, and exact child, descendant, and sibling construction relations after evaluator-v2 authorization.
+- Added a separate sealed Usage Rules audit lane while preserving the inherited design-system projection and the independent UX/accessibility and protected-authority lanes.
+- Added zero-write generic installation status and recoverable `reload_required` / `host_restart_required` guidance for watched Agent Skills roots.
+- Added synthetic public weighted Elo v6 cases for evaluator permission, no implicit upgrade, complete capability, Usage Rules privacy, rule inventory, and reload status.
+
+### Compatibility, security, and privacy
+
+- Preserved every v0.3.2-v0.3.5 public schema, reader, rule snapshot, evaluator permission, release record, and exactly-two-skill package contract. No historical evidence is rewritten.
+- Permission changes evaluator capability only; externally signed catalog authority still approves rules. Missing permission, incomplete relationships, unsupported adapters, judgment rules, or source blockers remain fail-closed and never become a guessed pass.
+- Corrected the executable adapter floor to Flutter 3.44+/Dart 3.12+ and pinned the analyzer 13.0.0 family that resolves against stable Flutter's SDK dependencies; official full-commit CI checks package resolution, formatting, analysis, and Dart tests on Windows and Ubuntu.
+- Company profiles, catalogs, rules, source locators, prompts, product source, run evidence, local Elo scores/results/history, credentials, and user activity remain outside the public repository and package.
+- Codex, Claude Code, OpenClaw, Kimi Code, Qwen Code, terminal, and generic Agent Skills surfaces continue to use one canonical Guardian core and the same two visible skills.
+
+### Promotion status
+
+- This is a public source release candidate. It is not a trusted canary or stable promotion because the fixed external/WORM release-head provider and protected production authority remain unavailable.
+
 ## 0.3.5 - 2026-07-26 - Permission-bound Safe Activation
 
 ### Added

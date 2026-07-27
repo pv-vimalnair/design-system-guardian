@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.invalid/schemas/flutter-adapter-result-v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "adapter",
+    "adapterVersion",
+    "status",
+    "binding",
+    "analysis",
+    "diagnostics",
+    "coverage",
+    "suppressionScan",
+    "productionReady"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "adapter": {"const": "flutter"},
+    "adapterVersion": {"const": "0.1.0"},
+    "status": {
+      "enum": ["allowed", "invalid", "unsupported", "not_assessed"]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "policyDigest",
+        "snapshotId",
+        "sourceCutDigest",
+        "configDigest"
+      ],
+      "properties": {
+        "profileId": {"type": "string", "minLength": 1},
+        "policyDigest": {"$ref": "#/$defs/digest"},
+        "snapshotId": {"type": "string", "minLength": 1},
+        "sourceCutDigest": {"$ref": "#/$defs/digest"},
+        "configDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "complete", "assessedFiles", "totalFiles"],
+      "properties": {
+        "method": {"const": "dart_analyzer_ast"},
+        "complete": {"type": "boolean"},
+        "assessedFiles": {"type": "integer", "minimum": 0},
+        "totalFiles": {"type": "integer", "minimum": 1}
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diagnostic"}
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "components",
+        "icons",
+        "colors",
+        "typography",
+        "spacing",
+        "radii",
+        "effects",
+        "motion"
+      ],
+      "properties": {
+        "components": {"$ref": "#/$defs/coverageLane"},
+        "icons": {"$ref": "#/$defs/coverageLane"},
+        "colors": {"$ref": "#/$defs/coverageLane"},
+        "typography": {"$ref": "#/$defs/coverageLane"},
+        "spacing": {"$ref": "#/$defs/coverageLane"},
+        "radii": {"$ref": "#/$defs/coverageLane"},
+        "effects": {"$ref": "#/$defs/coverageLane"},
+        "motion": {"$ref": "#/$defs/coverageLane"}
+      }
+    },
+    "suppressionScan": {"$ref": "suppression-scan.schema.json"},
+    "productionReady": {"type": "boolean"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "code",
+        "path",
+        "line",
+        "column",
+        "length",
+        "message"
+      ],
+      "properties": {
+        "severity": {"enum": ["INFO", "WARNING", "ERROR"]},
+        "code": {"type": "string", "pattern": "^(design_system_guardian_flutter/)?guardian_[a-z0-9_]+$"},
+        "path": {"type": "string", "minLength": 1},
+        "line": {"type": "integer", "minimum": 1},
+        "column": {"type": "integer", "minimum": 1},
+        "length": {"type": "integer", "minimum": 0},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "coverageLane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "method", "diagnosticCount"],
+      "properties": {
+        "status": {"enum": ["allowed", "invalid", "unsupported", "not_assessed"]},
+        "method": {"const": "dart_analyzer_ast"},
+        "diagnosticCount": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

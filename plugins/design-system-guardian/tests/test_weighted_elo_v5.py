@@ -65,8 +65,29 @@ class WeightedEloV5EvolutionTest(unittest.TestCase):
         from guardian_core.canonical import sha256_digest
         from guardian_core.elo import _current_score, _validate_suite_transition, _worker_digest
 
-        suite = _json(ROOT / "benchmarks" / "elo-suite.json")
+        current_suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         current = _json(ROOT / "benchmarks" / "current-score.json")
+        self.assertGreaterEqual(current_suite["suiteVersion"], 5)
+        v5_module_ids = {
+            "guardian-public-cases-v1",
+            "guardian-public-cases-v3",
+            "guardian-public-cases-v4",
+            V5_MODULE_ID,
+        }
+        # Reconstruct the exact v5 projection so later additive suites cannot
+        # weaken or rewrite the authenticated v5 transition.
+        suite = copy.deepcopy(current_suite)
+        suite["suiteVersion"] = 5
+        suite["caseModules"] = [
+            item
+            for item in suite["caseModules"]
+            if item["moduleId"] in v5_module_ids
+        ]
+        suite["achievements"] = [
+            item
+            for item in suite["achievements"]
+            if item["caseModuleId"] in v5_module_ids
+        ]
         self.assertEqual(suite["suiteVersion"], 5)
 
         modules = {item["moduleId"]: item for item in suite["caseModules"]}

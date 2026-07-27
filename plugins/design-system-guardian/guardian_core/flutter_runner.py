@@ -94,6 +94,18 @@ _CONFIG_V2_KEYS = _CONFIG_V1_KEYS | {
     "activeUsageRules",
     "usageRuleCoverage",
 }
+_CONFIG_V3_KEYS = _CONFIG_V2_KEYS | {
+    "runId",
+    "evaluatorId",
+    "evaluatorContractDigest",
+    "authorizationDigest",
+}
+_USAGE_NOT_ASSESSED_CODE = "guardian_usage_rule_not_assessed"
+_USAGE_NOT_ASSESSED_MESSAGE = re.compile(
+    r"^DSG_USAGE_RULE_NOT_ASSESSED_V1 "
+    r"ruleId=([a-z][a-z0-9]*(?:[._-][a-z0-9]+)*) "
+    r"reasonCode=incomplete_construction_graph$"
+)
 _GUARDIAN_CODES = {
     "guardian_unapproved_visual_primitive": ("components",),
     "guardian_unapproved_widget": ("components",),
@@ -250,6 +262,8 @@ def _validate_config(path: Path, root: Path) -> tuple[dict[str, Any], bytes]:
         if schema_version == 1
         else _CONFIG_V2_KEYS
         if schema_version == 2
+        else _CONFIG_V3_KEYS
+        if schema_version == 3
         else None
     )
     if expected_keys is None or set(config) != expected_keys:
@@ -283,7 +297,7 @@ def _validate_config(path: Path, root: Path) -> tuple[dict[str, Any], bytes]:
         raise FlutterRunnerIntegrityError(
             f"Flutter adapter package provenance is invalid: {error}"
         ) from error
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         try:
             from .flutter_config import FlutterConfigError, _validate_config_document
 
@@ -313,6 +327,10 @@ def _validate_run_pin(run_pin: Mapping[str, Any], config: Mapping[str, Any]) -> 
             raise FlutterRunnerIntegrityError(f"Guardian run pin {field} differs from adapter config.")
     if sha256_digest(run_pin["sourceCut"]) != config["sourceCutDigest"]:
         raise FlutterRunnerIntegrityError("Guardian run pin sourceCut differs from adapter config.")
+    if config.get("schemaVersion") == 3 and run_pin["runId"] != config["runId"]:
+        raise FlutterRunnerIntegrityError(
+            "Guardian run pin runId differs from evaluator-v2 adapter config."
+        )
     return json.loads(canonical_json_bytes(dict(run_pin)))
 
 
@@ -474,8 +492,8 @@ def _probe_analyzer_version(
             "Staged profile-bound Dart runtime did not report a compatible version."
         )
     major, minor = (int(match.group(1)), int(match.group(2)))
-    if (major, minor) < (3, 10):
-        raise FlutterRunnerUnsupportedError("Dart 3.10 or newer is required for supported analyzer plugins.")
+    if (major, minor) < (3, 12):
+        raise FlutterRunnerUnsupportedError("Dart 3.12 or newer is required by the stable Flutter 3.44 adapter line.")
     return sha256_digest(version_text.encode("utf-8"))
 
 
@@ -506,7 +524,7 @@ def _stage_project(root: Path, stage: Path, files: Sequence[Mapping[str, str]], 
         shutil.copyfile(original_options, stage / "analysis_options.guardian-base.yaml")
         include = "include: analysis_options.guardian-base.yaml\n"
     diagnostics = "\n".join(
-        f"      {code}: true" for code in sorted((*_GUARDIAN_CODES, "guardian_compilation_unit_attestation", "guardian_invalid_config_binding"))
+        f"      {code}: true" for code in sorted((*_GUARDIAN_CODES, _USAGE_NOT_ASSESSED_CODE, "guardian_compilation_unit_attestation", "guardian_invalid_config_binding"))
     )
     options = (
         include
@@ -546,24 +564,50 @@ def _parse_machine_output(
     stage: Path,
     files: Sequence[Mapping[str, str]],
     config_digest: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    allow_usage_markers: bool = False,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     expected_paths = {item["path"] for item in files}
     attestations: dict[str, int] = {}
     guardian: list[dict[str, Any]] = []
+    usage_markers: list[dict[str, Any]] = []
     other: list[dict[str, Any]] = []
     for raw_line in output.splitlines():
         if not raw_line:
             continue
         fields = raw_line.split("|", 7)
         if len(fields) != 8:
-            raise FlutterRunnerIntegrityError("Analyzer machine output contains a malformed record.")
-        severity, diagnostic_type, raw_code, raw_path, line, column, length, message = fields
+            raise FlutterRunnerIntegrityError(
+                "Analyzer machine output contains a malformed record."
+            )
+        (
+            severity,
+            diagnostic_type,
+            raw_code,
+            raw_path,
+            line,
+            column,
+            length,
+            message,
+        ) = fields
         try:
             numeric = (int(line), int(column), int(length))
         except ValueError as error:
-            raise FlutterRunnerIntegrityError("Analyzer machine output location is malformed.") from error
-        if severity not in {"INFO", "WARNING", "ERROR"} or numeric[0] < 1 or numeric[1] < 1 or numeric[2] < 0:
-            raise FlutterRunnerIntegrityError("Analyzer machine output location or severity is invalid.")
+            raise FlutterRunnerIntegrityError(
+                "Analyzer machine output location is malformed."
+            ) from error
+        if (
+            severity not in {"INFO", "WARNING", "ERROR"}
+            or numeric[0] < 1
+            or numeric[1] < 1
+            or numeric[2] < 0
+        ):
+            raise FlutterRunnerIntegrityError(
+                "Analyzer machine output location or severity is invalid."
+            )
         relative = _relative_diagnostic_path(raw_path, stage)
         code = raw_code.lower()
         record = {
@@ -579,19 +623,40 @@ def _parse_machine_output(
         if code == namespace + "guardian_compilation_unit_attestation":
             expected_message = ATTESTATION_PREFIX + config_digest
             if message != expected_message:
-                raise FlutterRunnerIntegrityError("Compilation-unit attestation configDigest is mismatched.")
+                raise FlutterRunnerIntegrityError(
+                    "Compilation-unit attestation configDigest is mismatched."
+                )
             if relative not in expected_paths:
-                raise FlutterRunnerIntegrityError("Compilation-unit attestation names an unassessed file.")
+                raise FlutterRunnerIntegrityError(
+                    "Compilation-unit attestation names an unassessed file."
+                )
             attestations[relative] = attestations.get(relative, 0) + 1
             if attestations[relative] != 1:
-                raise FlutterRunnerIntegrityError("Compilation-unit attestation is duplicated.")
+                raise FlutterRunnerIntegrityError(
+                    "Compilation-unit attestation is duplicated."
+                )
             continue
         if code.startswith(namespace):
             short = code[len(namespace) :]
             if short == "guardian_invalid_config_binding":
-                raise FlutterRunnerIntegrityError("Analyzer reported invalid Guardian config binding.")
+                raise FlutterRunnerIntegrityError(
+                    "Analyzer reported invalid Guardian config binding."
+                )
+            if short == _USAGE_NOT_ASSESSED_CODE:
+                if (
+                    not allow_usage_markers
+                    or _USAGE_NOT_ASSESSED_MESSAGE.fullmatch(message) is None
+                ):
+                    raise FlutterRunnerIntegrityError(
+                        "Analyzer reported invalid usage-rule coverage evidence."
+                    )
+                record["code"] = short
+                usage_markers.append(record)
+                continue
             if short not in _GUARDIAN_CODES:
-                raise FlutterRunnerIntegrityError(f"Analyzer reported unknown Guardian diagnostic: {short}.")
+                raise FlutterRunnerIntegrityError(
+                    f"Analyzer reported unknown Guardian diagnostic: {short}."
+                )
             record["code"] = short
             guardian.append(record)
         else:
@@ -603,10 +668,20 @@ def _parse_machine_output(
             "Compilation-unit attestation is missing for: " + ", ".join(missing)
         )
     if any(item["severity"] == "ERROR" for item in other):
-        raise FlutterRunnerIntegrityError("A non-Guardian analyzer error makes file coverage incomplete.")
-    guardian.sort(key=lambda item: (item["path"], item["line"], item["column"], item["code"], item["message"]))
+        raise FlutterRunnerIntegrityError(
+            "A non-Guardian analyzer error makes file coverage incomplete."
+        )
+    diagnostic_key = lambda item: (
+        item["path"],
+        item["line"],
+        item["column"],
+        item["code"],
+        item["message"],
+    )
+    guardian.sort(key=diagnostic_key)
+    usage_markers.sort(key=diagnostic_key)
     other.sort(key=canonical_json_bytes)
-    return guardian, other
+    return guardian, other, usage_markers
 
 
 def _binding(config: Mapping[str, Any]) -> dict[str, str]:
@@ -690,11 +765,12 @@ def run_flutter_analysis(
             )
         if completed.stderr.strip():
             raise FlutterRunnerIntegrityError("Dart analyzer wrote unexpected stderr; coverage is not trusted.")
-        diagnostics, non_guardian = _parse_machine_output(
+        diagnostics, non_guardian, usage_markers = _parse_machine_output(
             completed.stdout,
             stage=stage,
             files=files,
             config_digest=config["configDigest"],
+            allow_usage_markers=config.get("schemaVersion") == 3,
         )
 
     if enumerate_relevant_dart_files(root) != files:
@@ -723,9 +799,15 @@ def run_flutter_analysis(
     for diagnostic in diagnostics:
         for category in _GUARDIAN_CODES[diagnostic["code"]]:
             counts[category] += 1
-    usage_coverage_incomplete = (
-        config.get("schemaVersion") == 2
+    usage_config_incomplete = (
+        config.get("schemaVersion") in {2, 3}
         and config["usageRuleCoverage"]["status"] == "incomplete"
+    )
+    usage_runtime_incomplete = (
+        config.get("schemaVersion") == 3 and bool(usage_markers)
+    )
+    usage_coverage_incomplete = (
+        usage_config_incomplete or usage_runtime_incomplete
     )
     coverage = {
         category: {
@@ -739,13 +821,23 @@ def run_flutter_analysis(
         }
         for category in AUDIT_CATEGORIES
     }
+    adapter_diagnostics = sorted(
+        [*diagnostics, *usage_markers],
+        key=lambda item: (
+            item["path"],
+            item["line"],
+            item["column"],
+            item["code"],
+            item["message"],
+        ),
+    )
     production_ready = (
-        not diagnostics
+        not adapter_diagnostics
         and not suppression_scan["findings"]
         and not usage_coverage_incomplete
     )
     adapter_result = {
-        "schemaVersion": 1,
+        "schemaVersion": 2 if config.get("schemaVersion") == 3 else 1,
         "adapter": "flutter",
         "adapterVersion": _ADAPTER_VERSION,
         "status": "not_assessed" if usage_coverage_incomplete else "allowed",
@@ -756,7 +848,7 @@ def run_flutter_analysis(
             "assessedFiles": len(files),
             "totalFiles": len(files),
         },
-        "diagnostics": diagnostics,
+        "diagnostics": adapter_diagnostics,
         "coverage": coverage,
         "suppressionScan": suppression_scan,
         "productionReady": production_ready,

@@ -1,6 +1,6 @@
 # Installing on Agent Hosts
 
-Design System Guardian has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the integrity-bound generic installer.
+Design System Guardian 0.3.6 has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the integrity-bound generic installer.
 
 Review and pin the full Git commit before installation. A movable branch name is convenient for discovery but is not release authority.
 
@@ -21,7 +21,7 @@ codex plugin marketplace add pv-vimalnair/design-system-guardian --ref main --js
 codex plugin add design-system-guardian@pv-vimalnair-design-system-guardian --json
 ```
 
-Start a new task and confirm that only `build-with-design-system` and `audit-design-system` are exposed.
+Start a new task and confirm version `0.3.6` and only `build-with-design-system` and `audit-design-system` are exposed. An install command without this read-back is not a completed reload.
 
 ## Claude Code
 
@@ -30,7 +30,7 @@ claude plugin marketplace add pv-vimalnair/design-system-guardian
 claude plugin install design-system-guardian@pv-vimalnair-design-system-guardian
 ```
 
-Start a new Claude Code session. The same two skills are namespaced under `design-system-guardian`.
+Start a new Claude Code session. Confirm version `0.3.6`; the same two skills must be namespaced under `design-system-guardian`.
 
 ## OpenClaw
 
@@ -42,7 +42,7 @@ openclaw plugins install design-system-guardian --marketplace pv-vimalnair/desig
 openclaw plugins inspect design-system-guardian
 ```
 
-Restart the Gateway or start a new session. Inspection must report a compatible bundle with exactly the two Guardian skills.
+Restart the Gateway or start a new session. Inspection must report version `0.3.6` and a compatible bundle with exactly the two Guardian skills.
 
 ## Kimi Code
 
@@ -54,7 +54,7 @@ From Kimi Code, install the public GitHub repository and reload:
 /plugins info design-system-guardian
 ```
 
-The repository-root `kimi.plugin.json` points to the same nested canonical skills and Guardian package.
+The repository-root `kimi.plugin.json` points to version `0.3.6`, the same nested canonical skills, and the same Guardian package. `/reload` plus `/plugins info` is required read-back.
 
 ## Qwen Code, terminal, Deep Code, and generic Agent Skills hosts
 
@@ -112,7 +112,10 @@ The agent, not the ordinary user, runs these commands internally:
 4. Only after permission, the agent creates the exact digest-bound permitted bundle and runs `guardian setup apply --input <permitted-bundle.json>`.
 5. The agent reruns `guardian setup status --profile <id>` and continues only when the result is ready.
 6. When a complete externally signed catalog v2 carries approved usage rules, the agent runs `guardian rules activate preview`, explains the exact activation, and asks permission.
-7. Only after permission, the agent runs `guardian rules activate apply` with the exact digest-bound bundle. Permission enables the evaluator; it does not approve rules.
+7. Only after permission, the agent runs `guardian rules activate apply` with the exact digest-bound bundle. Permission enables the retained evaluator; it does not approve rules.
+8. The agent runs `guardian rules list --profile <id>` read-only and explains the effective rule capability without exposing rule prose or company content.
+9. If v2 evaluator coverage is needed, the agent runs `guardian rules upgrade preview --profile <id>` without writing, explains that Guardian can check all six approved machine-rule types including `widget_class`, and asks whether it may save that exact evaluator permission locally.
+10. Only after permission, the agent runs `guardian rules upgrade apply --input <permission-bound-bundle.json>`, reruns `guardian rules list`, and keeps design-system, Usage Rules, UX/accessibility, and protected-authority results separate.
 
 The candidate must contain the catalog authority public key path, one exact profile, and one signed complete catalog snapshot. Guardian cannot safely generate a company's catalog authority or decide that discovered Figma assets are approved. An authorized design-system owner prepares that candidate once; users do not install a second Guardian copy or manually copy a policy seal.
 
@@ -160,12 +163,24 @@ Kimi Code: rerun the repository install, then reload and inspect.
 /plugins info design-system-guardian
 ```
 
-For a generic install, check out the reviewed new commit and rerun the same installer command with `--replace`.
+For a generic install, check out the reviewed new commit and inspect the exact target without writing:
+
+```powershell
+python plugins/design-system-guardian/scripts/install_agent_skills.py `
+  --target-root "$HOME\.agents\skills" `
+  --status
+```
+
+Status is one of `current`, `update_required`, `reload_required`, or `invalid`. `current` means the version, package, policy, launcher, both skill folders, binding, and recorded runtime all match the reviewed candidate. Any other status is not current. Then rerun the same installer command with `--replace` only when an update is required.
+
 - The installer replaces only an intact prior install from the same package root and refuses unknown or locally modified skill folders.
 - A normal update rejects a lower SemVer, malformed version, partial install, or divergent two-skill version before replacing either skill.
 - A journal rolls back prepared replacements or finishes committed cleanup after interruption.
 - Transient staging remains beside, never inside, the watched live skill root.
 - Rerun the installer after a Python upgrade so its exact path and digest are rebound.
+- If atomic promotion is blocked by a Windows watcher, Guardian restores the prior intact installation and returns `reload_required` with `host_restart_required`. Close or restart only the named agent host, rerun the same verified `--replace` command, start a new task or session, and rerun `--status`. Guardian never kills a process or overwrites the watched root in place.
+
+After every native or generic update, read back version `0.3.6` and exactly the two canonical skills. Do not claim a host is updated while it reports an older version, `update_required`, `reload_required`, or `invalid`.
 
 Every update must preserve the immutable policy digest. A missing or changed policy, package, interpreter, skill, launcher, or binding blocks execution. Updates never include local profiles, catalogs, Figma observations, audit history, prompts, product source, credentials, or user activity.
 

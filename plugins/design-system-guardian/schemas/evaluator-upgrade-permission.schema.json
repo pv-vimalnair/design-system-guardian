@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/evaluator-upgrade-permission.schema.json",
+  "title": "Design System Guardian evaluator-v2 upgrade permission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profileId", "permission"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "profileId": {"$ref": "snapshot.schema.json#/$defs/profileId"},
+    "permission": {"$ref": "#/$defs/permission"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "capabilityMatrix": {
+      "const": {
+        "predicates": [
+          {"predicate": "forbidden_identity_in_scope", "relations": [], "scopes": ["compilation_unit", "widget_class"]},
+          {"predicate": "max_instances_per_scope", "relations": [], "scopes": ["compilation_unit", "widget_class"]},
+          {"predicate": "forbidden_nesting", "relations": [], "scopes": []},
+          {"predicate": "required_companion", "relations": ["child", "descendant", "sibling"], "scopes": []},
+          {"predicate": "allowed_parents", "relations": [], "scopes": []},
+          {"predicate": "variant_context", "relations": [], "scopes": ["compilation_unit", "widget_class"]}
+        ],
+        "relations": ["child", "descendant", "sibling"],
+        "scopes": ["compilation_unit", "widget_class"]
+      }
+    },
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "authorizationSequence", "previousAuthorizationDigest",
+        "profileId", "profileDigest", "policyDigest", "ruleSnapshotId",
+        "ruleSnapshotApprovalSequence", "rulesDigest", "sourceCutDigest",
+        "activationPermissionDigest", "catalogAuthorityKeyId", "previousEvaluatorId",
+        "targetEvaluatorId", "evaluatorContractDigest", "capabilityMatrix",
+        "namespaceTarget", "targetAuthorizationSchemaVersion", "granted"
+      ],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "authorizationSequence": {"const": 1},
+        "previousAuthorizationDigest": {"const": null},
+        "profileId": {"$ref": "snapshot.schema.json#/$defs/profileId"},
+        "profileDigest": {"$ref": "#/$defs/digest"},
+        "policyDigest": {"$ref": "#/$defs/digest"},
+        "ruleSnapshotId": {"$ref": "#/$defs/digest"},
+        "ruleSnapshotApprovalSequence": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+        "rulesDigest": {"$ref": "#/$defs/digest"},
+        "sourceCutDigest": {"$ref": "#/$defs/digest"},
+        "activationPermissionDigest": {"$ref": "#/$defs/digest"},
+        "catalogAuthorityKeyId": {"$ref": "#/$defs/digest"},
+        "previousEvaluatorId": {"const": "guardian-flutter-usage-rules-v1"},
+        "targetEvaluatorId": {"const": "guardian-flutter-usage-rules-v2"},
+        "evaluatorContractDigest": {"const": "24b38e5b0a7ffe35da9cb368613c693e42e95937d599922491aac2fced411846"},
+        "capabilityMatrix": {"$ref": "#/$defs/capabilityMatrix"},
+        "namespaceTarget": {"const": "evaluator-authorizations-v1"},
+        "targetAuthorizationSchemaVersion": {"const": 1},
+        "granted": {"type": "boolean"}
+      }
+    }
+  }
+}

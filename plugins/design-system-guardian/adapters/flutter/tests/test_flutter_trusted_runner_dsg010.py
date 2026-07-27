@@ -76,7 +76,12 @@ class FlutterTrustedRunnerTests(unittest.TestCase):
         )
         return project
 
-    def make_config(self, root: Path) -> tuple[Path, dict, dict, Path]:
+    def make_config(
+        self,
+        root: Path,
+        *,
+        schema_version: int = 1,
+    ) -> tuple[Path, dict, dict, Path]:
         executable, toolchain = create_test_dart_sdk(root / "host" / "dart-sdk")
         flutter_root = root / "flutter-package"
         config = {
@@ -101,6 +106,32 @@ class FlutterTrustedRunnerTests(unittest.TestCase):
             },
             "componentVariants": {},
         }
+        if schema_version == 3:
+            config.update(
+                {
+                    "schemaVersion": 3,
+                    "ruleSnapshotId": config["snapshotId"],
+                    "rulesDigest": "7" * 64,
+                    "activeUsageRules": [],
+                    "usageRuleCoverage": {
+                        "status": "incomplete",
+                        "activeRuleIds": [],
+                        "inactive": [
+                            {
+                                "ruleId": "card.judgment",
+                                "reasonCode": "unsupported_rule_class",
+                            }
+                        ],
+                        "informativeRuleIds": [],
+                    },
+                    "runId": "run-001",
+                    "evaluatorId": "guardian-flutter-usage-rules-v2",
+                    "evaluatorContractDigest": (
+                        "24b38e5b0a7ffe35da9cb368613c693e42e95937d599922491aac2fced411846"
+                    ),
+                    "authorizationDigest": "8" * 64,
+                }
+            )
         config["configDigest"] = sha256_digest(config)
         path = root / "host" / "flutter-adapter.json"
         path.parent.mkdir(exist_ok=True)
@@ -130,9 +161,13 @@ class FlutterTrustedRunnerTests(unittest.TestCase):
         attestation_mode: str = "exact",
         extra: str = "",
         analyzer_exit_code: int = 1,
+        config_schema_version: int = 1,
     ) -> dict:
         project = self.make_project(root)
-        config_path, config, run_pin, executable = self.make_config(root)
+        config_path, config, run_pin, executable = self.make_config(
+            root,
+            schema_version=config_schema_version,
+        )
         before = self.tree_digest(project)
 
         def which(name: str) -> str | None:
@@ -146,7 +181,7 @@ class FlutterTrustedRunnerTests(unittest.TestCase):
 
         def invoke(command, **kwargs):
             if "--version" in command:
-                return subprocess.CompletedProcess(command, 0, "Dart SDK version: 3.10.0", "")
+                return subprocess.CompletedProcess(command, 0, "Dart SDK version: 3.12.0", "")
             stage = Path(kwargs["cwd"])
             self.assertNotEqual(stage.resolve(), project.resolve())
             options = (stage / "analysis_options.yaml").read_text(encoding="utf-8")
@@ -249,6 +284,122 @@ class FlutterTrustedRunnerTests(unittest.TestCase):
             ["guardian_unapproved_visual_primitive"],
         )
         self.assertEqual(result["coverage"]["components"]["diagnosticCount"], 1)
+
+    def test_usage_not_assessed_marker_is_separate_runner_evidence(self) -> None:
+        from guardian_core.flutter_runner import _parse_machine_output
+
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory).resolve()
+            source = stage / "lib" / "main.dart"
+            source.parent.mkdir(parents=True)
+            source.write_text("void main() {}\n", encoding="utf-8")
+            config_digest = "a" * 64
+            output = "\n".join(
+                [
+                    (
+                        "WARNING|STATIC_WARNING|"
+                        "design_system_guardian_flutter/"
+                        "guardian_compilation_unit_attestation|"
+                        f"{source}|1|1|1|"
+                        f"{ATTESTATION_PREFIX}{config_digest}"
+                    ),
+                    (
+                        "WARNING|STATIC_WARNING|"
+                        "design_system_guardian_flutter/"
+                        "guardian_usage_rule_not_assessed|"
+                        f"{source}|1|1|4|"
+                        "DSG_USAGE_RULE_NOT_ASSESSED_V1 "
+                        "ruleId=card.maximum "
+                        "reasonCode=incomplete_construction_graph"
+                    ),
+                ]
+            )
+            diagnostics, other, markers = _parse_machine_output(
+                output,
+                stage=stage,
+                files=[{"path": "lib/main.dart", "sha256": "b" * 64}],
+                config_digest=config_digest,
+                allow_usage_markers=True,
+            )
+            self.assertEqual(diagnostics, [])
+            self.assertEqual(other, [])
+            self.assertEqual(
+                [item["code"] for item in markers],
+                ["guardian_usage_rule_not_assessed"],
+            )
+            with self.assertRaisesRegex(
+                FlutterRunnerIntegrityError,
+                "coverage evidence",
+            ):
+                _parse_machine_output(
+                    output,
+                    stage=stage,
+                    files=[{"path": "lib/main.dart", "sha256": "b" * 64}],
+                    config_digest=config_digest,
+                )
+
+    def test_config_v3_runner_result_v2_normalizes_usage_evidence(self) -> None:
+        import importlib.util
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = self.execute(
+                root,
+                config_schema_version=3,
+            )
+            config = json.loads(
+                (root / "host" / "flutter-adapter.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            run_pin = {
+                "schemaVersion": 1,
+                "runId": "run-001",
+                "profileId": config["profileId"],
+                "snapshotId": config["snapshotId"],
+                "policyDigest": config["policyDigest"],
+                "sourceCut": {"figma": "v1"},
+            }
+            tool_path = (
+                PLUGIN_ROOT
+                / "adapters"
+                / "flutter"
+                / "tools"
+                / "guardian_flutter_contract.py"
+            )
+            spec = importlib.util.spec_from_file_location(
+                "guardian_flutter_contract_runner_test",
+                tool_path,
+            )
+            self.assertIsNotNone(spec)
+            self.assertIsNotNone(spec.loader)
+            tool = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(tool)
+            normalized = tool.normalize_flutter_result_to_core(
+                evidence["adapterResult"],
+                config,
+                run_pin,
+            )
+
+        self.assertEqual(evidence["adapterResult"]["schemaVersion"], 2)
+        self.assertEqual(evidence["adapterResult"]["status"], "not_assessed")
+        self.assertEqual(
+            normalized["usageRulesEvidence"]["status"],
+            "not_assessed",
+        )
+        self.assertEqual(
+            normalized["usageRulesEvidence"]["notAssessed"],
+            [
+                {
+                    "ruleId": "card.judgment",
+                    "reasonCode": "unsupported_rule_class",
+                }
+            ],
+        )
+        self.assertEqual(
+            normalized["categories"]["components"]["status"],
+            "not_assessed",
+        )
 
     def test_analyzer_exit_code_outside_documented_range_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

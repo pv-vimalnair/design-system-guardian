@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .audit import AUDIT_CATEGORIES
+from .audit import AUDIT_CATEGORIES, AuditIntegrityError, derive_audit_exit_code
 from .authority import AuthorityIntegrityError, authority_seal, verify_authority_seal
 from .canonical import canonical_json_bytes, read_canonical_json, sha256_digest
 from .enforcement_authority import (
@@ -297,6 +297,7 @@ def _next_action(
     ux_lane: dict[str, Any],
     coverage: dict[str, Any],
     authority_lane: dict[str, Any],
+    usage_lane: dict[str, Any] | None,
 ) -> str:
     """Return one fixed, deterministic action without projecting raw evidence."""
 
@@ -322,6 +323,20 @@ def _next_action(
         )
     if design_status == "conflict":
         return "Resolve the reported design-system conflicts, then run the final audit again."
+
+    if usage_lane is not None:
+        usage_status = usage_lane.get("status")
+        if usage_status == "invalid":
+            return "Repair the invalid Usage Rules evidence, then run the final audit again."
+        if usage_status in {"stale", "source_unavailable", "source_incomplete"}:
+            return "Restore fresh, complete Usage Rules source evidence, then run the final audit again."
+        if usage_status == "conflict":
+            return "Fix the reported Usage Rules violations, then run the final audit again."
+        if usage_status == "unsupported":
+            return "Run Usage Rules with the pinned supported analyzer adapter."
+        if usage_status == "not_assessed":
+            return "Complete every gating Usage Rules assessment, then run the final audit again."
+
     if coverage.get("supported") is not True or coverage.get("complete") is not True:
         return "Complete supported adapter coverage, then run the final audit again."
     if design_status in {"unsupported", "not_assessed"}:
@@ -366,8 +381,18 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
     design_lane = audit.get("designSystemLane")
     ux_lane = audit.get("uxAccessibilityLane")
     coverage = audit.get("coverage")
+    usage_lane = audit.get("usageRulesLane") if audit.get("schemaVersion") == 2 else None
     if not isinstance(design_lane, dict) or not isinstance(ux_lane, dict) or not isinstance(coverage, dict):
         raise RunArtifactIntegrityError("Audit lanes and coverage must be objects.")
+    if audit.get("schemaVersion") == 2:
+        if not isinstance(usage_lane, dict):
+            raise RunArtifactIntegrityError("Usage Rules lane must be an object.")
+        try:
+            derive_audit_exit_code(audit)
+        except AuditIntegrityError as error:
+            raise RunArtifactIntegrityError(
+                f"Usage Rules audit evidence is invalid: {error}"
+            ) from error
     categories = coverage.get("categories")
     if not isinstance(categories, dict) or set(categories) != set(AUDIT_CATEGORIES):
         raise RunArtifactIntegrityError("Readable report requires all exact audit categories.")
@@ -431,6 +456,83 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
                     f"- [{_one_line(item.get('category'))}] "
                     f"{_one_line(item.get('diagnosticId'))}: {_one_line(item.get('message'))}"
                 )
+    if usage_lane is not None:
+        lines.extend(
+            [
+                "",
+                "## Usage Rules compliance lane",
+                "",
+                f"Usage Rules compliance: {_one_line(usage_lane.get('status'))}",
+                f"Evaluator: {_one_line(usage_lane.get('evaluatorId'))}",
+                "",
+                "### Active gating rules",
+                "",
+            ]
+        )
+        active_rule_ids = usage_lane.get("activeRuleIds")
+        assessed_rule_ids = usage_lane.get("assessedRuleIds")
+        violated_rule_ids = usage_lane.get("violatedRuleIds")
+        informative_rule_ids = usage_lane.get("informativeRuleIds")
+        not_assessed = usage_lane.get("notAssessed")
+        usage_diagnostics = usage_lane.get("diagnostics")
+        if not all(
+            isinstance(value, list)
+            for value in (
+                active_rule_ids,
+                assessed_rule_ids,
+                violated_rule_ids,
+                informative_rule_ids,
+                not_assessed,
+                usage_diagnostics,
+            )
+        ):
+            raise RunArtifactIntegrityError(
+                "Usage Rules lists must be canonical arrays."
+            )
+        lines.append(
+            ", ".join(_one_line(item) for item in active_rule_ids)
+            if active_rule_ids
+            else "None."
+        )
+        lines.extend(["", "### Assessed rules", ""])
+        lines.append(
+            ", ".join(_one_line(item) for item in assessed_rule_ids)
+            if assessed_rule_ids
+            else "None."
+        )
+        lines.extend(["", "### Violated rules", ""])
+        if usage_diagnostics:
+            for item in usage_diagnostics:
+                if not isinstance(item, dict):
+                    raise RunArtifactIntegrityError(
+                        "Usage Rules diagnostics must be objects."
+                    )
+                lines.append(
+                    f"- {_one_line(item.get('ruleId'))}: "
+                    f"{_one_line(item.get('reasonCode'))}"
+                )
+        else:
+            lines.append("None.")
+        lines.extend(["", "### Not assessed", ""])
+        if not_assessed:
+            for item in not_assessed:
+                if not isinstance(item, dict):
+                    raise RunArtifactIntegrityError(
+                        "Usage Rules not-assessed entries must be objects."
+                    )
+                lines.append(
+                    f"- {_one_line(item.get('ruleId'))}: "
+                    f"{_one_line(item.get('reasonCode'))}"
+                )
+        else:
+            lines.append("None.")
+        lines.extend(["", "### Informative rules (non-gating)", ""])
+        lines.append(
+            ", ".join(_one_line(item) for item in informative_rule_ids)
+            if informative_rule_ids
+            else "None."
+        )
+
     checks = ux_lane.get("checks")
     if not isinstance(checks, list):
         raise RunArtifactIntegrityError("UX/accessibility checks must be an array.")
@@ -441,7 +543,7 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## UX/accessibility lane",
+            "## UX/accessibility quality lane" if usage_lane is not None else "## UX/accessibility lane",
             "",
             f"UX/accessibility: {_one_line(ux_lane.get('status'))}",
         ]
@@ -484,6 +586,7 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
                 ux_lane=ux_lane,
                 coverage=coverage,
                 authority_lane=authority_lane,
+                usage_lane=usage_lane,
             ),
         ]
     )

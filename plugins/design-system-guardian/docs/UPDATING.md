@@ -8,6 +8,18 @@ Guardian evolves in three separate layers:
 | Company catalog | Each approved source change creates a new immutable snapshot under its one profile. Profiles never blend. |
 | Plugin logic | Reviewed SemVer release, deterministic one-version migration, canary verification, then stable promotion. |
 
+## 0.3.6 release boundary
+
+Version 0.3.6 preserves every v0.3.2-v0.3.5 capability and adds one separately permissioned evaluator-v2 sidecar. Installation alone does not expand v0.3.5 evaluator authority. `guardian rules upgrade preview --profile <id>` performs no writes; apply accepts only the exact permission-bound candidate and writes append-only local authorization evidence without changing rule snapshots or old permissions. Permission enables evaluator semantics and never approves rules or assets.
+
+`guardian rules list --profile <id>` is zero-write in every outcome. It reports the exact rule snapshot, source state, evaluator, rule IDs/classes, capability statuses, fixed reasons, and active/not-assessed/informative counts without printing rule prose, company paths, design content, or user data.
+
+After explicit evaluator-v2 permission, Guardian supports all six existing machine predicates, analyzer-proven `compilation_unit` and `widget_class` scope where defined, and child, descendant, and sibling relations. Judgment rules remain `not_assessed`; informative rules remain non-gating. New audit evidence carries a separate Usage Rules lane and retains the inherited design-system projection. Missing permission, incomplete analysis, disagreement, or source/integrity blockers never produce green.
+
+Generic Agent Skills status is zero-write and returns `current`, `update_required`, `reload_required`, or `invalid`. A Windows watched-root promotion failure restores the prior intact install and returns `reload_required` with `host_restart_required`; close or restart the named host, rerun the same verified update, start a new task or session, and read back version `0.3.6` plus exactly two skills before claiming completion.
+
+All company profiles, catalogs, usage rules, evaluator permissions, run evidence, local Elo scores/results/history, and user content remain local. The public v6 Elo suite contains only synthetic evidence. No v0.3.2-v0.3.5 schema, release entry, permission, score record, or history is rewritten.
+
 ## 0.3.5 release boundary
 
 Version 0.3.5 preserves every v0.3.2-v0.3.4 capability and adds only permission-bound Safe Activation. `guardian rules activate preview` performs no writes. `guardian rules activate apply` accepts only the exact digest-bound permission bundle for a complete catalog v2 already signed by the selected profile's pinned external catalog authority. Permission enables the evaluator; it does not approve rules.
@@ -30,9 +42,11 @@ The public source update does not create automatic routing or protected producti
 
 ## Local development refresh is not a release
 
-Codex may require a build-metadata cachebuster to reload an edited local plugin. Use the plugin-creator `update_plugin_cachebuster.py` helper and reinstall from the configured personal marketplace. That cachebuster is only a local pickup mechanism. It does not advance SemVer precedence, sign an artifact, create channel history, or authorize production. Claude Code, OpenClaw, Kimi Code, and generic Agent Skills installations use their documented host refresh paths instead. See [Installing on Agent Hosts](INSTALLING.md#updating) for exact commands.
+Codex may require a build-metadata cachebuster to reload an edited local plugin. Use the plugin-creator `update_plugin_cachebuster.py` helper and reinstall from the configured personal marketplace. That cachebuster is only a local pickup mechanism. It does not advance SemVer precedence, sign an artifact, create channel history, or authorize production. Claude Code, OpenClaw, Kimi Code, Qwen Code, and generic Agent Skills installations use their documented host refresh paths instead. See [Installing on Agent Hosts](INSTALLING.md#updating) for exact commands.
 
-Keep the Codex, Claude Code, and Kimi Code manifest versions equal to `guardian_core.release.RUNTIME_VERSION`. Start a new task or session after reinstall so skill discovery is refreshed. Validate that exactly `build-with-design-system` and `audit-design-system` appear under the host's normal namespace.
+Keep the Codex, Claude Code, Kimi Code, Flutter package, and generated generic Agent Skills binding versions equal to `guardian_core.release.RUNTIME_VERSION`. For v0.3.6 they must all resolve to `0.3.6`. Start a new task or session after reinstall so skill discovery is refreshed. Validate that exactly `build-with-design-system` and `audit-design-system` appear under the host's normal namespace.
+
+For a generic host, run `python <reviewed-package>/scripts/install_agent_skills.py --target-root <host-skill-root> --status` before and after replacement. `reload_required` with `host_restart_required` means the prior installation was restored but a host still watches the target. Close or restart that exact host, rerun the same verified update, reload or start a new session, and repeat the read-back. Do not report the candidate as installed while status is `update_required`, `reload_required`, or `invalid`.
 
 ## Mandatory clean-public-release check
 
@@ -48,7 +62,7 @@ Any failure blocks publication. Never copy local company data into a release to 
 
 ## Release preparation
 
-This section records the intended future production flow. Version 0.3.5 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
+This section records the intended future production flow. Version 0.3.6 can prepare and externally sign evidence, but its public channel operation is an unconditional blocker and cannot complete step 8.
 
 1. Review the entire change and select the next strict SemVer. Normal promotion must be greater than every normal version previously promoted in that channel, including versions followed by a restoration.
 2. Run the complete unit/adversarial suite, plugin validator, skill validators, Python compilation, schema validation, and whitespace checks.
@@ -57,7 +71,7 @@ This section records the intended future production flow. Version 0.3.5 can prep
 5. Record one full lowercase Git object ID: 40 characters for SHA-1 repositories or 64 for SHA-256 repositories. Abbreviated commits are forbidden.
 6. Create a release manifest conforming to `schemas/release/release-manifest.schema.json`. The signed policy digest must remain `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`.
 7. Have the designated external release authority sign the exact bytes returned by `guardian_core.release.release_signing_payload`. Guardian does not sign and never receives the private key.
-8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.3.5 this call always blocks and accepts no configuration workaround.
+8. After a future reviewed release integrates the fixed provider, supply the signed manifest and exact artifact to `guardian_core.release.promote_release`; that implementation must authenticate latest head and complete monotonic CAS. In version 0.3.6 this call always blocks and accepts no configuration workaround.
 
 The first production enrollment supplies only the external authority's public PEM to `enroll_release_authority`. Enrollment is create-once, and the release key must differ from the pinned catalog approval key. A different key is an integrity failure, not an automatic rotation.
 
@@ -98,7 +112,7 @@ Never edit migration history or a backup in place. Restoration creates a new app
 
 ## Rollback
 
-The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.3.5 always blocks the public rollback call.
+The following procedure is also reserved for a future reviewed release with the fixed provider integrated; version 0.3.6 always blocks the public rollback call.
 
 Rollback is an externally authorized release action, not a file copy or version decrement.
 

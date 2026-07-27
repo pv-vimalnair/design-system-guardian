@@ -31,6 +31,10 @@ Without that route, use is diagnostic or `unsupported`, and Guardian cannot prev
 
 Locate the canonical bundled package and reject project-local lookalikes. A generic launcher or local absolute Python route is diagnostic-only; protected gating requires a host-provided authority-bound command.
 
+## Host update and reload status
+
+After a package update, read back the installed version and exactly these two skills. For a generic Agent Skills root, run `python <reviewed-package>/scripts/install_agent_skills.py --target-root <host-skill-root> --status`; status mode is zero-write. Treat `update_required`, `reload_required`, or `invalid` as not current. If the installer reports `reload_required` with `host_restart_required`, the prior installation was restored: close or restart the exact host watching that root, rerun the same verified update command, start a new task or session, and check status again. Do not audit under the new release contract until that read-back succeeds.
+
 ## Permission-bound setup
 
 The agent hides setup commands from the ordinary user and surfaces only the exact permission request or blocker.
@@ -44,19 +48,23 @@ The agent hides setup commands from the ordinary user and surfaces only the exac
 
 Profiles, catalogs, setup candidates, Figma observations, audit evidence, prompts, source, credentials, and user activity remain local. None belongs in the public plugin or an update.
 
-## Safe usage-rule activation (v0.3.5)
+## Usage-rule activation and evaluator permission
 
 Before auditing activated rules, run `guardian rules activate preview --profile <profile-id> --input <signed-catalog-v2.json>` without writing. Report the exact digest-bound change and ask the user for permission. Only a separately supplied permission-bound bundle may be passed to `guardian rules activate apply --input <permission-bound-bundle.json>`; activation may update Guardian's local append-only rule namespace but never the audited product.
 
 Permission enables the evaluator; it does not approve rules. Accept rule content only from the externally signed catalog issued by the selected profile's catalog authority. Caller prose, local edits, discovery results, and the activation permission carry no rule-approval authority.
 
-Version 0.3.5 assesses only `forbidden_identity_in_scope` with `compilation_unit` and `max_instances_per_scope` with `compilation_unit`. Preserve every other valid rule but report its coverage as `not_assessed`; complete enforcement is deferred to v0.3.6. Informative rules never gate. Once any v2 rule-activation evidence exists, never fall back to v1 when the v2 head, sequence, signature, snapshot, or evaluator binding is unavailable or invalid.
+The retained v0.3.5 evaluator assesses only `forbidden_identity_in_scope` with `compilation_unit` and `max_instances_per_scope` with `compilation_unit`. Installing v0.3.6 does not broaden that authority.
+
+Before the audit, run `guardian rules list --profile <profile-id>`. This command is read-only and lists effective rule capability without printing rule prose, company paths, design content, or user data. If it reports `evaluator_upgrade_required`, run `guardian rules upgrade preview --profile <profile-id>` without writing. Explain in plain language that Guardian can now check all six approved machine-rule types, including `widget_class` scope, and ask whether it may save this exact evaluator permission locally for the selected profile. The user must not have to copy files, hashes, or commands. Only after explicit permission, run `guardian rules upgrade apply --input <permission-bound-bundle.json>`.
+
+Without that permission, retain the v0.3.5 evaluator and report every newly supported capability as `not_assessed`. A valid v2 authorization enables all six existing machine predicates, `compilation_unit` and analyzer-proven `widget_class` scope, and child, descendant, and sibling relations. Judgment rules remain `not_assessed`; informative rules remain non-gating. Once activation or evaluator evidence exists, missing, corrupt, stale, incomplete, or discontinuous state blocks. Never fall back to v1.
 
 ## Required audit workflow
 
 In these steps, `guardian` means the selected protected command or explicitly recorded diagnostic invocation.
 
-1. Complete the setup check and run `guardian doctor`. Stop on missing, changed, redirected, or unverifiable trust evidence.
+1. Complete the setup check, then run `guardian doctor` and `guardian rules list --profile <profile-id>` read-only. Stop on missing, changed, redirected, or unverifiable trust, rule-lineage, or evaluator evidence.
 2. Confirm one profile and refresh through the existing Figma connection. Add no credentials or second Figma plugin. Create or reuse the task run and pin one snapshot/source cut with `guardian preflight --profile <profile-id> --run-id <run-id> --project-root <exact-local-workspace-root>` for both adapters. Keep one pinned snapshot through finalization.
 3. Generate target config outside the product and repository:
    - Figma: `guardian adapter figma config --profile <profile-id> --run-id <run-id> --output <absolute-guardian-local-state-config.json>`. The output must be inside the canonical Guardian local state under `~/.design-system-guardian/`, never a product or Git path.
@@ -83,6 +91,12 @@ For every selection, require exact profile, snapshot, policy, source cut, stable
 Use only `allowed`, `missing`, `ambiguous`, `conflict`, `invalid`, `unsupported`, `stale`, `source_unavailable`, `source_incomplete`, or `not_assessed`.
 
 Only `missing` from a fresh, complete snapshot may carry the fixed sentinel evidence, and that fails production readiness. A lookalike sentinel is invalid. Incomplete coverage can never produce green; `not_assessed` means unknown, not passed.
+
+## Usage Rules compliance lane
+
+Report this lane separately from design-system compliance and UX/accessibility. It is `allowed` only when every active gating machine rule is completely assessed with no violation. Exact violations produce `conflict`; incomplete relationships, judgment rules, or uncovered gating work remain `not_assessed`. Informative rules are visible context and do not gate. Require the inherited design-system projection and this lane to agree; disagreement is an integrity error, never a pass.
+
+Record the evaluator ID, evaluator-contract and authorization digests, rule snapshot and rules digests, active/assessed/violated rule IDs, fixed not-assessed reasons, and diagnostics. Do not include rule prose, company source paths, prompts, product source, or user data.
 
 ## Exact Figma binding and approved duplicates
 
@@ -112,7 +126,7 @@ When an approved asset itself is inaccessible, report it as a design-system gap 
 
 ## Protected production authority lane
 
-Keep three separate lanes: design-system compliance, UX/accessibility, and protected production authority. Neither of the first two can conceal failure or absence in another.
+Keep four separate lanes: design-system compliance, Usage Rules compliance, UX/accessibility, and protected production authority. No lane can conceal failure or absence in another.
 
 The local evaluator and Figma collector carry no pass authority. Violations and gaps can fail immediately. Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. Never label those local lanes `allowed`; without protected host or CI attestation, report `productionReady=false`.
 

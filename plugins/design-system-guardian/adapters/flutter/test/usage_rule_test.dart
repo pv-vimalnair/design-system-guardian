@@ -40,10 +40,12 @@ void main() {
       maximum: 2,
     );
     expect(
-      firstUsageRuleViolationIndex(
-        rule,
-        <String>[approved, similar, approved, approved],
-      ),
+      firstUsageRuleViolationIndex(rule, <String>[
+        approved,
+        similar,
+        approved,
+        approved,
+      ]),
       3,
     );
     expect(
@@ -55,11 +57,11 @@ void main() {
 
 final class _UsageRuleInvocationProbe extends AnalysisRule {
   _UsageRuleInvocationProbe()
-      : super(
-          name: code.name,
-          description:
-              'Exercises exact usage-rule invocation identity resolution.',
-        );
+    : super(
+        name: code.lowerCaseName,
+        description:
+            'Exercises exact usage-rule invocation identity resolution.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_test_usage_rule_invocation',

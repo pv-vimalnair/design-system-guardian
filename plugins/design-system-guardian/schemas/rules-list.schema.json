@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/rules-list.schema.json",
+  "title": "Design System Guardian privacy-safe rule inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "status", "profileId", "ruleSnapshotId", "rulesDigest",
+    "sourceState", "evaluatorState", "evaluatorId", "evaluatorContractDigest",
+    "authorizationDigest", "rules", "summary", "localChangesPerformed",
+    "productionReady"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "status": {"enum": ["allowed", "not_assessed"]},
+    "profileId": {"$ref": "snapshot.schema.json#/$defs/profileId"},
+    "ruleSnapshotId": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "rulesDigest": {"$ref": "snapshot.schema.json#/$defs/digest"},
+    "sourceState": {"enum": ["fresh", "offline_grace"]},
+    "evaluatorState": {"enum": ["pre_activation", "legacy_v1", "authorized_v2"]},
+    "evaluatorId": {
+      "enum": [null, "guardian-flutter-usage-rules-v1", "guardian-flutter-usage-rules-v2"]
+    },
+    "evaluatorContractDigest": {
+      "oneOf": [
+        {"type": "null"},
+        {"const": "24b38e5b0a7ffe35da9cb368613c693e42e95937d599922491aac2fced411846"}
+      ]
+    },
+    "authorizationDigest": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "snapshot.schema.json#/$defs/digest"}
+      ]
+    },
+    "rules": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {"$ref": "#/$defs/rule"}
+    },
+    "summary": {"$ref": "#/$defs/summary"},
+    "localChangesPerformed": {"const": false},
+    "productionReady": {"const": false}
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "ruleClass", "predicate", "capabilityStatus", "reasonCode"],
+      "properties": {
+        "ruleId": {"$ref": "rule.schema.json#/$defs/ruleId"},
+        "ruleClass": {"enum": ["machine", "judgment", "informative"]},
+        "predicate": {
+          "enum": [
+            null, "forbidden_identity_in_scope", "max_instances_per_scope",
+            "forbidden_nesting", "required_companion", "allowed_parents",
+            "variant_context"
+          ]
+        },
+        "capabilityStatus": {"enum": ["active", "not_assessed", "informative"]},
+        "reasonCode": {
+          "enum": [
+            "evaluator_capability_active", "evaluator_upgrade_required",
+            "judgment_rule_not_assessed", "informative_non_gating",
+            "unsupported_evaluator_capability"
+          ]
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active", "notAssessed", "informative"],
+      "properties": {
+        "active": {"type": "integer", "minimum": 0},
+        "notAssessed": {"type": "integer", "minimum": 0},
+        "informative": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

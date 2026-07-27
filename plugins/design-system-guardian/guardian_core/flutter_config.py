@@ -14,6 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import atomic_write_json, canonical_json_bytes, sha256_digest
+from .evaluator_upgrade import (
+    EVALUATOR_CAPABILITY_MATRIX,
+    EVALUATOR_CONTRACT_DIGEST,
+    TARGET_EVALUATOR_ID,
+    EvaluatorUpgradeError,
+    load_evaluator_authorization,
+)
 from .flutter_packages import (
     FlutterPackageProvenanceError,
     derive_approved_packages,
@@ -55,6 +62,12 @@ _CONFIG_V2_KEYS = _CONFIG_V1_KEYS | {
     'activeUsageRules',
     'usageRuleCoverage',
 }
+_CONFIG_V3_KEYS = _CONFIG_V2_KEYS | {
+    "runId",
+    "evaluatorId",
+    "evaluatorContractDigest",
+    "authorizationDigest",
+}
 
 _IDENTITY_CATEGORIES = (
     "colors",
@@ -77,6 +90,7 @@ _TOKEN_TYPE_CATEGORY = {
 }
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
+_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _RULE_ID = re.compile(r'^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$')
 _CODE_IDENTITY = re.compile(
     r"^(?:dart|package):[^#\s]+#[A-Za-z_$][A-Za-z0-9_$.]*$"
@@ -89,9 +103,13 @@ _ACTIVATED_USAGE_CAPABILITIES = [
 ]
 _INACTIVE_USAGE_RULE_REASONS = {
     'identity_not_mapped',
+    'variant_not_mapped',
     'unsupported_predicate_scope',
     'unsupported_rule_class',
 }
+
+_USAGE_SCOPES = {"compilation_unit", "widget_class"}
+_COMPANION_RELATIONS = {"child", "descendant", "sibling"}
 
 
 class FlutterConfigError(ValueError):
@@ -480,6 +498,197 @@ def _compile_usage_rules(
     return active, coverage
 
 
+def _compile_usage_rules_v2(
+    snapshot: Any,
+    approved_widgets: set[str] | list[str] | tuple[str, ...],
+    component_variants: dict[str, dict[str, list[str]]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Compile evaluator-v2 rules from exact catalog-to-code mappings only."""
+
+    if not isinstance(snapshot, dict):
+        raise FlutterConfigError("Verified rule snapshot is malformed.")
+    normalized_widgets = {
+        _exact_code_identity(value, "approved widget identity")
+        for value in approved_widgets
+    }
+    if len(normalized_widgets) != len(approved_widgets):
+        raise FlutterConfigError("Approved widget identities are not unique.")
+    if not isinstance(component_variants, dict):
+        raise FlutterConfigError("Verified component variant mappings are malformed.")
+    constructor_map = _component_rule_symbol_map(snapshot, normalized_widgets)
+    rules = snapshot.get("rules")
+    if not isinstance(rules, list):
+        raise FlutterConfigError("Rule snapshot rules must be an array.")
+    rule_ids = [rule.get("ruleId") if isinstance(rule, dict) else None for rule in rules]
+    if (
+        any(not isinstance(rule_id, str) or _RULE_ID.fullmatch(rule_id) is None for rule_id in rule_ids)
+        or rule_ids != sorted(set(rule_ids))
+    ):
+        raise FlutterConfigError("Rule snapshot rules are not sorted and unique by ruleId.")
+
+    def mapped(identity: Any, *, rule_id: str, label: str) -> list[str] | None:
+        if not isinstance(identity, str) or not identity.strip():
+            raise FlutterConfigError(f"Machine rule {rule_id!r} {label} is invalid.")
+        return copy.deepcopy(constructor_map.get(identity))
+
+    active: list[dict[str, Any]] = []
+    inactive: list[dict[str, str]] = []
+    informative: list[str] = []
+    for rule in rules:
+        rule_id = rule["ruleId"]
+        rule_class = rule.get("class")
+        if rule_class == "informative":
+            informative.append(rule_id)
+            continue
+        if rule_class == "judgment":
+            inactive.append({"ruleId": rule_id, "reasonCode": "unsupported_rule_class"})
+            continue
+        if rule_class != "machine":
+            raise FlutterConfigError(f"Rule {rule_id!r} has an invalid rule class.")
+        predicate = rule.get("predicate")
+        if not isinstance(predicate, dict):
+            raise FlutterConfigError(f"Machine rule {rule_id!r} has no exact predicate.")
+        predicate_type = predicate.get("type")
+        compiled: dict[str, Any] = {"ruleId": rule_id, "predicate": predicate_type}
+        if predicate_type in {"forbidden_identity_in_scope", "max_instances_per_scope"}:
+            expected = {"type", "identity", "scope"}
+            if predicate_type == "max_instances_per_scope":
+                expected.add("max")
+            if set(predicate) != expected or predicate.get("scope") not in _USAGE_SCOPES:
+                raise FlutterConfigError(f"Machine rule {rule_id!r} predicate is malformed.")
+            constructors = mapped(predicate.get("identity"), rule_id=rule_id, label="identity")
+            if not constructors:
+                inactive.append({"ruleId": rule_id, "reasonCode": "identity_not_mapped"})
+                continue
+            compiled.update(
+                {
+                    "scope": predicate["scope"],
+                    "constructorIdentities": constructors,
+                }
+            )
+            if predicate_type == "max_instances_per_scope":
+                maximum = predicate.get("max")
+                if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0:
+                    raise FlutterConfigError(f"Machine rule {rule_id!r} maximum is invalid.")
+                compiled["max"] = maximum
+        elif predicate_type == "forbidden_nesting":
+            if set(predicate) != {"type", "outerIdentity", "innerIdentity"}:
+                raise FlutterConfigError(f"Machine rule {rule_id!r} predicate is malformed.")
+            outer = mapped(predicate.get("outerIdentity"), rule_id=rule_id, label="outerIdentity")
+            inner = mapped(predicate.get("innerIdentity"), rule_id=rule_id, label="innerIdentity")
+            if not outer or not inner:
+                inactive.append({"ruleId": rule_id, "reasonCode": "identity_not_mapped"})
+                continue
+            compiled.update(
+                {
+                    "outerConstructorIdentities": outer,
+                    "innerConstructorIdentities": inner,
+                }
+            )
+        elif predicate_type == "required_companion":
+            if (
+                set(predicate) != {"type", "identity", "companionIdentity", "relation"}
+                or predicate.get("relation") not in _COMPANION_RELATIONS
+            ):
+                raise FlutterConfigError(f"Machine rule {rule_id!r} predicate is malformed.")
+            constructors = mapped(predicate.get("identity"), rule_id=rule_id, label="identity")
+            companions = mapped(
+                predicate.get("companionIdentity"),
+                rule_id=rule_id,
+                label="companionIdentity",
+            )
+            if not constructors or not companions:
+                inactive.append({"ruleId": rule_id, "reasonCode": "identity_not_mapped"})
+                continue
+            compiled.update(
+                {
+                    "constructorIdentities": constructors,
+                    "companionConstructorIdentities": companions,
+                    "relation": predicate["relation"],
+                }
+            )
+        elif predicate_type == "allowed_parents":
+            if set(predicate) != {"type", "identity", "parents"}:
+                raise FlutterConfigError(f"Machine rule {rule_id!r} predicate is malformed.")
+            raw_parents = predicate.get("parents")
+            if (
+                not isinstance(raw_parents, list)
+                or not raw_parents
+                or any(not isinstance(parent, str) or not parent.strip() for parent in raw_parents)
+                or raw_parents != sorted(set(raw_parents))
+            ):
+                raise FlutterConfigError(f"Machine rule {rule_id!r} parents are invalid.")
+            constructors = mapped(predicate.get("identity"), rule_id=rule_id, label="identity")
+            parent_groups = [
+                mapped(parent, rule_id=rule_id, label="parent identity")
+                for parent in raw_parents
+            ]
+            if not constructors or any(not group for group in parent_groups):
+                inactive.append({"ruleId": rule_id, "reasonCode": "identity_not_mapped"})
+                continue
+            parent_constructors = sorted(
+                {identity for group in parent_groups for identity in group or []}
+            )
+            compiled.update(
+                {
+                    "constructorIdentities": constructors,
+                    "parentConstructorIdentities": parent_constructors,
+                }
+            )
+        elif predicate_type == "variant_context":
+            if set(predicate) != {"type", "identity", "variant", "allowedScopes"}:
+                raise FlutterConfigError(f"Machine rule {rule_id!r} predicate is malformed.")
+            allowed_scopes = predicate.get("allowedScopes")
+            if (
+                not isinstance(allowed_scopes, list)
+                or not allowed_scopes
+                or allowed_scopes != sorted(set(allowed_scopes))
+                or any(scope not in _USAGE_SCOPES for scope in allowed_scopes)
+            ):
+                raise FlutterConfigError(f"Machine rule {rule_id!r} allowedScopes are invalid.")
+            constructors = mapped(predicate.get("identity"), rule_id=rule_id, label="identity")
+            raw_variant = predicate.get("variant")
+            if not constructors:
+                inactive.append({"ruleId": rule_id, "reasonCode": "identity_not_mapped"})
+                continue
+            if not isinstance(raw_variant, str) or _CODE_IDENTITY.fullmatch(raw_variant) is None:
+                inactive.append({"ruleId": rule_id, "reasonCode": "variant_not_mapped"})
+                continue
+            matched_properties: set[str] = set()
+            for constructor in constructors:
+                properties = component_variants.get(constructor)
+                if not isinstance(properties, dict):
+                    matched_properties.clear()
+                    break
+                matches = [
+                    property_name
+                    for property_name, identities in properties.items()
+                    if isinstance(identities, list) and raw_variant in identities
+                ]
+                if len(matches) != 1:
+                    matched_properties.clear()
+                    break
+                matched_properties.add(matches[0])
+            if len(matched_properties) != 1:
+                inactive.append({"ruleId": rule_id, "reasonCode": "variant_not_mapped"})
+                continue
+            compiled.update(
+                {
+                    "constructorIdentities": constructors,
+                    "variantProperty": next(iter(matched_properties)),
+                    "variantIdentities": [raw_variant],
+                    "allowedScopes": copy.deepcopy(allowed_scopes),
+                }
+            )
+        else:
+            raise FlutterConfigError(f"Machine rule {rule_id!r} predicate is unsupported.")
+        active.append(compiled)
+    return active, {
+        "status": "incomplete" if inactive else "complete",
+        "activeRuleIds": [item["ruleId"] for item in active],
+        "inactive": inactive,
+        "informativeRuleIds": informative,
+    }
 def _validate_usage_rule_config(
     document: dict[str, Any],
     approved_widgets: list[str],
@@ -569,6 +778,168 @@ def _validate_usage_rule_config(
         raise FlutterConfigError("usageRuleCoverage status differs from inactive evidence.")
 
 
+def _validate_usage_rule_config_v3(
+    document: dict[str, Any],
+    approved_widgets: list[str],
+    component_variants: dict[str, Any],
+) -> None:
+    if document.get("ruleSnapshotId") != document.get("snapshotId"):
+        raise FlutterConfigError("ruleSnapshotId must equal the pinned snapshotId.")
+    for field in ("rulesDigest", "evaluatorContractDigest", "authorizationDigest"):
+        value = document.get(field)
+        if not isinstance(value, str) or _DIGEST.fullmatch(value) is None:
+            raise FlutterConfigError(f"Flutter adapter config {field} is invalid.")
+    if document.get("evaluatorId") != TARGET_EVALUATOR_ID:
+        raise FlutterConfigError("Flutter adapter config evaluatorId is unsupported.")
+    if document.get("evaluatorContractDigest") != EVALUATOR_CONTRACT_DIGEST:
+        raise FlutterConfigError("Flutter adapter evaluator contract is unsupported.")
+    run_id = document.get("runId")
+    if not isinstance(run_id, str) or _RUN_ID.fullmatch(run_id) is None:
+        raise FlutterConfigError("Flutter adapter config runId is invalid.")
+
+    active = document.get("activeUsageRules")
+    if not isinstance(active, list):
+        raise FlutterConfigError("activeUsageRules must be an array.")
+    approved_widget_set = set(approved_widgets)
+    active_ids: list[str] = []
+    for item in active:
+        if not isinstance(item, dict):
+            raise FlutterConfigError("activeUsageRules contains a malformed rule.")
+        predicate = item.get("predicate")
+        expected_by_predicate = {
+            "forbidden_identity_in_scope": {
+                "ruleId", "predicate", "scope", "constructorIdentities",
+            },
+            "max_instances_per_scope": {
+                "ruleId", "predicate", "scope", "constructorIdentities", "max",
+            },
+            "forbidden_nesting": {
+                "ruleId", "predicate", "outerConstructorIdentities",
+                "innerConstructorIdentities",
+            },
+            "required_companion": {
+                "ruleId", "predicate", "constructorIdentities",
+                "companionConstructorIdentities", "relation",
+            },
+            "allowed_parents": {
+                "ruleId", "predicate", "constructorIdentities",
+                "parentConstructorIdentities",
+            },
+            "variant_context": {
+                "ruleId", "predicate", "constructorIdentities", "variantProperty",
+                "variantIdentities", "allowedScopes",
+            },
+        }
+        expected = expected_by_predicate.get(predicate)
+        if expected is None or set(item) != expected:
+            raise FlutterConfigError("activeUsageRules contains an unsupported predicate.")
+        rule_id = item.get("ruleId")
+        if not isinstance(rule_id, str) or _RULE_ID.fullmatch(rule_id) is None:
+            raise FlutterConfigError("activeUsageRules contains an invalid ruleId.")
+
+        identity_fields = {
+            "forbidden_identity_in_scope": ("constructorIdentities",),
+            "max_instances_per_scope": ("constructorIdentities",),
+            "forbidden_nesting": (
+                "outerConstructorIdentities", "innerConstructorIdentities",
+            ),
+            "required_companion": (
+                "constructorIdentities", "companionConstructorIdentities",
+            ),
+            "allowed_parents": (
+                "constructorIdentities", "parentConstructorIdentities",
+            ),
+            "variant_context": ("constructorIdentities", "variantIdentities"),
+        }[predicate]
+        normalized: dict[str, list[str]] = {}
+        for field in identity_fields:
+            normalized[field] = _variant_identity_list(
+                item.get(field), f"activeUsageRules.{rule_id}.{field}"
+            )
+        constructor_fields = [
+            field for field in identity_fields if field != "variantIdentities"
+        ]
+        if any(
+            identity not in approved_widget_set
+            for field in constructor_fields
+            for identity in normalized[field]
+        ):
+            raise FlutterConfigError(
+                "activeUsageRules constructor is not an approved widget identity."
+            )
+
+        if predicate in {"forbidden_identity_in_scope", "max_instances_per_scope"}:
+            if item.get("scope") not in _USAGE_SCOPES:
+                raise FlutterConfigError("activeUsageRules scope is invalid.")
+        if predicate == "max_instances_per_scope":
+            maximum = item.get("max")
+            if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0:
+                raise FlutterConfigError("activeUsageRules maximum is invalid.")
+        if predicate == "required_companion" and item.get("relation") not in _COMPANION_RELATIONS:
+            raise FlutterConfigError("activeUsageRules companion relation is invalid.")
+        if predicate == "variant_context":
+            variant_property = item.get("variantProperty")
+            allowed_scopes = item.get("allowedScopes")
+            if not isinstance(variant_property, str) or not variant_property:
+                raise FlutterConfigError("activeUsageRules variantProperty is invalid.")
+            if (
+                not isinstance(allowed_scopes, list)
+                or not allowed_scopes
+                or allowed_scopes != sorted(set(allowed_scopes))
+                or any(scope not in _USAGE_SCOPES for scope in allowed_scopes)
+            ):
+                raise FlutterConfigError("activeUsageRules allowedScopes are invalid.")
+            for constructor in normalized["constructorIdentities"]:
+                properties = component_variants.get(constructor)
+                mapped = properties.get(variant_property) if isinstance(properties, dict) else None
+                if (
+                    not isinstance(mapped, list)
+                    or any(identity not in mapped for identity in normalized["variantIdentities"])
+                ):
+                    raise FlutterConfigError(
+                        "activeUsageRules variant is not exactly mapped to its constructor."
+                    )
+        active_ids.append(rule_id)
+    if active_ids != sorted(set(active_ids)):
+        raise FlutterConfigError("activeUsageRules is not sorted and unique by ruleId.")
+
+    coverage = document.get("usageRuleCoverage")
+    if not isinstance(coverage, dict) or set(coverage) != {
+        "status", "activeRuleIds", "inactive", "informativeRuleIds",
+    }:
+        raise FlutterConfigError("usageRuleCoverage has unknown or missing fields.")
+    if coverage.get("activeRuleIds") != active_ids:
+        raise FlutterConfigError("usageRuleCoverage activeRuleIds differs from compiled rules.")
+    informative = coverage.get("informativeRuleIds")
+    if (
+        not isinstance(informative, list)
+        or any(not isinstance(item, str) or _RULE_ID.fullmatch(item) is None for item in informative)
+        or informative != sorted(set(informative))
+    ):
+        raise FlutterConfigError("usageRuleCoverage informativeRuleIds is invalid.")
+    inactive = coverage.get("inactive")
+    if not isinstance(inactive, list):
+        raise FlutterConfigError("usageRuleCoverage inactive must be an array.")
+    inactive_ids: list[str] = []
+    for item in inactive:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"ruleId", "reasonCode"}
+            or not isinstance(item.get("ruleId"), str)
+            or _RULE_ID.fullmatch(item["ruleId"]) is None
+            or item.get("reasonCode") not in _INACTIVE_USAGE_RULE_REASONS
+        ):
+            raise FlutterConfigError("usageRuleCoverage contains invalid inactive metadata.")
+        inactive_ids.append(item["ruleId"])
+    if inactive_ids != sorted(set(inactive_ids)):
+        raise FlutterConfigError("usageRuleCoverage inactive rules are not sorted and unique.")
+    all_ids = active_ids + inactive_ids + informative
+    if len(all_ids) != len(set(all_ids)):
+        raise FlutterConfigError("usageRuleCoverage rule classes overlap.")
+    if coverage.get("status") != ("incomplete" if inactive else "complete"):
+        raise FlutterConfigError("usageRuleCoverage status differs from inactive evidence.")
+
+
 def _validate_config_document(document: Any) -> dict[str, Any]:
     if not isinstance(document, dict):
         raise FlutterConfigError("Flutter adapter config must be an object.")
@@ -578,6 +949,8 @@ def _validate_config_document(document: Any) -> dict[str, Any]:
         if schema_version == 1
         else _CONFIG_V2_KEYS
         if schema_version == 2
+        else _CONFIG_V3_KEYS
+        if schema_version == 3
         else None
     )
     if expected_keys is None or set(document) != expected_keys:
@@ -617,6 +990,10 @@ def _validate_config_document(document: Any) -> dict[str, Any]:
             if not isinstance(property_name, str) or not property_name:
                 raise FlutterConfigError("componentVariants property name is invalid.")
             _variant_identity_list(values, f"componentVariants.{widget}.{property_name}")
+    if schema_version == 3:
+        _validate_usage_rule_config_v3(
+            document, approved["widgets"], variants
+        )
     try:
         normalized_approved = validate_approved_package_bindings(
             document.get("approvedPackages"), approved, variants
@@ -707,8 +1084,19 @@ def _generate_flutter_adapter_config_at_home(
     snapshot_schema = snapshot.get("schemaVersion")
     if snapshot_schema not in {1, 2}:
         raise FlutterConfigError("Pinned snapshot schema is unsupported by the Flutter adapter.")
+    evaluator_authorization: dict[str, Any] | None = None
+    if snapshot_schema == 2:
+        try:
+            evaluator_authorization = load_evaluator_authorization(
+                normalized_home, profile_id
+            )
+        except EvaluatorUpgradeError as error:
+            raise FlutterConfigError(
+                f"Evaluator-v2 authorization cannot be verified: {error}"
+            ) from error
+    config_schema = 3 if evaluator_authorization is not None else snapshot_schema
     unsigned = {
-        "schemaVersion": snapshot_schema,
+        "schemaVersion": config_schema,
         "adapter": "flutter",
         "adapterVersion": ADAPTER_VERSION,
         "profileId": pin["profileId"],
@@ -746,15 +1134,44 @@ def _generate_flutter_adapter_config_at_home(
             or rule_evidence.get("sourceComplete") is not True
         ):
             raise FlutterConfigError("Rule source capture is incomplete.")
-        if (
-            not isinstance(rule_validation, dict)
-            or rule_validation.get("status") != "allowed"
-        ):
-            raise FlutterConfigError("Rule validation is not allowed for production analysis.")
-        active_rules, rule_coverage = _compile_usage_rules(
-            snapshot,
-            set(approved_identities["widgets"]),
-        )
+        if not isinstance(rule_validation, dict):
+            raise FlutterConfigError("Rule validation evidence is malformed.")
+        if evaluator_authorization is None:
+            if rule_validation.get("status") != "allowed":
+                raise FlutterConfigError(
+                    "Rule validation is not allowed for production analysis."
+                )
+            active_rules, rule_coverage = _compile_usage_rules(
+                snapshot,
+                set(approved_identities["widgets"]),
+            )
+        else:
+            if rule_validation.get("status") not in {"allowed", "not_assessed"}:
+                raise FlutterConfigError(
+                    "Rule validation is invalid for evaluator-v2 analysis."
+                )
+            if (
+                evaluator_authorization.get("evaluatorId") != TARGET_EVALUATOR_ID
+                or evaluator_authorization.get("evaluatorContractDigest")
+                != EVALUATOR_CONTRACT_DIGEST
+                or evaluator_authorization.get("capabilityMatrix")
+                != EVALUATOR_CAPABILITY_MATRIX
+                or not isinstance(
+                    evaluator_authorization.get("authorizationDigest"), str
+                )
+                or _DIGEST.fullmatch(
+                    evaluator_authorization["authorizationDigest"]
+                )
+                is None
+            ):
+                raise FlutterConfigError(
+                    "Evaluator-v2 authorization does not match the supported contract."
+                )
+            active_rules, rule_coverage = _compile_usage_rules_v2(
+                snapshot,
+                set(approved_identities["widgets"]),
+                component_variants,
+            )
         unsigned.update(
             {
                 "ruleSnapshotId": snapshot_id,
@@ -763,6 +1180,17 @@ def _generate_flutter_adapter_config_at_home(
                 "usageRuleCoverage": rule_coverage,
             }
         )
+        if evaluator_authorization is not None:
+            unsigned.update(
+                {
+                    "runId": pin["runId"],
+                    "evaluatorId": TARGET_EVALUATOR_ID,
+                    "evaluatorContractDigest": EVALUATOR_CONTRACT_DIGEST,
+                    "authorizationDigest": evaluator_authorization[
+                        "authorizationDigest"
+                    ],
+                }
+            )
     config = {**unsigned, "configDigest": sha256_digest(unsigned)}
     return _validate_config_document(config)
 

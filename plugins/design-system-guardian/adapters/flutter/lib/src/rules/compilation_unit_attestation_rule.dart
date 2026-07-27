@@ -14,10 +14,11 @@ import '../config/adapter_config.dart';
 /// warning so an empty diagnostic stream can never impersonate plugin success.
 final class GuardianCompilationUnitAttestationRule extends AnalysisRule {
   GuardianCompilationUnitAttestationRule()
-      : super(
-          name: code.name,
-          description: 'Attests that Guardian analyzed this compilation unit with the pinned config.',
-        );
+    : super(
+        name: code.lowerCaseName,
+        description:
+            'Attests that Guardian analyzed this compilation unit with the pinned config.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_compilation_unit_attestation',
@@ -28,7 +29,10 @@ final class GuardianCompilationUnitAttestationRule extends AnalysisRule {
   LintCode get diagnosticCode => code;
 
   @override
-  void registerNodeProcessors(RuleVisitorRegistry registry, RuleContext context) {
+  void registerNodeProcessors(
+    RuleVisitorRegistry registry,
+    RuleContext context,
+  ) {
     registry.addCompilationUnit(this, _AttestationVisitor(this, context));
   }
 }

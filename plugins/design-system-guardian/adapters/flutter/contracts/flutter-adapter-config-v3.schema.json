@@ -1,0 +1,549 @@
+{
+    "$schema":  "https://json-schema.org/draft/2020-12/schema",
+    "$id":  "https://design-system-guardian.invalid/schemas/flutter-adapter-config-v3.json",
+    "title":  "Design System Guardian Flutter adapter configuration v3",
+    "type":  "object",
+    "additionalProperties":  false,
+    "required":  [
+                     "schemaVersion",
+                     "adapter",
+                     "adapterVersion",
+                     "profileId",
+                     "policyDigest",
+                     "snapshotId",
+                     "sourceCutDigest",
+                     "configDigest",
+                     "toolchain",
+                     "requiredPackages",
+                     "approvedPackages",
+                     "approvedIdentities",
+                     "componentVariants",
+                     "ruleSnapshotId",
+                     "rulesDigest",
+                     "activeUsageRules",
+                     "usageRuleCoverage",
+                     "runId",
+                     "evaluatorId",
+                     "evaluatorContractDigest",
+                     "authorizationDigest"
+                 ],
+    "properties":  {
+                       "schemaVersion":  {
+                                             "const":  3
+                                         },
+                       "adapter":  {
+                                       "const":  "flutter"
+                                   },
+                       "adapterVersion":  {
+                                              "const":  "0.1.0"
+                                          },
+                       "profileId":  {
+                                         "type":  "string",
+                                         "pattern":  "^[a-z0-9][a-z0-9._-]{0,127}$"
+                                     },
+                       "policyDigest":  {
+                                            "$ref":  "#/$defs/digest"
+                                        },
+                       "snapshotId":  {
+                                          "$ref":  "#/$defs/digest"
+                                      },
+                       "sourceCutDigest":  {
+                                               "$ref":  "#/$defs/digest"
+                                           },
+                       "configDigest":  {
+                                            "$ref":  "#/$defs/digest"
+                                        },
+                       "ruleSnapshotId":  {
+                                              "$ref":  "#/$defs/digest"
+                                          },
+                       "rulesDigest":  {
+                                           "$ref":  "#/$defs/digest"
+                                       },
+                       "toolchain":  {
+                                         "$ref":  "#/$defs/toolchain"
+                                     },
+                       "requiredPackages":  {
+                                                "$ref":  "#/$defs/requiredPackages"
+                                            },
+                       "approvedPackages":  {
+                                                "$ref":  "#/$defs/approvedPackages"
+                                            },
+                       "approvedIdentities":  {
+                                                  "$ref":  "#/$defs/approvedIdentities"
+                                              },
+                       "componentVariants":  {
+                                                 "$ref":  "#/$defs/componentVariants"
+                                             },
+                       "activeUsageRules":  {
+                                                "type":  "array",
+                                                "items":  {
+                                                              "oneOf":  [
+                                                                            {
+                                                                                "$ref":  "#/$defs/forbiddenIdentityRule"
+                                                                            },
+                                                                            {
+                                                                                "$ref":  "#/$defs/maxInstancesRule"
+                                                                            },
+                                                                            {
+                                                                                "$ref":  "#/$defs/forbiddenNestingRule"
+                                                                            },
+                                                                            {
+                                                                                "$ref":  "#/$defs/requiredCompanionRule"
+                                                                            },
+                                                                            {
+                                                                                "$ref":  "#/$defs/allowedParentsRule"
+                                                                            },
+                                                                            {
+                                                                                "$ref":  "#/$defs/variantContextRule"
+                                                                            }
+                                                                        ]
+                                                          }
+                                            },
+                       "usageRuleCoverage":  {
+                                                 "$ref":  "#/$defs/usageRuleCoverage"
+                                             },
+                       "runId":  {
+                                     "type":  "string",
+                                     "pattern":  "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                                 },
+                       "evaluatorId":  {
+                                           "const":  "guardian-flutter-usage-rules-v2"
+                                       },
+                       "evaluatorContractDigest":  {
+                                                       "const":  "24b38e5b0a7ffe35da9cb368613c693e42e95937d599922491aac2fced411846"
+                                                   },
+                       "authorizationDigest":  {
+                                                   "$ref":  "#/$defs/digest"
+                                               }
+                   },
+    "$defs":  {
+                  "digest":  {
+                                 "type":  "string",
+                                 "pattern":  "^[0-9a-f]{64}$"
+                             },
+                  "ruleId":  {
+                                 "type":  "string",
+                                 "pattern":  "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+                             },
+                  "identity":  {
+                                   "type":  "string",
+                                   "pattern":  "^(dart|package):[^#]+#[A-Za-z_$][A-Za-z0-9_$.]*$"
+                               },
+                  "identityList":  {
+                                       "type":  "array",
+                                       "uniqueItems":  true,
+                                       "items":  {
+                                                     "$ref":  "#/$defs/identity"
+                                                 }
+                                   },
+                  "identityListNonEmpty":  {
+                                               "type":  "array",
+                                               "minItems":  1,
+                                               "uniqueItems":  true,
+                                               "items":  {
+                                                             "$ref":  "#/$defs/identity"
+                                                         }
+                                           },
+                  "packageBinding":  {
+                                         "type":  "object",
+                                         "additionalProperties":  false,
+                                         "required":  [
+                                                          "contentDigest",
+                                                          "repositoryCommit"
+                                                      ],
+                                         "properties":  {
+                                                            "contentDigest":  {
+                                                                                  "$ref":  "#/$defs/digest"
+                                                                              },
+                                                            "repositoryCommit":  {
+                                                                                     "type":  "string",
+                                                                                     "pattern":  "^([0-9a-f]{40}|[0-9a-f]{64})$"
+                                                                                 }
+                                                        }
+                                     },
+                  "toolchain":  {
+                                    "type":  "object",
+                                    "additionalProperties":  false,
+                                    "required":  [
+                                                     "platformId",
+                                                     "dartSdk"
+                                                 ],
+                                    "properties":  {
+                                                       "platformId":  {
+                                                                          "enum":  [
+                                                                                       "windows-x64",
+                                                                                       "windows-arm64",
+                                                                                       "linux-x64",
+                                                                                       "linux-arm64",
+                                                                                       "macos-x64",
+                                                                                       "macos-arm64"
+                                                                                   ]
+                                                                      },
+                                                       "dartSdk":  {
+                                                                       "type":  "object",
+                                                                       "additionalProperties":  false,
+                                                                       "required":  [
+                                                                                        "contentDigest",
+                                                                                        "executableRelativePath"
+                                                                                    ],
+                                                                       "properties":  {
+                                                                                          "contentDigest":  {
+                                                                                                                "$ref":  "#/$defs/digest"
+                                                                                                            },
+                                                                                          "executableRelativePath":  {
+                                                                                                                         "enum":  [
+                                                                                                                                      "bin/dart.exe",
+                                                                                                                                      "bin/dart"
+                                                                                                                                  ]
+                                                                                                                     }
+                                                                                      }
+                                                                   }
+                                                   },
+                                    "allOf":  [
+                                                  {
+                                                      "if":  {
+                                                                 "properties":  {
+                                                                                    "platformId":  {
+                                                                                                       "pattern":  "^windows-"
+                                                                                                   }
+                                                                                }
+                                                             },
+                                                      "then":  {
+                                                                   "properties":  {
+                                                                                      "dartSdk":  {
+                                                                                                      "properties":  {
+                                                                                                                         "executableRelativePath":  {
+                                                                                                                                                        "const":  "bin/dart.exe"
+                                                                                                                                                    }
+                                                                                                                     }
+                                                                                                  }
+                                                                                  }
+                                                               },
+                                                      "else":  {
+                                                                   "properties":  {
+                                                                                      "dartSdk":  {
+                                                                                                      "properties":  {
+                                                                                                                         "executableRelativePath":  {
+                                                                                                                                                        "const":  "bin/dart"
+                                                                                                                                                    }
+                                                                                                                     }
+                                                                                                  }
+                                                                                  }
+                                                               }
+                                                  }
+                                              ]
+                                },
+                  "requiredPackages":  {
+                                           "type":  "object",
+                                           "required":  [
+                                                            "flutter"
+                                                        ],
+                                           "propertyNames":  {
+                                                                 "type":  "string",
+                                                                 "pattern":  "^(?!design_system_guardian_flutter$)[a-z][a-z0-9_]*$"
+                                                             },
+                                           "additionalProperties":  {
+                                                                        "$ref":  "#/$defs/packageBinding"
+                                                                    }
+                                       },
+                  "approvedPackages":  {
+                                           "type":  "object",
+                                           "propertyNames":  {
+                                                                 "type":  "string",
+                                                                 "pattern":  "^[a-z][a-z0-9_]*$"
+                                                             },
+                                           "additionalProperties":  {
+                                                                        "$ref":  "#/$defs/packageBinding"
+                                                                    }
+                                       },
+                  "approvedIdentities":  {
+                                             "type":  "object",
+                                             "additionalProperties":  false,
+                                             "required":  [
+                                                              "colors",
+                                                              "textStyles",
+                                                              "icons",
+                                                              "dimensions",
+                                                              "effects",
+                                                              "motion",
+                                                              "widgets"
+                                                          ],
+                                             "properties":  {
+                                                                "colors":  {
+                                                                               "$ref":  "#/$defs/identityList"
+                                                                           },
+                                                                "textStyles":  {
+                                                                                   "$ref":  "#/$defs/identityList"
+                                                                               },
+                                                                "icons":  {
+                                                                              "$ref":  "#/$defs/identityList"
+                                                                          },
+                                                                "dimensions":  {
+                                                                                   "$ref":  "#/$defs/identityList"
+                                                                               },
+                                                                "effects":  {
+                                                                                "$ref":  "#/$defs/identityList"
+                                                                            },
+                                                                "motion":  {
+                                                                               "$ref":  "#/$defs/identityList"
+                                                                           },
+                                                                "widgets":  {
+                                                                                "$ref":  "#/$defs/identityList"
+                                                                            }
+                                                            }
+                                         },
+                  "componentVariants":  {
+                                            "type":  "object",
+                                            "propertyNames":  {
+                                                                  "$ref":  "#/$defs/identity"
+                                                              },
+                                            "additionalProperties":  {
+                                                                         "type":  "object",
+                                                                         "minProperties":  1,
+                                                                         "additionalProperties":  {
+                                                                                                      "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                                  }
+                                                                     }
+                                        },
+                  "forbiddenIdentityRule":  {
+                                                "type":  "object",
+                                                "additionalProperties":  false,
+                                                "required":  [
+                                                                 "ruleId",
+                                                                 "predicate",
+                                                                 "scope",
+                                                                 "constructorIdentities"
+                                                             ],
+                                                "properties":  {
+                                                                   "ruleId":  {
+                                                                                  "$ref":  "#/$defs/ruleId"
+                                                                              },
+                                                                   "predicate":  {
+                                                                                     "const":  "forbidden_identity_in_scope"
+                                                                                 },
+                                                                   "scope":  {
+                                                                                 "enum":  [
+                                                                                              "compilation_unit",
+                                                                                              "widget_class"
+                                                                                          ]
+                                                                             },
+                                                                   "constructorIdentities":  {
+                                                                                                 "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                             }
+                                                               }
+                                            },
+                  "maxInstancesRule":  {
+                                           "type":  "object",
+                                           "additionalProperties":  false,
+                                           "required":  [
+                                                            "ruleId",
+                                                            "predicate",
+                                                            "scope",
+                                                            "constructorIdentities",
+                                                            "max"
+                                                        ],
+                                           "properties":  {
+                                                              "ruleId":  {
+                                                                             "$ref":  "#/$defs/ruleId"
+                                                                         },
+                                                              "predicate":  {
+                                                                                "const":  "max_instances_per_scope"
+                                                                            },
+                                                              "scope":  {
+                                                                            "enum":  [
+                                                                                         "compilation_unit",
+                                                                                         "widget_class"
+                                                                                     ]
+                                                                        },
+                                                              "constructorIdentities":  {
+                                                                                            "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                        },
+                                                              "max":  {
+                                                                          "type":  "integer",
+                                                                          "minimum":  0
+                                                                      }
+                                                          }
+                                       },
+                  "inactiveRule":  {
+                                       "type":  "object",
+                                       "additionalProperties":  false,
+                                       "required":  [
+                                                        "ruleId",
+                                                        "reasonCode"
+                                                    ],
+                                       "properties":  {
+                                                          "ruleId":  {
+                                                                         "$ref":  "#/$defs/ruleId"
+                                                                     },
+                                                          "reasonCode":  {
+                                                                             "enum":  [
+                                                                                          "identity_not_mapped",
+                                                                                          "variant_not_mapped",
+                                                                                          "unsupported_predicate_scope",
+                                                                                          "unsupported_rule_class"
+                                                                                      ]
+                                                                         }
+                                                      }
+                                   },
+                  "usageRuleCoverage":  {
+                                            "type":  "object",
+                                            "additionalProperties":  false,
+                                            "required":  [
+                                                             "status",
+                                                             "activeRuleIds",
+                                                             "inactive",
+                                                             "informativeRuleIds"
+                                                         ],
+                                            "properties":  {
+                                                               "status":  {
+                                                                              "enum":  [
+                                                                                           "complete",
+                                                                                           "incomplete"
+                                                                                       ]
+                                                                          },
+                                                               "activeRuleIds":  {
+                                                                                     "type":  "array",
+                                                                                     "uniqueItems":  true,
+                                                                                     "items":  {
+                                                                                                   "$ref":  "#/$defs/ruleId"
+                                                                                               }
+                                                                                 },
+                                                               "inactive":  {
+                                                                                "type":  "array",
+                                                                                "items":  {
+                                                                                              "$ref":  "#/$defs/inactiveRule"
+                                                                                          }
+                                                                            },
+                                                               "informativeRuleIds":  {
+                                                                                          "type":  "array",
+                                                                                          "uniqueItems":  true,
+                                                                                          "items":  {
+                                                                                                        "$ref":  "#/$defs/ruleId"
+                                                                                                    }
+                                                                                      }
+                                                           }
+                                        },
+                  "forbiddenNestingRule":  {
+                                               "type":  "object",
+                                               "additionalProperties":  false,
+                                               "required":  [
+                                                                "ruleId",
+                                                                "predicate",
+                                                                "outerConstructorIdentities",
+                                                                "innerConstructorIdentities"
+                                                            ],
+                                               "properties":  {
+                                                                  "ruleId":  {
+                                                                                 "$ref":  "#/$defs/ruleId"
+                                                                             },
+                                                                  "predicate":  {
+                                                                                    "const":  "forbidden_nesting"
+                                                                                },
+                                                                  "outerConstructorIdentities":  {
+                                                                                                     "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                                 },
+                                                                  "innerConstructorIdentities":  {
+                                                                                                     "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                                 }
+                                                              }
+                                           },
+                  "requiredCompanionRule":  {
+                                                "type":  "object",
+                                                "additionalProperties":  false,
+                                                "required":  [
+                                                                 "ruleId",
+                                                                 "predicate",
+                                                                 "constructorIdentities",
+                                                                 "companionConstructorIdentities",
+                                                                 "relation"
+                                                             ],
+                                                "properties":  {
+                                                                   "ruleId":  {
+                                                                                  "$ref":  "#/$defs/ruleId"
+                                                                              },
+                                                                   "predicate":  {
+                                                                                     "const":  "required_companion"
+                                                                                 },
+                                                                   "constructorIdentities":  {
+                                                                                                 "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                             },
+                                                                   "companionConstructorIdentities":  {
+                                                                                                          "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                                      },
+                                                                   "relation":  {
+                                                                                    "enum":  [
+                                                                                                 "child",
+                                                                                                 "descendant",
+                                                                                                 "sibling"
+                                                                                             ]
+                                                                                }
+                                                               }
+                                            },
+                  "allowedParentsRule":  {
+                                             "type":  "object",
+                                             "additionalProperties":  false,
+                                             "required":  [
+                                                              "ruleId",
+                                                              "predicate",
+                                                              "constructorIdentities",
+                                                              "parentConstructorIdentities"
+                                                          ],
+                                             "properties":  {
+                                                                "ruleId":  {
+                                                                               "$ref":  "#/$defs/ruleId"
+                                                                           },
+                                                                "predicate":  {
+                                                                                  "const":  "allowed_parents"
+                                                                              },
+                                                                "constructorIdentities":  {
+                                                                                              "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                          },
+                                                                "parentConstructorIdentities":  {
+                                                                                                    "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                                }
+                                                            }
+                                         },
+                  "variantContextRule":  {
+                                             "type":  "object",
+                                             "additionalProperties":  false,
+                                             "required":  [
+                                                              "ruleId",
+                                                              "predicate",
+                                                              "constructorIdentities",
+                                                              "variantProperty",
+                                                              "variantIdentities",
+                                                              "allowedScopes"
+                                                          ],
+                                             "properties":  {
+                                                                "ruleId":  {
+                                                                               "$ref":  "#/$defs/ruleId"
+                                                                           },
+                                                                "predicate":  {
+                                                                                  "const":  "variant_context"
+                                                                              },
+                                                                "constructorIdentities":  {
+                                                                                              "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                          },
+                                                                "variantProperty":  {
+                                                                                        "type":  "string",
+                                                                                        "minLength":  1,
+                                                                                        "maxLength":  256
+                                                                                    },
+                                                                "variantIdentities":  {
+                                                                                          "$ref":  "#/$defs/identityListNonEmpty"
+                                                                                      },
+                                                                "allowedScopes":  {
+                                                                                      "type":  "array",
+                                                                                      "minItems":  1,
+                                                                                      "uniqueItems":  true,
+                                                                                      "items":  {
+                                                                                                    "enum":  [
+                                                                                                                 "compilation_unit",
+                                                                                                                 "widget_class"
+                                                                                                             ]
+                                                                                                }
+                                                                                  }
+                                                            }
+                                         }
+              }
+}

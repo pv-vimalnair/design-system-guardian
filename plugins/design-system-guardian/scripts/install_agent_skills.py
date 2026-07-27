@@ -122,6 +122,20 @@ class InstallError(Exception):
     pass
 
 
+class HostRestartRequired(InstallError):
+    """Raised only after a watched-root promotion failure is rolled back."""
+
+    status = "reload_required"
+    reason_code = "host_restart_required"
+
+    def __init__(self, target_root: Path) -> None:
+        self.target_root = target_root.resolve()
+        super().__init__(
+            "the prior Guardian installation was restored, but the agent host "
+            f"is still watching {self.target_root}"
+        )
+
+
 def parse_semver(value: Any, field: str) -> tuple[int, int, int, tuple[str, ...] | None]:
     """Parse strict SemVer 2.0 precedence fields or fail closed."""
 
@@ -285,6 +299,237 @@ def validate_existing(destination: Path) -> dict[str, Any]:
     if not package_path.is_absolute() or package_path.resolve() != PLUGIN_ROOT.resolve():
         raise InstallError(f"skill belongs to another Guardian package: {destination}")
     return binding
+
+
+def _status_payload(
+    target_root: Path,
+    *,
+    status: str,
+    reason_code: str,
+    candidate_version: str,
+    installed_version: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "status": status,
+        "reasonCode": reason_code,
+        "targetRoot": str(target_root),
+        "candidateVersion": candidate_version,
+        "installedVersion": installed_version,
+    }
+
+
+def _binding_runtime_is_intact(binding: dict[str, Any]) -> bool:
+    python = binding.get("python")
+    if not isinstance(python, dict) or set(python) != {"path", "sha256"}:
+        return False
+    path_value = python.get("path")
+    digest = python.get("sha256")
+    if not isinstance(path_value, str) or not isinstance(digest, str):
+        return False
+    path = Path(path_value)
+    if not path.is_absolute() or not path.is_file() or sha256_file(path) != digest:
+        return False
+
+    marker_path = path.parent.parent / RUNTIME_MARKER_NAME
+    if not marker_path.exists():
+        return True
+    try:
+        marker = load_json(marker_path)
+    except InstallError:
+        return False
+    return (
+        marker.get("schemaVersion") == 1
+        and marker.get("owner") == RUNTIME_OWNER
+        and marker.get("pythonSha256") == digest
+    )
+
+
+def _binding_package_is_intact(binding: dict[str, Any]) -> bool:
+    package_value = binding.get("packageRoot")
+    package_digest_value = binding.get("packageDigest")
+    guardian_cli = binding.get("guardianCli")
+    if (
+        not isinstance(package_value, str)
+        or not isinstance(package_digest_value, str)
+        or not isinstance(guardian_cli, dict)
+        or set(guardian_cli) != {"path", "sha256"}
+    ):
+        return False
+    package_root = Path(package_value)
+    cli_value = guardian_cli.get("path")
+    cli_digest = guardian_cli.get("sha256")
+    if (
+        not package_root.is_absolute()
+        or not package_root.is_dir()
+        or not isinstance(cli_value, str)
+        or not isinstance(cli_digest, str)
+    ):
+        return False
+    cli_path = Path(cli_value)
+    expected_cli = (package_root / "scripts" / "guardian.py").resolve()
+    if (
+        not cli_path.is_absolute()
+        or cli_path.resolve() != expected_cli
+        or not cli_path.is_file()
+        or sha256_file(cli_path) != cli_digest
+    ):
+        return False
+    try:
+        return package_digest(package_root) == package_digest_value
+    except (InstallError, OSError):
+        return False
+
+
+def installation_status(target_root: Path) -> dict[str, Any]:
+    """Inspect one generic host installation without writing or recovering it."""
+
+    manifest = load_json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json")
+    candidate_version = manifest.get("version")
+    parse_semver(candidate_version, "candidate pluginVersion")
+    normalized = target_root.expanduser().resolve()
+    if normalized == Path(normalized.anchor):
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="filesystem_root_not_allowed",
+            candidate_version=candidate_version,
+        )
+    if not normalized.exists():
+        return _status_payload(
+            normalized,
+            status="update_required",
+            reason_code="guardian_not_installed",
+            candidate_version=candidate_version,
+        )
+    if not normalized.is_dir():
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="target_not_directory",
+            candidate_version=candidate_version,
+        )
+    if (normalized / JOURNAL_NAME).exists():
+        return _status_payload(
+            normalized,
+            status="reload_required",
+            reason_code="interrupted_installation_recovery_required",
+            candidate_version=candidate_version,
+        )
+
+    present = [name for name in SKILL_NAMES if (normalized / name).exists()]
+    if not present:
+        return _status_payload(
+            normalized,
+            status="update_required",
+            reason_code="guardian_not_installed",
+            candidate_version=candidate_version,
+        )
+    if len(present) != len(SKILL_NAMES):
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="incomplete_skill_set",
+            candidate_version=candidate_version,
+        )
+
+    bindings: list[dict[str, Any]] = []
+    try:
+        for name in SKILL_NAMES:
+            bindings.append(validate_managed_skill(normalized / name))
+    except (InstallError, OSError):
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="managed_skill_integrity_failed",
+            candidate_version=candidate_version,
+        )
+
+    versions = [binding.get("pluginVersion") for binding in bindings]
+    try:
+        for index, version in enumerate(versions):
+            parse_semver(version, f"installed {SKILL_NAMES[index]} pluginVersion")
+    except InstallError:
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="invalid_plugin_version",
+            candidate_version=candidate_version,
+        )
+    if len(set(versions)) != 1:
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="divergent_plugin_versions",
+            candidate_version=candidate_version,
+        )
+    installed_version = versions[0]
+    shared_keys = (
+        "packageRoot",
+        "packageDigest",
+        "pluginVersion",
+        "policyDigest",
+        "guardianCli",
+        "python",
+    )
+    if any(
+        bindings[0].get(key) != binding.get(key)
+        for binding in bindings[1:]
+        for key in shared_keys
+    ):
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="divergent_install_bindings",
+            candidate_version=candidate_version,
+            installed_version=installed_version,
+        )
+    binding = bindings[0]
+    if not _binding_package_is_intact(binding) or not _binding_runtime_is_intact(binding):
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="bound_runtime_or_package_invalid",
+            candidate_version=candidate_version,
+            installed_version=installed_version,
+        )
+
+    comparison = compare_semver(candidate_version, installed_version)
+    if comparison > 0:
+        return _status_payload(
+            normalized,
+            status="update_required",
+            reason_code="older_intact_installation",
+            candidate_version=candidate_version,
+            installed_version=installed_version,
+        )
+    if comparison < 0:
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="newer_installation_cannot_be_downgraded",
+            candidate_version=candidate_version,
+            installed_version=installed_version,
+        )
+    if (
+        Path(str(binding["packageRoot"])).resolve() != PLUGIN_ROOT.resolve()
+        or binding["packageDigest"] != package_digest(PLUGIN_ROOT)
+    ):
+        return _status_payload(
+            normalized,
+            status="invalid",
+            reason_code="same_version_package_mismatch",
+            candidate_version=candidate_version,
+            installed_version=installed_version,
+        )
+    return _status_payload(
+        normalized,
+        status="current",
+        reason_code="exact_package_installed",
+        candidate_version=candidate_version,
+        installed_version=installed_version,
+    )
+
 
 
 def validate_replacement_versions(
@@ -823,6 +1068,37 @@ def recover_interrupted(target_root: Path) -> bool:
     return True
 
 
+def _is_windows_host_lock(error: BaseException) -> bool:
+    if os.name != "nt":
+        return False
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, OSError) and getattr(current, "winerror", None) in {5, 32, 33}:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def _recover_install_failure(
+    target_root: Path,
+    original: BaseException,
+    *,
+    host_lock_eligible: bool = True,
+) -> None:
+    try:
+        recover_interrupted(target_root)
+    except BaseException as recovery_error:
+        raise InstallError(
+            f"install interrupted and recovery evidence was preserved: {recovery_error}"
+        ) from original
+    if host_lock_eligible and _is_windows_host_lock(original):
+        raise HostRestartRequired(target_root) from original
+    raise original
+
+
+
 def install(
     target_root: Path,
     python_path: Path,
@@ -887,10 +1163,12 @@ def install(
             phase="prepared",
         )
 
+        promotion_started = False
         try:
             for name in SKILL_NAMES:
                 stage_skill(name, stage_root, binding_base)
 
+            promotion_started = True
             for name in SKILL_NAMES:
                 destination = target_root / name
                 backup = backup_root / name
@@ -907,13 +1185,11 @@ def install(
                 phase="committed",
             )
         except BaseException as original:
-            try:
-                recover_interrupted(target_root)
-            except BaseException as recovery_error:
-                raise InstallError(
-                    f"install interrupted and recovery evidence was preserved: {recovery_error}"
-                ) from original
-            raise
+            _recover_install_failure(
+                target_root,
+                original,
+                host_lock_eligible=promotion_started,
+            )
 
         recover_interrupted(target_root)
 
@@ -930,9 +1206,13 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument(
         "--python",
-        required=True,
         type=Path,
         help="Absolute Python 3.11+ executable used for diagnostic Guardian commands.",
+    )
+    result.add_argument(
+        "--status",
+        action="store_true",
+        help="Inspect one generic Guardian skill installation without writing.",
     )
     result.add_argument(
         "--replace",
@@ -952,6 +1232,33 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
+    if arguments.status:
+        if (
+            arguments.python is not None
+            or arguments.replace
+            or arguments.bootstrap_runtime
+        ):
+            print(
+                "Design System Guardian status blocked: --status cannot change "
+                "runtime or replacement options.",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            payload = installation_status(arguments.target_root)
+        except (InstallError, OSError) as exc:
+            print(f"Design System Guardian status blocked: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+        return 2 if payload["status"] == "invalid" else 0
+
+    if arguments.python is None:
+        print(
+            "Design System Guardian install blocked: --python is required for installation.",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
         install(
             arguments.target_root,
@@ -959,6 +1266,22 @@ def main(argv: list[str] | None = None) -> int:
             arguments.replace,
             bootstrap_runtime=arguments.bootstrap_runtime,
         )
+    except HostRestartRequired as exc:
+        payload = {
+            "schemaVersion": 1,
+            "status": exc.status,
+            "reasonCode": exc.reason_code,
+            "targetRoot": str(exc.target_root),
+        }
+        print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+        print(
+            "The prior Guardian installation was restored. Close or restart the "
+            f"agent host watching {exc.target_root}, then rerun the same verified "
+            "install command.",
+            file=sys.stderr,
+        )
+        return 2
+
     except (InstallError, OSError) as exc:
         print(f"Design System Guardian install blocked: {exc}", file=sys.stderr)
         return 2

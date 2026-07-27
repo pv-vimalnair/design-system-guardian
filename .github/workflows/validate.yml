@@ -66,7 +66,7 @@ jobs:
           from pathlib import Path
           root = Path("plugins/design-system-guardian")
           schemas = sorted(root.rglob("*.schema.json"))
-          assert len(schemas) == 28, [str(path) for path in schemas]
+          assert len(schemas) == 38, [str(path) for path in schemas]
           for path in schemas:
               json.loads(path.read_text(encoding="utf-8"))
 
@@ -116,3 +116,52 @@ jobs:
             git cat-file -e "${base}^{commit}"
           fi
           git diff --check "$base" "$head"
+
+  flutter-adapter:
+    name: Flutter adapter / ${{ matrix.os }} / Flutter 3.44.0
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    env:
+      FLUTTER_COMMIT: 559ffa3f75e7402d65a8def9c28389a9b2e6fe42
+
+    steps:
+      - name: Check out Guardian
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Install the pinned official Flutter SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout --depth 1 --branch 3.44.0 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" checkout --detach "$FLUTTER_COMMIT"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "$FLUTTER_COMMIT"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Verify the pinned Flutter and Dart toolchain
+        shell: bash
+        run: |
+          flutter config --no-analytics
+          flutter --version
+          dart --version
+
+      - name: Resolve the pinned adapter package
+        working-directory: plugins/design-system-guardian/adapters/flutter
+        run: flutter pub get
+
+      - name: Check Dart formatting
+        working-directory: plugins/design-system-guardian/adapters/flutter
+        run: dart format --output=none --set-exit-if-changed lib test/usage_rule_v2_test.dart
+
+      - name: Analyze adapter source and v2 tests
+        working-directory: plugins/design-system-guardian/adapters/flutter
+        shell: bash
+        run: |
+          dart analyze lib
+          dart analyze test/usage_rule_v2_test.dart
+
+      - name: Run Dart rule tests
+        working-directory: plugins/design-system-guardian/adapters/flutter
+        run: dart test

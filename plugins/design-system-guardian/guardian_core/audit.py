@@ -72,6 +72,29 @@ _TRUSTED_UX_MESSAGES = {
 }
 _DESIGN_LANE_KEYS = {"status", "sourceCutDigest", "violations", "gaps", "sentinelCount", "resolutionSummary"}
 _UX_LANE_KEYS = {"status", "checks"}
+_USAGE_RULES_EVIDENCE_KEYS = {
+    "schemaVersion",
+    "status",
+    "evaluatorId",
+    "evaluatorContractDigest",
+    "authorizationDigest",
+    "ruleSnapshotId",
+    "rulesDigest",
+    "activeRuleIds",
+    "assessedRuleIds",
+    "violatedRuleIds",
+    "informativeRuleIds",
+    "notAssessed",
+    "diagnostics",
+}
+_USAGE_RULES_LANE_KEYS = _USAGE_RULES_EVIDENCE_KEYS - {"schemaVersion"}
+_USAGE_NOT_ASSESSED_KEYS = {"ruleId", "reasonCode"}
+_USAGE_DIAGNOSTIC_KEYS = {
+    "diagnosticId",
+    "ruleId",
+    "reasonCode",
+    "inheritedDiagnosticId",
+}
 _COVERAGE_KEYS = {"schemaVersion", "adapter", "supported", "configDigest", "complete", "status", "categories", "assessedFiles", "totalFiles"}
 _RESOLUTION_KEYS = {
     "schemaVersion",
@@ -117,6 +140,36 @@ _UNTRUSTED_UX_RESULT = {
         "evaluatorVersion": None,
     },
 }
+_AUDIT_V1_KEYS = {
+    "schemaVersion",
+    "runId",
+    "profileId",
+    "snapshotId",
+    "policyDigest",
+    "analysisAttestationDigest",
+    "projectEvidence",
+    "enforcementAuthorityLane",
+    "designSystemLane",
+    "uxAccessibilityLane",
+    "coverage",
+    "resolutions",
+    "productionReady",
+}
+_AUDIT_V2_KEYS = _AUDIT_V1_KEYS | {"usageRulesLane"}
+_USAGE_LANE_STATUSES = {
+    "allowed",
+    "conflict",
+    "not_assessed",
+    "unsupported",
+    "invalid",
+    "stale",
+    "source_unavailable",
+    "source_incomplete",
+}
+_USAGE_EVIDENCE_STATUSES = _USAGE_LANE_STATUSES - _SOURCE_STATUSES
+_RULE_ID = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
+_REASON_CODE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+_DIAGNOSTIC_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class AuditIntegrityError(ValueError):
@@ -147,6 +200,308 @@ def _require_nonempty_string(value: Any, field: str) -> str:
 
 def _sorted_objects(values: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted((copy.deepcopy(item) for item in values), key=canonical_json_bytes)
+
+
+def _canonical_rule_ids(value: Any, field: str) -> list[str]:
+    if not isinstance(value, list):
+        raise AuditIntegrityError(f"{field} must be an array.")
+    if any(
+        not isinstance(item, str)
+        or len(item) > 127
+        or not _RULE_ID.fullmatch(item)
+        for item in value
+    ):
+        raise AuditIntegrityError(f"{field} contains an invalid rule ID.")
+    if value != sorted(set(value)):
+        raise AuditIntegrityError(f"{field} must be unique and sorted.")
+    return list(value)
+
+
+def _canonical_usage_rules(value: Any, *, lane: bool) -> dict[str, Any]:
+    expected_keys = _USAGE_RULES_LANE_KEYS if lane else _USAGE_RULES_EVIDENCE_KEYS
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        raise AuditIntegrityError("Usage Rules evidence has unknown or missing fields.")
+    if not lane and value.get("schemaVersion") != 1:
+        raise AuditIntegrityError("Usage Rules evidence schemaVersion must be 1.")
+    statuses = _USAGE_LANE_STATUSES if lane else _USAGE_EVIDENCE_STATUSES
+    status = value.get("status")
+    if status not in statuses:
+        raise AuditIntegrityError("Usage Rules status is outside the canonical contract.")
+    if value.get("evaluatorId") != "guardian-flutter-usage-rules-v2":
+        raise AuditIntegrityError("Usage Rules evidence uses another evaluator.")
+    for field in (
+        "evaluatorContractDigest",
+        "authorizationDigest",
+        "ruleSnapshotId",
+        "rulesDigest",
+    ):
+        digest = value.get(field)
+        if not isinstance(digest, str) or not _HEX_64.fullmatch(digest):
+            raise AuditIntegrityError(
+                f"Usage Rules {field} must be a lowercase SHA-256 digest."
+            )
+
+    active = _canonical_rule_ids(value.get("activeRuleIds"), "activeRuleIds")
+    assessed = _canonical_rule_ids(value.get("assessedRuleIds"), "assessedRuleIds")
+    violated = _canonical_rule_ids(value.get("violatedRuleIds"), "violatedRuleIds")
+    informative = _canonical_rule_ids(
+        value.get("informativeRuleIds"), "informativeRuleIds"
+    )
+
+    raw_not_assessed = value.get("notAssessed")
+    if not isinstance(raw_not_assessed, list):
+        raise AuditIntegrityError("notAssessed must be an array.")
+    not_assessed: list[dict[str, str]] = []
+    for item in raw_not_assessed:
+        if not isinstance(item, dict) or set(item) != _USAGE_NOT_ASSESSED_KEYS:
+            raise AuditIntegrityError(
+                "Usage Rules notAssessed entries have unknown or missing fields."
+            )
+        rule_id = item.get("ruleId")
+        reason_code = item.get("reasonCode")
+        if (
+            not isinstance(rule_id, str)
+            or len(rule_id) > 127
+            or not _RULE_ID.fullmatch(rule_id)
+        ):
+            raise AuditIntegrityError("Usage Rules notAssessed ruleId is invalid.")
+        if (
+            not isinstance(reason_code, str)
+            or len(reason_code) > 127
+            or not _REASON_CODE.fullmatch(reason_code)
+        ):
+            raise AuditIntegrityError("Usage Rules notAssessed reasonCode is invalid.")
+        not_assessed.append({"ruleId": rule_id, "reasonCode": reason_code})
+    expected_not_assessed = sorted(not_assessed, key=canonical_json_bytes)
+    if raw_not_assessed != expected_not_assessed:
+        raise AuditIntegrityError("Usage Rules notAssessed must be unique and sorted.")
+    not_assessed_ids = [item["ruleId"] for item in not_assessed]
+    if len(not_assessed_ids) != len(set(not_assessed_ids)):
+        raise AuditIntegrityError("A Usage Rules rule may have only one not-assessed reason.")
+
+    raw_diagnostics = value.get("diagnostics")
+    if not isinstance(raw_diagnostics, list):
+        raise AuditIntegrityError("Usage Rules diagnostics must be an array.")
+    diagnostics: list[dict[str, str]] = []
+    for item in raw_diagnostics:
+        if not isinstance(item, dict) or set(item) != _USAGE_DIAGNOSTIC_KEYS:
+            raise AuditIntegrityError(
+                "Usage Rules diagnostics have unknown or missing fields."
+            )
+        diagnostic_id = item.get("diagnosticId")
+        inherited_id = item.get("inheritedDiagnosticId")
+        rule_id = item.get("ruleId")
+        reason_code = item.get("reasonCode")
+        if (
+            not isinstance(diagnostic_id, str)
+            or not _DIAGNOSTIC_ID.fullmatch(diagnostic_id)
+            or not isinstance(inherited_id, str)
+            or not _DIAGNOSTIC_ID.fullmatch(inherited_id)
+        ):
+            raise AuditIntegrityError("Usage Rules diagnostic identity is invalid.")
+        if (
+            not isinstance(rule_id, str)
+            or len(rule_id) > 127
+            or not _RULE_ID.fullmatch(rule_id)
+            or not isinstance(reason_code, str)
+            or len(reason_code) > 127
+            or not _REASON_CODE.fullmatch(reason_code)
+        ):
+            raise AuditIntegrityError("Usage Rules diagnostic rule or reason is invalid.")
+        diagnostics.append(
+            {
+                "diagnosticId": diagnostic_id,
+                "ruleId": rule_id,
+                "reasonCode": reason_code,
+                "inheritedDiagnosticId": inherited_id,
+            }
+        )
+    expected_diagnostics = sorted(diagnostics, key=canonical_json_bytes)
+    if raw_diagnostics != expected_diagnostics:
+        raise AuditIntegrityError("Usage Rules diagnostics must be unique and sorted.")
+    diagnostic_ids = [item["diagnosticId"] for item in diagnostics]
+    inherited_ids = [item["inheritedDiagnosticId"] for item in diagnostics]
+    if (
+        len(diagnostic_ids) != len(set(diagnostic_ids))
+        or len(inherited_ids) != len(set(inherited_ids))
+    ):
+        raise AuditIntegrityError("Usage Rules diagnostic identities must be unique.")
+
+    active_set = set(active)
+    assessed_set = set(assessed)
+    violated_set = set(violated)
+    not_assessed_set = set(not_assessed_ids)
+    informative_set = set(informative)
+    if not assessed_set <= active_set or not violated_set <= assessed_set:
+        raise AuditIntegrityError("Usage Rules assessed and violated sets are not subsets.")
+    if active_set != assessed_set | (not_assessed_set & active_set):
+        raise AuditIntegrityError(
+            "Every active Usage Rules rule must be assessed or explicitly not assessed."
+        )
+    if assessed_set & not_assessed_set:
+        raise AuditIntegrityError("A Usage Rules rule cannot be assessed and not assessed.")
+    if informative_set & (active_set | not_assessed_set):
+        raise AuditIntegrityError("Informative rules cannot enter a gating Usage Rules set.")
+    if {item["ruleId"] for item in diagnostics} != violated_set:
+        raise AuditIntegrityError(
+            "Usage Rules diagnostics differ from the exact violated rule IDs."
+        )
+
+    if status not in _SOURCE_STATUSES and status != "invalid":
+        expected_status = (
+            "conflict"
+            if violated
+            else "unsupported"
+            if status == "unsupported"
+            else "not_assessed"
+            if not_assessed
+            else "allowed"
+        )
+        if status != expected_status:
+            raise AuditIntegrityError("Usage Rules status differs from its exact evidence.")
+        if status == "unsupported" and (assessed or diagnostics):
+            raise AuditIntegrityError(
+                "Unsupported Usage Rules evidence cannot claim assessed rules."
+            )
+
+    normalized = {
+        key: copy.deepcopy(value[key])
+        for key in _USAGE_RULES_LANE_KEYS
+    }
+    if not lane:
+        normalized["schemaVersion"] = 1
+    return normalized
+
+
+def canonical_usage_rules_evidence(value: Any) -> dict[str, Any]:
+    """Validate the adapter-owned v2 evidence interface without trusting summaries."""
+
+    return _canonical_usage_rules(value, lane=False)
+
+
+def _inherited_usage_diagnostic_ids(design_lane: dict[str, Any]) -> list[str]:
+    violations = design_lane.get("violations")
+    if not isinstance(violations, list):
+        raise AuditIntegrityError("Design-system violations must be an array.")
+    identifiers: list[str] = []
+    for item in violations:
+        evidence = item.get("evidence") if isinstance(item, dict) else None
+        if isinstance(evidence, dict) and evidence.get("code") == "guardian_usage_rule":
+            identifier = item.get("diagnosticId")
+            if not isinstance(identifier, str):
+                raise AuditIntegrityError(
+                    "Inherited Usage Rules diagnostic identity is invalid."
+                )
+            identifiers.append(identifier)
+    return sorted(identifiers)
+
+
+def _assert_usage_rules_agreement(
+    lane: dict[str, Any],
+    *,
+    design_lane: dict[str, Any],
+    coverage: dict[str, Any],
+) -> None:
+    expected_inherited = sorted(
+        item["inheritedDiagnosticId"] for item in lane["diagnostics"]
+    )
+    if _inherited_usage_diagnostic_ids(design_lane) != expected_inherited:
+        raise AuditIntegrityError(
+            "Usage Rules diagnostics disagree with the inherited design-system projection."
+        )
+    categories = coverage.get("categories")
+    components = categories.get("components") if isinstance(categories, dict) else None
+    component_status = components.get("status") if isinstance(components, dict) else None
+    status = lane["status"]
+    if status in _SOURCE_STATUSES:
+        if design_lane.get("status") != status:
+            raise AuditIntegrityError(
+                "Usage Rules source status disagrees with the inherited projection."
+            )
+        return
+    if status == "invalid":
+        if design_lane.get("status") != "invalid":
+            raise AuditIntegrityError(
+                "Invalid Usage Rules evidence disagrees with the inherited projection."
+            )
+        return
+    if status == "conflict":
+        if component_status not in {"allowed", "not_assessed", "unsupported"}:
+            raise AuditIntegrityError(
+                "Usage Rules conflict has invalid inherited coverage."
+            )
+    else:
+        expected_coverage = {
+            "allowed": "allowed",
+            "not_assessed": "not_assessed",
+            "unsupported": "unsupported",
+        }[status]
+        if component_status != expected_coverage:
+            raise AuditIntegrityError(
+                "Usage Rules coverage disagrees with the inherited design-system projection."
+            )
+    if status == "conflict" and design_lane.get("status") != "conflict":
+        raise AuditIntegrityError(
+            "Usage Rules conflict disagrees with the inherited design-system projection."
+        )
+
+
+def _project_usage_rules_lane(
+    evidence: Any,
+    *,
+    source_status: str | None,
+    design_lane: dict[str, Any],
+    coverage: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = canonical_usage_rules_evidence(evidence)
+    lane = {
+        key: copy.deepcopy(normalized[key])
+        for key in _USAGE_RULES_LANE_KEYS
+    }
+    if lane["status"] != "invalid" and source_status in _SOURCE_STATUSES:
+        lane["status"] = source_status
+    _assert_usage_rules_agreement(
+        lane,
+        design_lane=design_lane,
+        coverage=coverage,
+    )
+    return lane
+
+
+def project_usage_rules_lane(
+    evidence: Any,
+    *,
+    design_system_lane: dict[str, Any],
+    coverage: dict[str, Any],
+) -> dict[str, Any]:
+    """Project exact runner evidence into the additive audit-result v2 lane."""
+
+    if not isinstance(design_system_lane, dict) or not isinstance(coverage, dict):
+        raise AuditIntegrityError(
+            "Usage Rules projection requires canonical design-system and coverage lanes."
+        )
+    design_status = design_system_lane.get("status")
+    return _project_usage_rules_lane(
+        evidence,
+        source_status=(design_status if design_status in _SOURCE_STATUSES else None),
+        design_lane=design_system_lane,
+        coverage=coverage,
+    )
+
+
+def _validate_usage_rules_lane(
+    value: Any,
+    *,
+    design_lane: dict[str, Any],
+    coverage: dict[str, Any],
+) -> dict[str, Any]:
+    lane = _canonical_usage_rules(value, lane=True)
+    _assert_usage_rules_agreement(
+        lane,
+        design_lane=design_lane,
+        coverage=coverage,
+    )
+    return lane
 
 
 def _validate_pin(run_pin: Any) -> dict[str, Any]:
@@ -204,11 +559,21 @@ def _validate_diagnostic(value: Any) -> dict[str, Any]:
 
 
 def _validate_adapter(adapter_result: Any, source_cut: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    if not isinstance(adapter_result, dict) or set(adapter_result) != _ADAPTER_KEYS:
+    if not isinstance(adapter_result, dict):
+        raise AuditIntegrityError("Adapter evidence has unknown or missing fields.")
+    keys = set(adapter_result)
+    has_usage_rules = keys == _ADAPTER_KEYS | {"usageRulesEvidence"}
+    if keys != _ADAPTER_KEYS and not has_usage_rules:
         raise AuditIntegrityError("Adapter evidence has unknown or missing fields.")
     if adapter_result.get("schemaVersion") != 1:
         raise AuditIntegrityError("Audit supports only adapter evidence schemaVersion 1.")
     _require_nonempty_string(adapter_result.get("adapter"), "adapter")
+    if has_usage_rules:
+        if adapter_result["adapter"] != "flutter":
+            raise AuditIntegrityError(
+                "Only Flutter adapter evidence may contain Usage Rules evidence."
+            )
+        canonical_usage_rules_evidence(adapter_result["usageRulesEvidence"])
     if not isinstance(adapter_result.get("supported"), bool):
         raise AuditIntegrityError("Adapter supported must be boolean.")
     config_digest = _require_nonempty_string(adapter_result.get("configDigest"), "configDigest")
@@ -583,8 +948,17 @@ def _select_exit_code(
 
 def derive_audit_exit_code(result: Any) -> ExitCode:
     """Recompute outcome from canonical evidence; never trust summaries or a claimed pass."""
-    required = {"schemaVersion", "runId", "profileId", "snapshotId", "policyDigest", "analysisAttestationDigest", "projectEvidence", "enforcementAuthorityLane", "designSystemLane", "uxAccessibilityLane", "coverage", "resolutions", "productionReady"}
-    if not isinstance(result, dict) or set(result) != required or result.get("schemaVersion") != 1:
+    if not isinstance(result, dict):
+        raise AuditIntegrityError("Audit result must be an object.")
+    schema_version = result.get("schemaVersion")
+    required = (
+        _AUDIT_V1_KEYS
+        if schema_version == 1
+        else _AUDIT_V2_KEYS
+        if schema_version == 2
+        else set()
+    )
+    if not required or set(result) != required:
         raise AuditIntegrityError("Audit result has unknown, missing, or invalid top-level fields.")
     for field in ("runId", "profileId"):
         _require_nonempty_string(result.get(field), f"audit {field}")
@@ -694,17 +1068,54 @@ def derive_audit_exit_code(result: Any) -> ExitCode:
         expected_design_status = ResolutionStatus.ALLOWED.value
     if design_status != expected_design_status:
         raise AuditIntegrityError("Design-system lane status differs from its exact evidence.")
-    return _select_exit_code(
+
+    coverage_blocked = (
+        coverage["complete"] is not True
+        or coverage["supported"] is not True
+        or coverage["status"] != "allowed"
+        or ux_status == "not_assessed"
+        or enforcement_lane["status"] != "allowed"
+        or bool(coverage_resolution_statuses)
+    )
+    if schema_version == 2:
+        usage_lane = _validate_usage_rules_lane(
+            result.get("usageRulesLane"),
+            design_lane=design,
+            coverage=coverage,
+        )
+        invalid = invalid or usage_lane["status"] == "invalid"
+        if usage_lane["status"] in _SOURCE_STATUSES:
+            source_statuses.add(usage_lane["status"])
+        violated = violated or usage_lane["status"] == "conflict"
+        coverage_blocked = coverage_blocked or usage_lane["status"] in {
+            "not_assessed",
+            "unsupported",
+        }
+
+    exit_code = _select_exit_code(
         invalid=invalid,
         source_blocked=bool(source_statuses),
-        coverage_blocked=(
-            coverage["complete"] is not True or coverage["supported"] is not True
-            or coverage["status"] != "allowed" or ux_status == "not_assessed"
-            or enforcement_lane["status"] != "allowed"
-            or bool(coverage_resolution_statuses)
-        ),
+        coverage_blocked=coverage_blocked,
         violated=violated,
     )
+    if schema_version == 2 and result["productionReady"] is not (
+        exit_code == ExitCode.PASS
+    ):
+        raise AuditIntegrityError(
+            "Audit productionReady differs from the complete v2 lane evidence."
+        )
+    return exit_code
+
+
+def project_audit_result_v1(result: Any) -> dict[str, Any]:
+    """Return the exact inherited v1 projection after validating current evidence."""
+
+    derive_audit_exit_code(result)
+    projected = copy.deepcopy(result)
+    if projected["schemaVersion"] == 2:
+        projected["schemaVersion"] = 1
+        projected.pop("usageRulesLane")
+    return projected
 
 
 def evaluate_audit(
@@ -717,6 +1128,7 @@ def evaluate_audit(
     verified_snapshot: dict[str, Any] | None = None,
     analysis_attestation_digest: str | None = None,
     trusted_ux_checks: list[dict[str, Any]] | None = None,
+    usage_rules_evidence: dict[str, Any] | None = None,
 ) -> AuditEvaluation:
     """Evaluate supplied evidence without writing source code or host state."""
 
@@ -752,6 +1164,17 @@ def evaluate_audit(
     coverage, diagnostics = adapter_audit_projection(
         adapter_result, pin["sourceCut"]
     )
+    embedded_usage_evidence = adapter_result.get("usageRulesEvidence")
+    if embedded_usage_evidence is not None:
+        normalized_embedded = canonical_usage_rules_evidence(
+            embedded_usage_evidence
+        )
+        if usage_rules_evidence is None:
+            usage_rules_evidence = normalized_embedded
+        elif canonical_usage_rules_evidence(usage_rules_evidence) != normalized_embedded:
+            raise AuditIntegrityError(
+                "Explicit Usage Rules evidence differs from the normalized adapter evidence."
+            )
     normalized_resolutions, resolution_counts, sentinel_count = _authoritatively_resolve(
         resolutions,
         pin=pin,
@@ -790,12 +1213,6 @@ def evaluate_audit(
     )
     ux_violated = ux_status == "conflict"
     violated = design_violated or ux_violated
-    exit_code = _select_exit_code(
-        invalid=invalid,
-        source_blocked=source_blocked,
-        coverage_blocked=coverage_blocked,
-        violated=violated,
-    )
 
     if invalid:
         design_status = ResolutionStatus.INVALID.value
@@ -819,8 +1236,40 @@ def evaluate_audit(
     if not isinstance(analysis_attestation_digest, str) or not _HEX_64.fullmatch(analysis_attestation_digest):
         raise AuditIntegrityError("Analysis attestation digest must be a lowercase SHA-256 digest.")
 
+    design_lane = {
+        "status": design_status,
+        "sourceCutDigest": sha256_digest(pin["sourceCut"]),
+        "violations": _sorted_objects(violations),
+        "gaps": _sorted_objects(gaps),
+        "sentinelCount": sentinel_count,
+        "resolutionSummary": resolution_counts,
+    }
+    usage_lane = None
+    if usage_rules_evidence is not None:
+        usage_lane = _project_usage_rules_lane(
+            usage_rules_evidence,
+            source_status=(
+                design_status if design_status in _SOURCE_STATUSES else None
+            ),
+            design_lane=design_lane,
+            coverage=coverage,
+        )
+        invalid = invalid or usage_lane["status"] == "invalid"
+        source_blocked = source_blocked or usage_lane["status"] in _SOURCE_STATUSES
+        violated = violated or usage_lane["status"] == "conflict"
+        coverage_blocked = coverage_blocked or usage_lane["status"] in {
+            "not_assessed",
+            "unsupported",
+        }
+    exit_code = _select_exit_code(
+        invalid=invalid,
+        source_blocked=source_blocked,
+        coverage_blocked=coverage_blocked,
+        violated=violated,
+    )
+
     result = {
-        "schemaVersion": 1,
+        "schemaVersion": 2 if usage_lane is not None else 1,
         "runId": pin["runId"],
         "profileId": pin["profileId"],
         "snapshotId": pin["snapshotId"],
@@ -828,14 +1277,7 @@ def evaluate_audit(
         "analysisAttestationDigest": analysis_attestation_digest,
         "projectEvidence": normalized_project_evidence,
         "enforcementAuthorityLane": enforcement_lane,
-        "designSystemLane": {
-            "status": design_status,
-            "sourceCutDigest": sha256_digest(pin["sourceCut"]),
-            "violations": _sorted_objects(violations),
-            "gaps": _sorted_objects(gaps),
-            "sentinelCount": sentinel_count,
-            "resolutionSummary": resolution_counts,
-        },
+        "designSystemLane": design_lane,
         "uxAccessibilityLane": {
             "status": ux_status,
             "checks": normalized_ux,
@@ -844,4 +1286,6 @@ def evaluate_audit(
         "resolutions": normalized_resolutions,
         "productionReady": exit_code == ExitCode.PASS,
     }
+    if usage_lane is not None:
+        result["usageRulesLane"] = usage_lane
     return AuditEvaluation(result=result, exit_code=exit_code)

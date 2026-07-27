@@ -8,8 +8,8 @@
     {
       "name": "design-system-guardian",
       "source": "./plugins/design-system-guardian",
-      "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, permission-bound safe activation, and fail-closed evidence.",
-      "version": "0.3.5",
+      "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, permission-bound machine-rule evaluation, and fail-closed evidence.",
+      "version": "0.3.6",
       "author": {
         "name": "Pv Vimal Nair"
       },

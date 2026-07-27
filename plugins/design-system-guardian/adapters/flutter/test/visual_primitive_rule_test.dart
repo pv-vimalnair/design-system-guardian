@@ -17,6 +17,35 @@ final class VisualPrimitiveRuleTest extends AnalysisRuleTest {
   void setUp() {
     rule = GuardianVisualPrimitiveRule();
     super.setUp();
+    newFile(convertPath('/packages/ui/lib/ui.dart'), r'''
+final class Paint {
+  double strokeWidth = 0;
+}
+
+final class Path {}
+
+final class Canvas {
+  void drawPath(Path path, Paint paint) {}
+  void clipPath(Path path) {}
+  void saveLayer(Object? bounds, Paint paint) {}
+}
+''');
+    newFile(
+      convertPath('/packages/flutter/lib/src/rendering/custom_paint.dart'),
+      'abstract class CustomPainter {}',
+    );
+    newFile(
+      convertPath('/packages/flutter/lib/src/painting/image_resolution.dart'),
+      'class AssetImage { const AssetImage(String name); }',
+    );
+    newFile(
+      convertPath('/packages/flutter/lib/src/services/font_loader.dart'),
+      'class FontLoader { FontLoader(String family); }',
+    );
+    newFile(
+      convertPath('/packages/flutter/lib/src/widgets/image.dart'),
+      'class Image { const Image.asset(String name); }',
+    );
   }
 
   Future<void> test_paintSetterAndCascade_areRejected() async {
@@ -65,7 +94,7 @@ void mutate(MutableVisualOptions options) {
 
   Future<void> test_customPainterSubclass_isRejected() async {
     const source = r'''
-import 'package:flutter/rendering.dart';
+import 'package:flutter/src/rendering/custom_paint.dart';
 
 abstract class BadPainter extends CustomPainter {}
 ''';
@@ -77,8 +106,9 @@ abstract class BadPainter extends CustomPainter {}
 
   Future<void> test_rawImageAndFontAssets_areRejected() async {
     const source = r'''
-import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/src/painting/image_resolution.dart';
+import 'package:flutter/src/services/font_loader.dart';
+import 'package:flutter/src/widgets/image.dart';
 
 void loadRawAssets() {
   AssetImage('assets/raw.png');
@@ -93,6 +123,7 @@ void loadRawAssets() {
         "FontLoader('RawFont')",
       ])
         lint(source.indexOf(invocation), invocation.length),
+      lint(source.indexOf('Image.asset') + 'Image.'.length, 'asset'.length),
     ]);
   }
 
@@ -106,8 +137,8 @@ void draw(Canvas canvas, Path path, Paint paint) {
   canvas.saveLayer(null, paint);
 }
 ''';
-    final diagnostics = <ExpectedDiagnostic>[];
-    for (final type in const <String>['Canvas', 'Path', 'Paint']) {
+    final diagnostics = [lint(source.indexOf('Canvas'), 'Canvas'.length)];
+    for (final type in const <String>['Path', 'Paint']) {
       diagnostics.add(lint(source.indexOf(type), type.length));
     }
     for (final invocation in const <String>[

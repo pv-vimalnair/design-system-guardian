@@ -1,5 +1,13 @@
 # Release Evidence Contract
 
+## v0.3.6 source coordinates
+
+The current public source candidate is `0.3.6`. The Codex, Claude Code, Kimi Code, Flutter package, and generic Agent Skills binding versions must match `guardian_core.release.RUNTIME_VERSION`; OpenClaw reuses the compatible Codex/Claude bundle and Qwen Code uses the same two integrity-bound Agent Skills. Every surface resolves to one Guardian core and exactly `build-with-design-system` and `audit-design-system`.
+
+This source candidate adds separately permissioned evaluator-v2 authorization, zero-write `guardian rules list`, all six machine predicates, a separate Usage Rules lane, and recoverable generic-host reload status. It does not rewrite any v0.3.2-v0.3.5 manifest, authorization, channel event, score, or history record. Public Elo v6 cases are synthetic; local Elo scores, benchmark results, and append-only history remain under `~/.design-system-guardian/` and outside Git.
+
+A host reporting `update_required`, `reload_required`, or `invalid` has not loaded v0.3.6. `reload_required` with `host_restart_required` means the prior intact installation was restored; restart the exact watching host, rerun the same verified update, start a new task or session, and require version and two-skill read-back. This installation state is not release authority.
+
 ## Signed action manifest
 
 `schemas/release/release-manifest.schema.json` describes both normal releases and restorations. Canonical signing bytes are:
