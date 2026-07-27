@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/audit-result-v2.schema.json",
+  "title": "Design System Guardian audit result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "profileId",
+    "snapshotId",
+    "policyDigest",
+    "analysisAttestationDigest",
+    "projectEvidence",
+    "enforcementAuthorityLane",
+    "designSystemLane",
+    "usageRulesLane",
+    "uxAccessibilityLane",
+    "coverage",
+    "resolutions",
+    "productionReady"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "runId": {"$ref": "audit-result.schema.json#/properties/runId"},
+    "profileId": {"$ref": "audit-result.schema.json#/properties/profileId"},
+    "snapshotId": {"$ref": "audit-result.schema.json#/properties/snapshotId"},
+    "policyDigest": {"$ref": "audit-result.schema.json#/properties/policyDigest"},
+    "analysisAttestationDigest": {"$ref": "audit-result.schema.json#/properties/analysisAttestationDigest"},
+    "projectEvidence": {"$ref": "audit-result.schema.json#/properties/projectEvidence"},
+    "enforcementAuthorityLane": {"$ref": "audit-result.schema.json#/properties/enforcementAuthorityLane"},
+    "designSystemLane": {"$ref": "audit-result.schema.json#/properties/designSystemLane"},
+    "usageRulesLane": {"$ref": "#/$defs/usageRulesLane"},
+    "uxAccessibilityLane": {"$ref": "audit-result.schema.json#/properties/uxAccessibilityLane"},
+    "coverage": {"$ref": "coverage.schema.json"},
+    "resolutions": {"type": "array", "items": {"$ref": "resolution.schema.json"}},
+    "productionReady": {"type": "boolean"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ruleId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "diagnosticId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "ruleIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ruleId"}
+    },
+    "notAssessed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "reasonCode"],
+      "properties": {
+        "ruleId": {"$ref": "#/$defs/ruleId"},
+        "reasonCode": {"$ref": "#/$defs/reasonCode"}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diagnosticId", "ruleId", "reasonCode", "inheritedDiagnosticId"],
+      "properties": {
+        "diagnosticId": {"$ref": "#/$defs/diagnosticId"},
+        "ruleId": {"$ref": "#/$defs/ruleId"},
+        "reasonCode": {"$ref": "#/$defs/reasonCode"},
+        "inheritedDiagnosticId": {"$ref": "#/$defs/diagnosticId"}
+      }
+    },
+    "usageRulesLane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "evaluatorId",
+        "evaluatorContractDigest",
+        "authorizationDigest",
+        "ruleSnapshotId",
+        "rulesDigest",
+        "activeRuleIds",
+        "assessedRuleIds",
+        "violatedRuleIds",
+        "informativeRuleIds",
+        "notAssessed",
+        "diagnostics"
+      ],
+      "properties": {
+        "status": {"enum": ["allowed", "conflict", "not_assessed", "unsupported", "invalid", "stale", "source_unavailable", "source_incomplete"]},
+        "evaluatorId": {"const": "guardian-flutter-usage-rules-v2"},
+        "evaluatorContractDigest": {"$ref": "#/$defs/digest"},
+        "authorizationDigest": {"$ref": "#/$defs/digest"},
+        "ruleSnapshotId": {"$ref": "#/$defs/digest"},
+        "rulesDigest": {"$ref": "#/$defs/digest"},
+        "activeRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "assessedRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "violatedRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "informativeRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "notAssessed": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/notAssessed"}},
+        "diagnostics": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/diagnostic"}}
+      }
+    }
+  }
+}

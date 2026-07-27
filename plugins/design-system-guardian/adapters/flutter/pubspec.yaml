@@ -1,11 +1,11 @@
 name: design_system_guardian_flutter
 description: Strict Flutter analyzer adapter for Design System Guardian.
-version: 0.3.5
+version: 0.3.6
 publish_to: none
 
 environment:
-  sdk: '>=3.10.0 <4.0.0'
-  flutter: '>=3.38.0'
+  sdk: '>=3.11.0 <4.0.0'
+  flutter: '>=3.41.0'
 
 dependencies:
   analysis_server_plugin: 0.3.19
@@ -17,7 +17,7 @@ dependencies:
 
 dev_dependencies:
   analyzer_testing: 0.3.3
-  test: 1.26.3
+  test: 1.31.2
   test_reflective_loader: 0.4.0
 
 flutter:

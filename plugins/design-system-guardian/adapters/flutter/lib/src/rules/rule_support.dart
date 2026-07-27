@@ -12,8 +12,7 @@ bool isApprovedExpression(
   GuardianAdapterConfig config,
   String category,
   Expression expression,
-) =>
-    config.isApproved(category, canonicalExpressionIdentity(expression));
+) => config.isApproved(category, canonicalExpressionIdentity(expression));
 
 const visualDimensionArguments = <String>{
   'all',
@@ -64,16 +63,29 @@ const positionalDimensionArguments = <String, Set<int>>{
   'dart:ui#Offset': <int>{0, 1},
   'dart:ui#Size': <int>{0, 1},
   'package:flutter/src/painting/edge_insets.dart#EdgeInsets.all': <int>{0},
-  'package:flutter/src/painting/edge_insets.dart#EdgeInsets.fromLTRB': <int>{0, 1, 2, 3},
-  'package:flutter/src/painting/edge_insets.dart#EdgeInsets.only': <int>{0, 1, 2, 3},
+  'package:flutter/src/painting/edge_insets.dart#EdgeInsets.fromLTRB': <int>{
+    0,
+    1,
+    2,
+    3,
+  },
+  'package:flutter/src/painting/edge_insets.dart#EdgeInsets.only': <int>{
+    0,
+    1,
+    2,
+    3,
+  },
 };
 
 const positionalRadiusArguments = <String, Set<int>>{
   'dart:ui#Radius.circular': <int>{0},
   'dart:ui#Radius.elliptical': <int>{0, 1},
-  'package:flutter/src/painting/border_radius.dart#BorderRadius.circular': <int>{0},
-  'package:flutter/src/painting/border_radius.dart#BorderRadius.horizontal': <int>{0, 1},
-  'package:flutter/src/painting/border_radius.dart#BorderRadius.vertical': <int>{0, 1},
+  'package:flutter/src/painting/border_radius.dart#BorderRadius.circular':
+      <int>{0},
+  'package:flutter/src/painting/border_radius.dart#BorderRadius.horizontal':
+      <int>{0, 1},
+  'package:flutter/src/painting/border_radius.dart#BorderRadius.vertical':
+      <int>{0, 1},
 };
 
 ExecutableElement? resolvedExecutable(Expression invocation) {
@@ -87,34 +99,38 @@ ExecutableElement? resolvedExecutable(Expression invocation) {
 }
 
 ArgumentList? _argumentList(Expression invocation) => switch (invocation) {
-      InstanceCreationExpression node => node.argumentList,
-      MethodInvocation node => node.argumentList,
-      FunctionExpressionInvocation node => node.argumentList,
-      _ => null,
-    };
+  InstanceCreationExpression node => node.argumentList,
+  MethodInvocation node => node.argumentList,
+  FunctionExpressionInvocation node => node.argumentList,
+  _ => null,
+};
 
-Iterable<({
-  int index,
-  String? parameterName,
-  Expression expression,
-  String? calleeIdentity,
-  bool named,
-})> governedArguments(Expression invocation) sync* {
+Iterable<
+  ({
+    int index,
+    String? parameterName,
+    Expression expression,
+    String? calleeIdentity,
+    bool named,
+  })
+>
+governedArguments(Expression invocation) sync* {
   final argumentList = _argumentList(invocation);
   if (argumentList == null) return;
   final executable = resolvedExecutable(invocation);
-  final positional = executable?.formalParameters
+  final positional =
+      executable?.formalParameters
           .where((parameter) => parameter.isPositional)
           .toList(growable: false) ??
       const <FormalParameterElement>[];
   final calleeIdentity = canonicalElementIdentity(executable);
   var positionalIndex = 0;
   for (final argument in argumentList.arguments) {
-    if (argument is NamedExpression) {
+    if (argument is NamedArgument) {
       yield (
         index: -1,
-        parameterName: argument.name.label.name,
-        expression: argument.expression,
+        parameterName: argument.name.lexeme,
+        expression: argument.argumentExpression,
         calleeIdentity: calleeIdentity,
         named: true,
       );
@@ -125,7 +141,7 @@ Iterable<({
       yield (
         index: positionalIndex,
         parameterName: name,
-        expression: argument,
+        expression: argument.argumentExpression,
         calleeIdentity: calleeIdentity,
         named: false,
       );

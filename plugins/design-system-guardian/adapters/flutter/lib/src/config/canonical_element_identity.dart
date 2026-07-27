@@ -18,7 +18,11 @@ String? canonicalElementIdentity(Element? element) {
   Element? cursor = element;
   while (cursor != null && cursor is! LibraryElement) {
     final name = cursor.name;
-    if (name != null && name.isNotEmpty && (names.isEmpty || names.last != name)) {
+    final unnamedConstructor = cursor is ConstructorElement && name == 'new';
+    if (!unnamedConstructor &&
+        name != null &&
+        name.isNotEmpty &&
+        (names.isEmpty || names.last != name)) {
       names.add(name);
     }
     cursor = cursor.enclosingElement;
@@ -30,13 +34,19 @@ String? canonicalElementIdentity(Element? element) {
 String? canonicalExpressionIdentity(Expression expression) {
   final unwrapped = expression.unParenthesized;
   return switch (unwrapped) {
-    InstanceCreationExpression node => canonicalElementIdentity(node.constructorName.element),
+    InstanceCreationExpression node => canonicalElementIdentity(
+      node.constructorName.element,
+    ),
     MethodInvocation node => canonicalElementIdentity(node.methodName.element),
-    FunctionExpressionInvocation node => canonicalElementIdentity(node.element),
-    PrefixedIdentifier node => canonicalElementIdentity(node.identifier.element),
+    FunctionExpressionInvocation node =>
+      canonicalElementIdentity(node.element) ??
+          canonicalExpressionIdentity(node.function),
+    PrefixedIdentifier node => canonicalElementIdentity(
+      node.identifier.element,
+    ),
     PropertyAccess node => canonicalElementIdentity(node.propertyName.element),
     SimpleIdentifier node => canonicalElementIdentity(node.element),
-    NamedExpression node => canonicalExpressionIdentity(node.expression),
+    NamedArgument node => canonicalExpressionIdentity(node.argumentExpression),
     _ => null,
   };
 }
@@ -46,9 +56,7 @@ const governedTypeIdentities = <String, Set<String>>{
   'textStyles': <String>{
     'package:flutter/src/painting/text_style.dart#TextStyle',
   },
-  'icons': <String>{
-    'package:flutter/src/widgets/icon_data.dart#IconData',
-  },
+  'icons': <String>{'package:flutter/src/widgets/icon_data.dart#IconData'},
   'effects': <String>{
     'dart:ui#BlendMode',
     'dart:ui#BlurStyle',
@@ -76,9 +84,7 @@ const governedTypeIdentities = <String, Set<String>>{
     'package:flutter/src/animation/tween.dart#Tween',
     'package:flutter/src/physics/spring_simulation.dart#SpringDescription',
   },
-  'widgets': <String>{
-    'package:flutter/src/widgets/framework.dart#Widget',
-  },
+  'widgets': <String>{'package:flutter/src/widgets/framework.dart#Widget'},
 };
 
 Set<String> canonicalTypeHierarchyIdentities(DartType? type) {

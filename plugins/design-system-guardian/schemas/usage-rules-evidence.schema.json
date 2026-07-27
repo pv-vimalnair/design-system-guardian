@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/usage-rules-evidence.schema.json",
+  "title": "Design System Guardian Usage Rules evaluator evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "evaluatorId",
+    "evaluatorContractDigest",
+    "authorizationDigest",
+    "ruleSnapshotId",
+    "rulesDigest",
+    "activeRuleIds",
+    "assessedRuleIds",
+    "violatedRuleIds",
+    "informativeRuleIds",
+    "notAssessed",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "status": {"enum": ["allowed", "conflict", "not_assessed", "unsupported", "invalid"]},
+    "evaluatorId": {"const": "guardian-flutter-usage-rules-v2"},
+    "evaluatorContractDigest": {"$ref": "#/$defs/digest"},
+    "authorizationDigest": {"$ref": "#/$defs/digest"},
+    "ruleSnapshotId": {"$ref": "#/$defs/digest"},
+    "rulesDigest": {"$ref": "#/$defs/digest"},
+    "activeRuleIds": {"$ref": "#/$defs/ruleIds"},
+    "assessedRuleIds": {"$ref": "#/$defs/ruleIds"},
+    "violatedRuleIds": {"$ref": "#/$defs/ruleIds"},
+    "informativeRuleIds": {"$ref": "#/$defs/ruleIds"},
+    "notAssessed": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/notAssessed"}
+    },
+    "diagnostics": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/diagnostic"}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ruleId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "diagnosticId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "ruleIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ruleId"}
+    },
+    "notAssessed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "reasonCode"],
+      "properties": {
+        "ruleId": {"$ref": "#/$defs/ruleId"},
+        "reasonCode": {"$ref": "#/$defs/reasonCode"}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diagnosticId", "ruleId", "reasonCode", "inheritedDiagnosticId"],
+      "properties": {
+        "diagnosticId": {"$ref": "#/$defs/diagnosticId"},
+        "ruleId": {"$ref": "#/$defs/ruleId"},
+        "reasonCode": {"$ref": "#/$defs/reasonCode"},
+        "inheritedDiagnosticId": {"$ref": "#/$defs/diagnosticId"}
+      }
+    }
+  }
+}

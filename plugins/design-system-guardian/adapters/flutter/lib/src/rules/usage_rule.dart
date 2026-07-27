@@ -10,6 +10,9 @@ import 'package:analyzer/error/error.dart';
 import '../config/adapter_config.dart';
 import '../config/canonical_element_identity.dart';
 import 'rule_support.dart';
+import 'usage_rule_evaluator.dart';
+
+export 'usage_rule_evaluator.dart';
 
 /// Returns only the analyzer-resolved identity forms already governed by the
 /// widget rule. Source spelling and wrapper guesses never enter usage counts.
@@ -32,18 +35,15 @@ int? firstUsageRuleViolationIndex(
   return null;
 }
 
-/// Enforces only the exact usage-rule capabilities activated by config v2.
-///
-/// The host compiler leaves every unsupported, judgment-based, or unmapped
-/// rule out of [GuardianAdapterConfig.activeUsageRules] and marks coverage
-/// incomplete. This analyzer rule therefore never guesses an invocation.
+/// Preserves config-v2 enforcement exactly and evaluates config-v3 machine
+/// predicates only from analyzer-resolved construction evidence.
 final class GuardianUsageRule extends AnalysisRule {
   GuardianUsageRule()
-      : super(
-          name: code.name,
-          description:
-              'Enforces exact approved design-system usage rules per compilation unit.',
-        );
+    : super(
+        name: code.name,
+        description:
+            'Enforces exact approved design-system usage rules per compilation unit.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_usage_rule',
@@ -73,11 +73,33 @@ final class _UsageRuleUnitVisitor extends SimpleAstVisitor<void> {
   @override
   void visitCompilationUnit(CompilationUnit node) {
     final config = validConfig(context);
-    if (config == null ||
-        config.schemaVersion != 2 ||
-        config.activeUsageRules.isEmpty) {
+    if (config == null || config.activeUsageRules.isEmpty) return;
+    if (config.schemaVersion == 2) {
+      _evaluateLegacy(node, config);
       return;
     }
+    if (config.schemaVersion != 3) return;
+
+    final evidence = buildGuardianUsageUnitEvidence(
+      node,
+      approvedMappedConstructorIdentities:
+          config.approvedIdentities['widgets']!,
+    );
+    for (final usageRule in config.activeUsageRules) {
+      final evaluation = evaluateGuardianUsageRule(usageRule, evidence);
+      for (final index in evaluation.violationIndices) {
+        final invocation = evidence.invocations[index];
+        final invocationNode = invocation.node;
+        if (invocationNode == null) continue;
+        rule.reportAtNode(
+          invocationNode,
+          arguments: <Object>[usageRule.ruleId],
+        );
+      }
+    }
+  }
+
+  void _evaluateLegacy(CompilationUnit node, GuardianAdapterConfig config) {
     final collector = _ResolvedInvocationCollector();
     node.accept(collector);
     collector.sortInSourceOrder();
@@ -91,6 +113,74 @@ final class _UsageRuleUnitVisitor extends SimpleAstVisitor<void> {
         collector.invocations[violationIndex].node,
         arguments: <Object>[usageRule.ruleId],
       );
+    }
+  }
+}
+
+/// Emits one machine-readable marker for every active config-v3 rule that
+/// cannot be fully assessed from the current resolved compilation unit.
+final class GuardianUsageRuleCoverageRule extends AnalysisRule {
+  GuardianUsageRuleCoverageRule()
+    : super(
+        name: code.name,
+        description:
+            'Reports explicit incomplete machine-rule construction evidence.',
+      );
+
+  static const LintCode code = LintCode(
+    'guardian_usage_rule_not_assessed',
+    'DSG_USAGE_RULE_NOT_ASSESSED_V1 ruleId={0} reasonCode={1}',
+  );
+
+  @override
+  LintCode get diagnosticCode => code;
+
+  @override
+  void registerNodeProcessors(
+    RuleVisitorRegistry registry,
+    RuleContext context,
+  ) {
+    registry.addCompilationUnit(
+      this,
+      _UsageRuleCoverageUnitVisitor(this, context),
+    );
+  }
+}
+
+final class _UsageRuleCoverageUnitVisitor extends SimpleAstVisitor<void> {
+  _UsageRuleCoverageUnitVisitor(this.rule, this.context);
+
+  final GuardianUsageRuleCoverageRule rule;
+  final RuleContext context;
+
+  @override
+  void visitCompilationUnit(CompilationUnit node) {
+    final config = validConfig(context);
+    if (config == null ||
+        config.schemaVersion != 3 ||
+        config.activeUsageRules.isEmpty) {
+      return;
+    }
+    final evidence = buildGuardianUsageUnitEvidence(
+      node,
+      approvedMappedConstructorIdentities:
+          config.approvedIdentities['widgets']!,
+    );
+    for (final usageRule in config.activeUsageRules) {
+      final evaluation = evaluateGuardianUsageRule(usageRule, evidence);
+      if (evaluation.status != GuardianUsageEvaluationStatus.notAssessed) {
+        continue;
+      }
+      final index = evaluation.notAssessedIndex;
+      final invocationNode = index == null
+          ? null
+          : evidence.invocations[index].node;
+      final arguments = <Object>[usageRule.ruleId, evaluation.reasonCode!];
+      if (invocationNode != null) {
+        rule.reportAtNode(invocationNode, arguments: arguments);
+      } else {
+        rule.reportAtToken(node.beginToken, arguments: arguments);
+      }
     }
   }
 }

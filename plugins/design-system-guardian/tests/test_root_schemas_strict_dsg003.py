@@ -166,7 +166,12 @@ class StrictRootSchemasTest(unittest.TestCase):
     def test_all_root_schemas_are_valid_strict_draft_2020_12(self) -> None:
         expected = {
             "audit-result.schema.json",
+            "audit-result-v2.schema.json",
+            "evaluator-authorization-pointer.schema.json",
+            "evaluator-authorization-record.schema.json",
+            "evaluator-upgrade-permission.schema.json",
             "post-run-assessment.schema.json",
+            "post-run-assessment-v2.schema.json",
             "build-plan.schema.json",
             "coverage.schema.json",
             "profile.schema.json",
@@ -174,8 +179,11 @@ class StrictRootSchemasTest(unittest.TestCase):
             "rule-activation-permission.schema.json",
             "rule-activation-snapshot.schema.json",
             "rule.schema.json",
+            "rules-list.schema.json",
             "rules-validation-report.schema.json",
             "run-manifest.schema.json",
+            "run-manifest-v2.schema.json",
+            "usage-rules-evidence.schema.json",
             "snapshot.schema.json",
         }
         self.assertEqual({path.name for path in SCHEMA_ROOT.glob("*.schema.json")}, expected)

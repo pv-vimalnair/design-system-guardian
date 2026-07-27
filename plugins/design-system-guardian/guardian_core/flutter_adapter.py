@@ -61,6 +61,27 @@ _CONFIG_V2_KEYS = _CONFIG_V1_KEYS | {
     "activeUsageRules",
     "usageRuleCoverage",
 }
+_CONFIG_V3_KEYS = _CONFIG_V2_KEYS | {
+    "runId",
+    "evaluatorId",
+    "evaluatorContractDigest",
+    "authorizationDigest",
+}
+_EVALUATOR_ID = "guardian-flutter-usage-rules-v2"
+_EVALUATOR_CONTRACT_DIGEST = (
+    "24b38e5b0a7ffe35da9cb368613c693e42e95937d599922491aac2fced411846"
+)
+_USAGE_NOT_ASSESSED_CODE = "guardian_usage_rule_not_assessed"
+_USAGE_NOT_ASSESSED_REASON = "incomplete_construction_graph"
+_USAGE_VIOLATION_MESSAGE = re.compile(
+    r"^Design-system usage rule ([a-z][a-z0-9]*(?:[._-][a-z0-9]+)*) "
+    r"is violated in this compilation unit\.$"
+)
+_USAGE_NOT_ASSESSED_MESSAGE = re.compile(
+    r"^DSG_USAGE_RULE_NOT_ASSESSED_V1 "
+    r"ruleId=([a-z][a-z0-9]*(?:[._-][a-z0-9]+)*) "
+    r"reasonCode=([a-z][a-z0-9]*(?:_[a-z0-9]+)*)$"
+)
 _BINDING_KEYS = {
     "profileId",
     "policyDigest",
@@ -163,6 +184,8 @@ def _validate_config(value: Any, pin: dict[str, Any]) -> dict[str, Any]:
         if schema_version == 1
         else _CONFIG_V2_KEYS
         if schema_version == 2
+        else _CONFIG_V3_KEYS
+        if schema_version == 3
         else set()
     )
     config = _exact_object(value, expected_keys, "Flutter adapter config")
@@ -183,6 +206,10 @@ def _validate_config(value: Any, pin: dict[str, Any]) -> dict[str, Any]:
     for field, exact in expected.items():
         if config.get(field) != exact:
             raise FlutterAdapterIntegrityError(f"Flutter adapter config {field} differs from the run pin.")
+    if schema_version == 3 and config.get("runId") != pin["runId"]:
+        raise FlutterAdapterIntegrityError(
+            "Flutter adapter config runId differs from the run pin."
+        )
     unsigned = copy.deepcopy(config)
     claimed_digest = unsigned.pop("configDigest")
     if sha256_digest(unsigned) != claimed_digest:
@@ -222,7 +249,7 @@ def _validate_config(value: Any, pin: dict[str, Any]) -> dict[str, Any]:
             )
     except (FlutterPackageProvenanceError, FlutterToolchainIntegrityError) as error:
         raise FlutterAdapterIntegrityError(str(error)) from error
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         try:
             from .flutter_config import FlutterConfigError, _validate_config_document
 
@@ -257,7 +284,7 @@ def _canonical_code(value: Any) -> str:
             raise FlutterAdapterIntegrityError("Diagnostic plugin namespace is not Guardian Flutter.")
     if code == "guardian_invalid_config_binding":
         raise FlutterAdapterIntegrityError("Flutter analyzer reported invalid configuration binding.")
-    if code not in _CODE_CATEGORIES:
+    if code not in _CODE_CATEGORIES and code != _USAGE_NOT_ASSESSED_CODE:
         raise FlutterAdapterIntegrityError(f"Unknown Guardian Flutter diagnostic code: {code}.")
     return code
 
@@ -321,6 +348,135 @@ def _core_diagnostic(raw: Mapping[str, Any], category: str, binding: Mapping[str
     }
 
 
+def _usage_violation_rule_id(raw: Mapping[str, Any]) -> str | None:
+    if raw["code"] != "guardian_usage_rule":
+        return None
+    match = _USAGE_VIOLATION_MESSAGE.fullmatch(raw["message"])
+    if match is None:
+        raise FlutterAdapterIntegrityError(
+            "Usage-rule violation message is not canonical."
+        )
+    return match.group(1)
+
+
+def _usage_not_assessed_marker(
+    raw: Mapping[str, Any],
+) -> tuple[str, str] | None:
+    if raw["code"] != _USAGE_NOT_ASSESSED_CODE:
+        return None
+    match = _USAGE_NOT_ASSESSED_MESSAGE.fullmatch(raw["message"])
+    if match is None or match.group(2) != _USAGE_NOT_ASSESSED_REASON:
+        raise FlutterAdapterIntegrityError(
+            "Usage-rule not-assessed marker is not canonical."
+        )
+    return match.group(1), match.group(2)
+
+
+def _build_usage_rules_evidence(
+    config: Mapping[str, Any],
+    *,
+    violation_links: list[tuple[str, str]],
+    markers: list[tuple[str, str]],
+    supported: bool,
+    complete_analysis: bool,
+) -> dict[str, Any]:
+    coverage = config["usageRuleCoverage"]
+    active = list(coverage["activeRuleIds"])
+    active_set = set(active)
+    informative = list(coverage["informativeRuleIds"])
+    violated = sorted({rule_id for rule_id, _ in violation_links})
+    if any(rule_id not in active_set for rule_id in violated):
+        raise FlutterAdapterIntegrityError(
+            "Usage-rule violation names an inactive or unknown rule."
+        )
+
+    marker_reasons: dict[str, str] = {}
+    for rule_id, reason_code in markers:
+        if rule_id not in active_set:
+            raise FlutterAdapterIntegrityError(
+                "Usage-rule marker names an inactive or unknown rule."
+            )
+        previous = marker_reasons.setdefault(rule_id, reason_code)
+        if previous != reason_code:
+            raise FlutterAdapterIntegrityError(
+                "Usage-rule marker reasons disagree."
+            )
+
+    if not supported:
+        marker_reasons = {
+            rule_id: "unsupported_adapter" for rule_id in active
+        }
+    elif not complete_analysis:
+        marker_reasons = {
+            rule_id: _USAGE_NOT_ASSESSED_REASON for rule_id in active
+        }
+    for rule_id in violated:
+        marker_reasons.pop(rule_id, None)
+
+    not_assessed = [
+        {"ruleId": item["ruleId"], "reasonCode": item["reasonCode"]}
+        for item in coverage["inactive"]
+    ]
+    not_assessed.extend(
+        {"ruleId": rule_id, "reasonCode": reason_code}
+        for rule_id, reason_code in marker_reasons.items()
+    )
+    not_assessed = sorted(not_assessed, key=canonical_json_bytes)
+    not_assessed_ids = {item["ruleId"] for item in not_assessed}
+    assessed = sorted(active_set - not_assessed_ids)
+
+    diagnostics = []
+    for rule_id, inherited_id in violation_links:
+        identity = {
+            "ruleId": rule_id,
+            "reasonCode": "machine_rule_violation",
+            "inheritedDiagnosticId": inherited_id,
+        }
+        diagnostics.append(
+            {
+                "diagnosticId": (
+                    "flutter-usage-" + sha256_digest(identity)[:24]
+                ),
+                **identity,
+            }
+        )
+    diagnostics = sorted(diagnostics, key=canonical_json_bytes)
+    diagnostic_ids = [item["diagnosticId"] for item in diagnostics]
+    inherited_ids = [item["inheritedDiagnosticId"] for item in diagnostics]
+    if (
+        len(diagnostic_ids) != len(set(diagnostic_ids))
+        or len(inherited_ids) != len(set(inherited_ids))
+    ):
+        raise FlutterAdapterIntegrityError(
+            "Usage-rule diagnostic identities collide."
+        )
+
+    status = (
+        "conflict"
+        if violated
+        else "unsupported"
+        if not supported
+        else "not_assessed"
+        if not_assessed
+        else "allowed"
+    )
+    return {
+        "schemaVersion": 1,
+        "status": status,
+        "evaluatorId": config["evaluatorId"],
+        "evaluatorContractDigest": config["evaluatorContractDigest"],
+        "authorizationDigest": config["authorizationDigest"],
+        "ruleSnapshotId": config["ruleSnapshotId"],
+        "rulesDigest": config["rulesDigest"],
+        "activeRuleIds": active,
+        "assessedRuleIds": assessed,
+        "violatedRuleIds": violated,
+        "informativeRuleIds": informative,
+        "notAssessed": not_assessed,
+        "diagnostics": diagnostics,
+    }
+
+
 def _suppression_categories(text: str) -> tuple[str, ...]:
     categories: set[str] = set()
     for match in _GUARDIAN_CODE_IN_TEXT.findall(text):
@@ -362,84 +518,208 @@ def normalize_flutter_adapter_result(
     """Validate the shipped Flutter result and project audit.py's exact contract."""
 
     raw = _exact_object(value, _TOP_KEYS, "Flutter adapter result")
-    if raw.get("schemaVersion") != 1:
-        raise FlutterAdapterIntegrityError("Flutter adapter schemaVersion must be exactly 1.")
     adapter = _string(raw.get("adapter"), "adapter")
     adapter_version = _string(raw.get("adapterVersion"), "adapterVersion")
     if raw.get("status") not in _LANE_STATUSES:
         raise FlutterAdapterIntegrityError("Flutter adapter status is invalid.")
     if not isinstance(raw.get("productionReady"), bool):
-        raise FlutterAdapterIntegrityError("Flutter adapter productionReady must be boolean.")
+        raise FlutterAdapterIntegrityError(
+            "Flutter adapter productionReady must be boolean."
+        )
 
     pin = _validate_run_pin(run_pin)
     config = _validate_config(adapter_config, pin)
+    result_schema = raw.get("schemaVersion")
+    expected_result_schema = 2 if config["schemaVersion"] == 3 else 1
+    if result_schema != expected_result_schema:
+        raise FlutterAdapterIntegrityError(
+            "Flutter result schema does not match the exact config contract."
+        )
     binding = _validate_binding(raw.get("binding"), config, pin)
 
-    analysis = _exact_object(raw.get("analysis"), _ANALYSIS_KEYS, "Flutter analysis")
-    if analysis.get("method") != "dart_analyzer_ast" or not isinstance(analysis.get("complete"), bool):
-        raise FlutterAdapterIntegrityError("Flutter analysis must be explicit Dart analyzer AST evidence.")
-    assessed_files = _integer(analysis.get("assessedFiles"), "analysis.assessedFiles")
-    total_files = _integer(analysis.get("totalFiles"), "analysis.totalFiles")
+    analysis = _exact_object(
+        raw.get("analysis"),
+        _ANALYSIS_KEYS,
+        "Flutter analysis",
+    )
+    if (
+        analysis.get("method") != "dart_analyzer_ast"
+        or not isinstance(analysis.get("complete"), bool)
+    ):
+        raise FlutterAdapterIntegrityError(
+            "Flutter analysis must be explicit Dart analyzer AST evidence."
+        )
+    assessed_files = _integer(
+        analysis.get("assessedFiles"),
+        "analysis.assessedFiles",
+    )
+    total_files = _integer(
+        analysis.get("totalFiles"),
+        "analysis.totalFiles",
+    )
     if total_files < 1:
-        raise FlutterAdapterIntegrityError("Flutter analysis must assess at least one relevant file.")
+        raise FlutterAdapterIntegrityError(
+            "Flutter analysis must assess at least one relevant file."
+        )
     if assessed_files > total_files:
-        raise FlutterAdapterIntegrityError("Flutter assessedFiles cannot exceed totalFiles.")
+        raise FlutterAdapterIntegrityError(
+            "Flutter assessedFiles cannot exceed totalFiles."
+        )
 
-    coverage = _exact_object(raw.get("coverage"), set(AUDIT_CATEGORIES), "Flutter coverage")
+    coverage = _exact_object(
+        raw.get("coverage"),
+        set(AUDIT_CATEGORIES),
+        "Flutter coverage",
+    )
     lane_statuses: dict[str, str] = {}
     lane_counts: dict[str, int] = {}
     for category in AUDIT_CATEGORIES:
-        lane = _exact_object(coverage[category], _LANE_KEYS, f"coverage.{category}")
+        lane = _exact_object(
+            coverage[category],
+            _LANE_KEYS,
+            f"coverage.{category}",
+        )
         status = lane.get("status")
-        if status not in _LANE_STATUSES or lane.get("method") != "dart_analyzer_ast":
-            raise FlutterAdapterIntegrityError(f"Flutter coverage lane {category} is invalid.")
+        if (
+            status not in _LANE_STATUSES
+            or lane.get("method") != "dart_analyzer_ast"
+        ):
+            raise FlutterAdapterIntegrityError(
+                f"Flutter coverage lane {category} is invalid."
+            )
         lane_statuses[category] = status
-        lane_counts[category] = _integer(lane.get("diagnosticCount"), f"coverage.{category}.diagnosticCount")
+        lane_counts[category] = _integer(
+            lane.get("diagnosticCount"),
+            f"coverage.{category}.diagnosticCount",
+        )
 
     if not isinstance(raw.get("diagnostics"), list):
-        raise FlutterAdapterIntegrityError("Flutter diagnostics must be an array.")
+        raise FlutterAdapterIntegrityError(
+            "Flutter diagnostics must be an array."
+        )
     diagnostics = [_raw_diagnostic(item) for item in raw["diagnostics"]]
-    expected_order = sorted(diagnostics, key=lambda item: (item["path"], item["line"], item["column"], item["code"], item["message"]))
+    expected_order = sorted(
+        diagnostics,
+        key=lambda item: (
+            item["path"],
+            item["line"],
+            item["column"],
+            item["code"],
+            item["message"],
+        ),
+    )
     if diagnostics != expected_order:
-        raise FlutterAdapterIntegrityError("Flutter diagnostics must be in deterministic order.")
+        raise FlutterAdapterIntegrityError(
+            "Flutter diagnostics must be in deterministic order."
+        )
     scan = _validate_scan(raw.get("suppressionScan"))
 
     core_diagnostics: list[dict[str, Any]] = []
+    usage_violation_links: list[tuple[str, str]] = []
+    usage_markers: list[tuple[str, str]] = []
     diagnostic_counts = {category: 0 for category in AUDIT_CATEGORIES}
     for diagnostic in diagnostics:
+        marker = _usage_not_assessed_marker(diagnostic)
+        if marker is not None:
+            if result_schema != 2:
+                raise FlutterAdapterIntegrityError(
+                    "Usage-rule not-assessed markers require result schema v2."
+                )
+            usage_markers.append(marker)
+            continue
         for category in _CODE_CATEGORIES[diagnostic["code"]]:
             diagnostic_counts[category] += 1
-            core_diagnostics.append(_core_diagnostic(diagnostic, category, binding))
+            core_diagnostic = _core_diagnostic(
+                diagnostic,
+                category,
+                binding,
+            )
+            core_diagnostics.append(core_diagnostic)
+            if (
+                result_schema == 2
+                and diagnostic["code"] == "guardian_usage_rule"
+            ):
+                rule_id = _usage_violation_rule_id(diagnostic)
+                assert rule_id is not None
+                usage_violation_links.append(
+                    (rule_id, core_diagnostic["diagnosticId"])
+                )
     core_diagnostics.extend(_suppression_diagnostics(scan, binding))
     core_diagnostics = sorted(core_diagnostics, key=canonical_json_bytes)
     identifiers = [item["diagnosticId"] for item in core_diagnostics]
     if len(identifiers) != len(set(identifiers)):
-        raise FlutterAdapterIntegrityError("Normalized Flutter diagnostic IDs collide.")
+        raise FlutterAdapterIntegrityError(
+            "Normalized Flutter diagnostic IDs collide."
+        )
     for category in AUDIT_CATEGORIES:
         if lane_counts[category] != diagnostic_counts[category]:
-            raise FlutterAdapterIntegrityError(f"Flutter coverage count for {category} differs from AST evidence.")
+            raise FlutterAdapterIntegrityError(
+                f"Flutter coverage count for {category} differs from AST evidence."
+            )
 
-    if raw["status"] == "invalid" or any(status == "invalid" for status in lane_statuses.values()):
-        raise FlutterAdapterIntegrityError("Invalid Flutter adapter evidence cannot enter the audit lane.")
+    if raw["status"] == "invalid" or any(
+        status == "invalid" for status in lane_statuses.values()
+    ):
+        raise FlutterAdapterIntegrityError(
+            "Invalid Flutter adapter evidence cannot enter the audit lane."
+        )
     unsupported_adapter = adapter != "flutter" or adapter_version != "0.1.0"
-    supported = not unsupported_adapter and raw["status"] != "unsupported" and not any(
-        status == "unsupported" for status in lane_statuses.values()
+    supported = (
+        not unsupported_adapter
+        and raw["status"] != "unsupported"
+        and not any(
+            status == "unsupported" for status in lane_statuses.values()
+        )
     )
-    complete_analysis = analysis["complete"] is True and assessed_files == total_files
-    all_coverage_allowed = all(status == "allowed" for status in lane_statuses.values())
-    expected_status = "unsupported" if not supported else "allowed" if complete_analysis and all_coverage_allowed else "not_assessed"
+    complete_analysis = (
+        analysis["complete"] is True and assessed_files == total_files
+    )
+    all_coverage_allowed = all(
+        status == "allowed" for status in lane_statuses.values()
+    )
+    expected_status = (
+        "unsupported"
+        if not supported
+        else "allowed"
+        if complete_analysis and all_coverage_allowed
+        else "not_assessed"
+    )
     if raw["status"] != expected_status:
-        raise FlutterAdapterIntegrityError("Flutter result status differs from exact analysis and coverage evidence.")
-    expected_ready = expected_status == "allowed" and not core_diagnostics
+        raise FlutterAdapterIntegrityError(
+            "Flutter result status differs from exact analysis and coverage evidence."
+        )
+
+    usage_evidence = None
+    if config["schemaVersion"] == 3:
+        usage_evidence = _build_usage_rules_evidence(
+            config,
+            violation_links=usage_violation_links,
+            markers=usage_markers,
+            supported=supported,
+            complete_analysis=complete_analysis,
+        )
+    expected_ready = (
+        expected_status == "allowed"
+        and not core_diagnostics
+        and (
+            usage_evidence is None
+            or usage_evidence["status"] == "allowed"
+        )
+    )
     if raw["productionReady"] is not expected_ready:
-        raise FlutterAdapterIntegrityError("Flutter productionReady differs from exact analyzer evidence.")
+        raise FlutterAdapterIntegrityError(
+            "Flutter productionReady differs from exact analyzer evidence."
+        )
 
     internal_categories: dict[str, dict[str, Any]] = {}
     for category in AUDIT_CATEGORIES:
         raw_status = lane_statuses[category]
         if not complete_analysis:
             status = "not_assessed"
-        elif config["schemaVersion"] == 1 and raw["status"] == "not_assessed":
+        elif (
+            config["schemaVersion"] == 1
+            and raw["status"] == "not_assessed"
+        ):
             status = "not_assessed"
         elif raw_status == "unsupported":
             status = "unsupported"
@@ -453,9 +733,13 @@ def normalize_flutter_adapter_result(
             "totalItems": total_files,
         }
 
-    return {
+    normalized = {
         "schemaVersion": 1,
-        "adapter": "flutter" if not unsupported_adapter else f"{adapter}@{adapter_version}",
+        "adapter": (
+            "flutter"
+            if not unsupported_adapter
+            else f"{adapter}@{adapter_version}"
+        ),
         "supported": supported,
         "configDigest": config["configDigest"],
         "sourceCut": copy.deepcopy(pin["sourceCut"]),
@@ -464,3 +748,6 @@ def normalize_flutter_adapter_result(
         "categories": internal_categories,
         "diagnostics": core_diagnostics,
     }
+    if usage_evidence is not None:
+        normalized["usageRulesEvidence"] = usage_evidence
+    return normalized

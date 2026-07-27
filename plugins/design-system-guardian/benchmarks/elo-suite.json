@@ -207,6 +207,46 @@
             "caseModuleId": "guardian-public-cases-v5",
             "caseFunction": "case_portability_no_downgrade",
             "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-correctness-explicit-evaluator-v2",
+            "category": "correctness",
+            "weight": 8,
+            "caseModuleId": "guardian-public-cases-v6",
+            "caseFunction": "case_correctness_explicit_evaluator_v2",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-reliability-no-implicit-evaluator-upgrade",
+            "category": "reliability",
+            "weight": 7,
+            "caseModuleId": "guardian-public-cases-v6",
+            "caseFunction": "case_reliability_no_implicit_evaluator_upgrade",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-coverage-six-predicates-two-scopes",
+            "category": "coverage_usefulness",
+            "weight": 8,
+            "caseModuleId": "guardian-public-cases-v6",
+            "caseFunction": "case_coverage_six_predicates_two_scopes",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-safety-separate-usage-rules-lane",
+            "category": "safety_privacy_integrity",
+            "weight": 8,
+            "caseModuleId": "guardian-public-cases-v6",
+            "caseFunction": "case_safety_separate_usage_rules_lane",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-portability-rule-list-reload-status",
+            "category": "portability_usability_performance",
+            "weight": 7,
+            "caseModuleId": "guardian-public-cases-v6",
+            "caseFunction": "case_portability_rule_list_reload_status",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
         }
     ],
     "caseModules": [
@@ -233,10 +273,16 @@
             "path": "benchmarks/elo_cases_v5.py",
             "moduleDigest": "0778ded8c434a0bd6ea3d329409d42b169e21660a470da2439911844fc2c0a1a",
             "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "moduleId": "guardian-public-cases-v6",
+            "path": "benchmarks/elo_cases_v6.py",
+            "moduleDigest": "77a26229e43babaa20ae948d2a9193aa293bf4ca3f1ae8984798cf13713ad74a",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
         }
     ],
     "model": "guardian-weighted-elo-v1",
     "schemaVersion": 2,
     "suiteId": "guardian-public-synthetic-v1",
-    "suiteVersion": 5
+    "suiteVersion": 6
 }

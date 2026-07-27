@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from .adapter_dispatch import build_pinned_adapter_config
-from .audit import AuditIntegrityError, derive_audit_exit_code
+from .audit import (
+    AuditIntegrityError,
+    derive_audit_exit_code,
+    project_audit_result_v1,
+    project_usage_rules_lane,
+)
 from .audit_attestation import AnalysisAttestationIntegrityError, verify_analysis_attestation
 from .canonical import canonical_json_bytes, sha256_digest
 from .clock import utc_now as _utc_now
@@ -163,6 +168,42 @@ def _audit(
     result["productionReady"] = code == ExitCode.PASS
     return result, code
 
+def _verify_sealed_usage_rules_lane(
+    audit: dict[str, Any], analysis_payload: dict[str, Any]
+) -> None:
+    if audit.get("schemaVersion") != 2:
+        return
+    runner_evidence = analysis_payload.get("runnerEvidence")
+    normalized_adapter_result = (
+        runner_evidence.get("normalizedAdapterResult")
+        if isinstance(runner_evidence, dict)
+        else None
+    )
+    evidence = (
+        normalized_adapter_result.get("usageRulesEvidence")
+        if isinstance(normalized_adapter_result, dict)
+        else None
+    )
+    if not isinstance(evidence, dict):
+        raise FinalizationError(
+            "Audit-result v2 requires exact sealed runner Usage Rules evidence."
+        )
+    try:
+        expected_lane = project_usage_rules_lane(
+            evidence,
+            design_system_lane=audit["designSystemLane"],
+            coverage=audit["coverage"],
+        )
+    except (AuditIntegrityError, KeyError) as error:
+        raise FinalizationError(
+            f"Sealed runner Usage Rules evidence is invalid: {error}"
+        ) from error
+    if audit.get("usageRulesLane") != expected_lane:
+        raise FinalizationError(
+            "Audit Usage Rules lane differs from the exact sealed runner evidence."
+        )
+
+
 def _rel(home: Path, path: Path) -> str:
     return path.relative_to(home).as_posix()
 
@@ -206,10 +247,11 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
             analysis_envelope["payload"],
             run_pin=pin,
             config_digest=expected_adapter_config["configDigest"],
-            audit_result=audit_result,
+            audit_result=project_audit_result_v1(audit_result),
             verified_snapshot=snapshot,
             adapter_config=expected_adapter_config,
         )
+        _verify_sealed_usage_rules_lane(audit, analysis_envelope["payload"])
     except (RunArtifactIntegrityError, AnalysisAttestationIntegrityError, KeyError) as error:
         raise FinalizationError(
             f"Trusted analysis attestation cannot be verified: {error}"
@@ -217,6 +259,13 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
     completion_state = completion_freshness["state"]
     if completion_state in {"stale", "source_unavailable", "source_incomplete"}:
         audit["designSystemLane"]["status"] = completion_state
+        if audit.get("schemaVersion") == 2:
+            usage_lane = audit.get("usageRulesLane")
+            if not isinstance(usage_lane, dict):
+                raise FinalizationError(
+                    "Audit-result v2 is missing its Usage Rules lane."
+                )
+            usage_lane["status"] = completion_state
         audit["productionReady"] = False
         try:
             audit_code = derive_audit_exit_code(audit)
@@ -243,7 +292,16 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
             outputs.append({"artifactType": kind, "path": _rel(home, path), "payloadDigest": envelope["payloadDigest"]})
             return envelope
         audit_envelope = store("audit-result", audit)
-        coverage = {"schemaVersion": 1, "runId": run_id, "profileId": profile_id, "snapshotId": pin["snapshotId"], "policyDigest": pin["policyDigest"], "coverage": copy.deepcopy(audit["coverage"])}
+        coverage = {
+            "schemaVersion": audit["schemaVersion"],
+            "runId": run_id,
+            "profileId": profile_id,
+            "snapshotId": pin["snapshotId"],
+            "policyDigest": pin["policyDigest"],
+            "coverage": copy.deepcopy(audit["coverage"]),
+        }
+        if audit["schemaVersion"] == 2:
+            coverage["usageRulesLane"] = copy.deepcopy(audit["usageRulesLane"])
         store("coverage", coverage)
         if plan is not None:
             store("build-plan", plan)
@@ -253,7 +311,7 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
         artifacts["readable-report"] = report_path
         outputs.append({"artifactType": "readable-report", "path": _rel(home, report_path), "payloadDigest": sha256_digest(report.encode("utf-8"))})
         manifest = {
-            "schemaVersion": 1,
+            "schemaVersion": audit["schemaVersion"],
             "runId": run_id,
             "profileId": profile_id,
             "snapshotId": pin["snapshotId"],
@@ -269,6 +327,10 @@ def _finalize_run_at(home: Path, *, profile_id: str, run_id: str, audit_result: 
             "exitCode": int(code),
             "productionReady": ready,
         }
+        if audit["schemaVersion"] == 2:
+            manifest["usageRulesLaneDigest"] = sha256_digest(
+                audit["usageRulesLane"]
+            )
         manifest_envelope = store("run-manifest", manifest)
         post_run_assessment = build_post_run_assessment(
             audit_result=audit,

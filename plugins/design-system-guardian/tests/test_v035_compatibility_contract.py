@@ -81,7 +81,9 @@ class V035CompatibilityContractTest(unittest.TestCase):
         }
         self.assertTrue(all((PLUGIN_ROOT / relative).is_file() for relative in additions))
         schemas = sorted(PLUGIN_ROOT.rglob("*.schema.json"))
-        self.assertEqual(len(schemas), 28)
+        # The exact v0.3.5 count remains executable from its public tag through
+        # the release-inheritance harness; newer releases may only add schemas.
+        self.assertGreaterEqual(len(schemas), 28)
         for path in schemas:
             json.loads(path.read_text(encoding="utf-8"))
 
@@ -95,7 +97,8 @@ class V035CompatibilityContractTest(unittest.TestCase):
         rendered = "\n".join(path.read_text(encoding="utf-8") for path in manifests)
         self.assertNotIn('"version": "0.3.4"', rendered)
         for path in manifests:
-            self.assertIn("0.3.5", path.read_text(encoding="utf-8"), path)
+            text = path.read_text(encoding="utf-8")
+            self.assertTrue("0.3.5" in text or "0.3.6" in text, path)
         plugin = json.loads(
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )

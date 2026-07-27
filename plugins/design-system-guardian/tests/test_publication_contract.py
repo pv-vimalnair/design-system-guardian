@@ -90,7 +90,7 @@ class PublicationContractTests(unittest.TestCase):
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "design-system-guardian")
-        self.assertEqual(manifest["version"], "0.3.5")
+        self.assertEqual(manifest["version"], "0.3.6")
         self.assertEqual(manifest["license"], "MIT")
         self.assertNotIn("hooks", manifest)
         self.assertEqual(manifest["interface"]["brandColor"], "#3157D8")
@@ -104,8 +104,11 @@ class PublicationContractTests(unittest.TestCase):
         from guardian_core.release import RUNTIME_VERSION
         self.assertEqual(RUNTIME_VERSION, manifest["version"])
         pubspec = (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8")
-        self.assertIn("version: 0.3.5", pubspec)
+        self.assertIn("version: 0.3.6", pubspec)
+        self.assertIn("sdk: '>=3.11.0 <4.0.0'", pubspec)
+        self.assertIn("flutter: '>=3.41.0'", pubspec)
         self.assertIn("analyzer_testing: 0.3.3", pubspec)
+        self.assertIn("test: 1.31.2", pubspec)
 
     def test_v035_release_page_preserves_supported_lanes_and_describes_safe_activation(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
@@ -133,6 +136,7 @@ class PublicationContractTests(unittest.TestCase):
         self.assertNotIn('"projectRoot": null', plugin_readme)
 
         changelog = (PLUGIN_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertLess(changelog.index("## 0.3.6"), changelog.index("## 0.3.5"))
         self.assertLess(changelog.index("## 0.3.5"), changelog.index("## 0.3.4"))
         self.assertLess(changelog.index("## 0.3.4"), changelog.index("## 0.3.3"))
 
@@ -198,5 +202,23 @@ class PublicationContractTests(unittest.TestCase):
         self.assertIn("git hash-object -t tree /dev/null", workflow)
         self.assertIn('git diff --check "$base" "$head"', workflow)
         self.assertNotIn("run: git diff --check", workflow)
+
+    def test_ci_runs_the_pinned_flutter_adapter_on_windows_and_ubuntu(self) -> None:
+        workflow = (REPOSITORY_ROOT / ".github/workflows/validate.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("flutter-adapter:", workflow)
+        self.assertEqual(workflow.count("os: [windows-latest, ubuntu-latest]"), 2)
+        self.assertIn("44a626f4f0027bc38a46dc68aed5964b05a83c18", workflow)
+        self.assertIn("https://github.com/flutter/flutter.git", workflow)
+        for command in (
+            "flutter pub get",
+            "dart format --output=none --set-exit-if-changed",
+            "dart analyze lib",
+            "dart analyze test/usage_rule_v2_test.dart",
+            "flutter test",
+        ):
+            self.assertIn(command, workflow)
+
 if __name__ == "__main__":
     unittest.main()

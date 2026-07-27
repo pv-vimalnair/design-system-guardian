@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/run-manifest-v2.schema.json",
+  "title": "Design System Guardian run manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "profileId",
+    "snapshotId",
+    "policyDigest",
+    "command",
+    "startedAt",
+    "completedAt",
+    "sourceCut",
+    "projectEvidence",
+    "enforcementAuthorityLane",
+    "inputs",
+    "outputs",
+    "exitCode",
+    "productionReady",
+    "usageRulesLaneDigest"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "runId": {"$ref": "run-manifest.schema.json#/properties/runId"},
+    "profileId": {"$ref": "run-manifest.schema.json#/properties/profileId"},
+    "snapshotId": {"$ref": "run-manifest.schema.json#/properties/snapshotId"},
+    "policyDigest": {"$ref": "run-manifest.schema.json#/properties/policyDigest"},
+    "command": {"const": "finalize"},
+    "startedAt": {"$ref": "run-manifest.schema.json#/properties/startedAt"},
+    "completedAt": {"$ref": "run-manifest.schema.json#/properties/completedAt"},
+    "sourceCut": {"$ref": "run-manifest.schema.json#/properties/sourceCut"},
+    "projectEvidence": {"$ref": "run-manifest.schema.json#/properties/projectEvidence"},
+    "enforcementAuthorityLane": {"$ref": "run-manifest.schema.json#/properties/enforcementAuthorityLane"},
+    "inputs": {"$ref": "run-manifest.schema.json#/properties/inputs"},
+    "outputs": {"$ref": "run-manifest.schema.json#/properties/outputs"},
+    "exitCode": {"$ref": "run-manifest.schema.json#/properties/exitCode"},
+    "productionReady": {"type": "boolean"},
+    "usageRulesLaneDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

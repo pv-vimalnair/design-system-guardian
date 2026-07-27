@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/post-run-assessment-v2.schema.json",
+  "title": "Design System Guardian post-run assessment v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "profileId",
+    "snapshotId",
+    "policyDigest",
+    "runtimeVersion",
+    "evidenceDigests",
+    "statuses",
+    "counts",
+    "usageRules",
+    "reasonCodes",
+    "evolutionHandoff",
+    "sourceMutationPerformed"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "runId": {"$ref": "post-run-assessment.schema.json#/properties/runId"},
+    "profileId": {"$ref": "post-run-assessment.schema.json#/properties/profileId"},
+    "snapshotId": {"$ref": "#/$defs/digest"},
+    "policyDigest": {"$ref": "#/$defs/digest"},
+    "runtimeVersion": {"$ref": "post-run-assessment.schema.json#/properties/runtimeVersion"},
+    "evidenceDigests": {"$ref": "#/$defs/evidenceDigests"},
+    "statuses": {"$ref": "#/$defs/statuses"},
+    "counts": {"$ref": "#/$defs/counts"},
+    "usageRules": {"$ref": "#/$defs/usageRules"},
+    "reasonCodes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/reason"}
+    },
+    "evolutionHandoff": {"$ref": "post-run-assessment.schema.json#/properties/evolutionHandoff"},
+    "sourceMutationPerformed": {"const": false}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ruleId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "ruleIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ruleId"}
+    },
+    "notAssessed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "reasonCode"],
+      "properties": {
+        "ruleId": {"$ref": "#/$defs/ruleId"},
+        "reasonCode": {"$ref": "#/$defs/reasonCode"}
+      }
+    },
+    "evidenceDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runManifest", "analysisAttestation", "sourceCut", "assessedTree", "analysisInputs", "usageRulesLane"],
+      "properties": {
+        "runManifest": {"$ref": "#/$defs/digest"},
+        "analysisAttestation": {"$ref": "#/$defs/digest"},
+        "sourceCut": {"$ref": "#/$defs/digest"},
+        "assessedTree": {"$ref": "#/$defs/digest"},
+        "analysisInputs": {"$ref": "#/$defs/digest"},
+        "usageRulesLane": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "statuses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "designSystem", "usageRules", "uxAccessibility", "coverage", "enforcementAuthority"],
+      "properties": {
+        "run": {"enum": ["passed", "violation", "invalid", "source_blocked", "unsupported"]},
+        "designSystem": {"enum": ["allowed", "invalid", "stale", "source_unavailable", "source_incomplete", "unsupported", "not_assessed", "conflict"]},
+        "usageRules": {"enum": ["allowed", "conflict", "not_assessed", "unsupported", "invalid", "stale", "source_unavailable", "source_incomplete"]},
+        "uxAccessibility": {"enum": ["allowed", "conflict", "not_assessed"]},
+        "coverage": {"enum": ["allowed", "unsupported", "not_assessed"]},
+        "enforcementAuthority": {"enum": ["allowed", "not_assessed"]}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "violations",
+        "designSystemGaps",
+        "sentinels",
+        "allowedResolutions",
+        "nonAllowedResolutions",
+        "assessedUxChecks",
+        "unassessedUxChecks",
+        "activeUsageRules",
+        "assessedUsageRules",
+        "violatedUsageRules",
+        "unassessedUsageRules",
+        "informativeUsageRules"
+      ],
+      "properties": {
+        "violations": {"type": "integer", "minimum": 0},
+        "designSystemGaps": {"type": "integer", "minimum": 0},
+        "sentinels": {"type": "integer", "minimum": 0},
+        "allowedResolutions": {"type": "integer", "minimum": 0},
+        "nonAllowedResolutions": {"type": "integer", "minimum": 0},
+        "assessedUxChecks": {"type": "integer", "minimum": 0},
+        "unassessedUxChecks": {"type": "integer", "minimum": 0},
+        "activeUsageRules": {"type": "integer", "minimum": 0},
+        "assessedUsageRules": {"type": "integer", "minimum": 0},
+        "violatedUsageRules": {"type": "integer", "minimum": 0},
+        "unassessedUsageRules": {"type": "integer", "minimum": 0},
+        "informativeUsageRules": {"type": "integer", "minimum": 0}
+      }
+    },
+    "usageRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluatorId", "evaluatorContractDigest", "authorizationDigest", "ruleSnapshotId", "rulesDigest", "activeRuleIds", "assessedRuleIds", "violatedRuleIds", "informativeRuleIds", "notAssessed"],
+      "properties": {
+        "evaluatorId": {"const": "guardian-flutter-usage-rules-v2"},
+        "evaluatorContractDigest": {"$ref": "#/$defs/digest"},
+        "authorizationDigest": {"$ref": "#/$defs/digest"},
+        "ruleSnapshotId": {"$ref": "#/$defs/digest"},
+        "rulesDigest": {"$ref": "#/$defs/digest"},
+        "activeRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "assessedRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "violatedRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "informativeRuleIds": {"$ref": "#/$defs/ruleIds"},
+        "notAssessed": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/notAssessed"}}
+      }
+    },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reasonCode", "attribution", "count"],
+      "properties": {
+        "reasonCode": {
+          "enum": [
+            "design_system_violation", "design_system_gap", "design_system_identity_missing",
+            "design_system_stale", "design_system_source_unavailable", "design_system_source_incomplete",
+            "design_system_unsupported", "design_system_not_assessed", "design_system_invalid",
+            "design_system_conflict", "resolution_missing", "resolution_ambiguous",
+            "resolution_conflict", "resolution_invalid", "resolution_unsupported", "resolution_stale",
+            "resolution_source_unavailable", "resolution_source_incomplete", "resolution_not_assessed",
+            "unsupported_adapter", "incomplete_coverage", "ux_conflict", "ux_not_assessed",
+            "enforcement_not_assessed", "usage_rule_violation", "usage_rule_not_assessed",
+            "usage_rules_unsupported", "usage_rules_invalid", "usage_rules_source_blocked"
+          ]
+        },
+        "attribution": {"enum": ["project_implementation", "design_system", "source", "project_configuration", "capability_candidate", "plugin_candidate"]},
+        "count": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

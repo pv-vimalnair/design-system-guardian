@@ -45,6 +45,14 @@ Permission enables the evaluator; it does not approve rules. Rules are accepted 
 
 Version 0.3.5 enforces only `forbidden_identity_in_scope` + `compilation_unit` and `max_instances_per_scope` + `compilation_unit`. Other valid rules remain stored and previewable but `not_assessed` until v0.3.6. Once v2 evidence exists, Guardian never falls back to v1 if the v2 head or evidence is unavailable, corrupt, incomplete, or discontinuous.
 
+## Explicit evaluator-v2 permission and rule inventory
+
+Installing v0.3.6 does not expand the permission above. The agent first runs `guardian rules list --profile <id>` read-only. The canonical result lists the effective evaluator, rule IDs/classes, capability status, fixed reason codes, and active/not-assessed/informative counts without printing rule prose, company paths, design content, or user data.
+
+When expanded coverage is needed, the agent runs `guardian rules upgrade preview --profile <id>` without writing. It explains in plain language that Guardian can now check all six approved machine-rule types, including analyzer-proven `widget_class` scope, and asks whether it may save that exact local evaluator permission for the selected profile. Only after explicit permission may the exact bundle be passed to `guardian rules upgrade apply --input <permission-bound-bundle.json>`. The user does not copy files, hashes, or commands.
+
+A valid evaluator-v2 authorization covers all six existing machine predicates, `compilation_unit` and `widget_class` scope where defined, and exact child, descendant, and sibling relations. It does not approve rules, identities, or assets. Without it, Guardian keeps the v0.3.5 evaluator and reports newly supported capabilities as `not_assessed`. Judgment rules remain `not_assessed`; informative rules remain non-gating.
+
 ## Figma evidence
 
 `guardian adapter figma config --profile <id> --run-id <id> --output <absolute-guardian-local-state-config.json>` derives the run-bound collector contract. The output must stay inside Guardian local state under `~/.design-system-guardian/`; never place it in the product tree, repository, or Git staging. The supported Figma collector reads the selected nodes back through the Plugin API. A version 2 audit accepts exact input shaped as:
@@ -92,19 +100,22 @@ A Plugin API mismatch blocks or reports the affected operation. It never authori
 
 The final version 2 `guardian audit` accepts `uxEvidence` and reruns the final-flow evaluation across every selected screen plus navigation, reachability, errors, recovery, and cross-screen state. A proven violation or gap can fail the run. Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation.
 
-Guardian reports three independent lanes:
+Guardian reports four independent lanes:
 
 1. design-system compliance;
-2. UX/accessibility quality;
-3. protected production authority.
+2. Usage Rules compliance;
+3. UX/accessibility quality;
+4. protected production authority.
 
-A compliant design can still fail UX, and an accessible unauthorized substitute still fails design-system compliance. Local Figma and UX evidence is diagnostic: violations and gaps can fail, but clean evidence cannot pass. Never label those local lanes `allowed`; without protected host or CI attestation they remain `not_assessed` and `productionReady=false`.
+The Usage Rules lane is `allowed` only when every active gating machine rule is fully assessed without violation. Exact violations produce `conflict`; incomplete relationships, judgment rules, and uncovered gating work remain `not_assessed`. Informative rules do not gate. The inherited design-system projection and the Usage Rules lane must agree or the result is invalid.
+
+A compliant design can still fail Usage Rules or UX, and an accessible unauthorized substitute still fails design-system compliance. Local Figma and UX evidence is diagnostic: violations and gaps can fail, but clean evidence cannot pass. Never label those local lanes `allowed`; without protected host or CI attestation they remain `not_assessed` and `productionReady=false`.
 
 An inaccessible approved asset is a design-system gap. Guardian never silently changes its color, size, motion, or behavior.
 
 ## Flutter compatibility
 
-Version 2 audit requests also support `adapter: "flutter"`, `adapterEvidence: null`, and the exact project root. Guardian owns analyzer execution, derives a run-bound allowlist, verifies the profile-bound Dart SDK and package closure, hashes source and analyzer input, analyzes an external staging copy, requires one attestation per compilation unit, scans suppressions, and seals the result.
+Version 2 audit requests also support `adapter: "flutter"`, `adapterEvidence: null`, and the exact project root. With explicit evaluator-v2 permission, Guardian assesses all six machine predicates through analyzer-resolved identities, variants, construction relations, and honest `compilation_unit` or `widget_class` scope. Guardian owns analyzer execution, derives a run-bound allowlist, verifies the profile-bound Dart SDK and package closure, hashes source and analyzer input, analyzes an external staging copy, requires one attestation per compilation unit, scans suppressions, and seals the result.
 
 Backward-compatible version 1 Flutter audit requests remain readable. A project or host without a supported adapter returns `unsupported`; incomplete coverage never passes.
 
@@ -122,6 +133,8 @@ The command surface is:
 - `resolve`
 - `rules validate`
 - `rules activate preview`, `rules activate apply`
+- `rules list`
+- `rules upgrade preview`, `rules upgrade apply`
 - `adapter flutter config`
 - `adapter figma config`
 - `ux checkpoint`
@@ -143,11 +156,13 @@ No sealed Guardian manifest means the work is not Guardian-approved.
 
 ## Cross-agent installation
 
-Codex, Claude Code, OpenClaw, and Kimi Code use host manifests over this same directory. Deep Code and generic Agent Skills hosts use the integrity-bound installer without duplicating `guardian_core`. See [Installing on Agent Hosts](docs/INSTALLING.md).
+Codex, Claude Code, OpenClaw, and Kimi Code use host manifests over this same directory. Qwen Code, terminal agents, Deep Code, and generic Agent Skills hosts use the integrity-bound installer without duplicating `guardian_core`. See [Installing on Agent Hosts](docs/INSTALLING.md).
 
 On generic hosts, `--bootstrap-runtime` is opt-in. The agent must explain the exact local change and obtain explicit permission before using it. An absolute Python 3.11+ executable remains required. The flag creates an isolated Guardian-owned virtual environment under `~/.design-system-guardian/runtimes/` and installs exactly `cryptography==46.0.7`, `cffi==2.1.0`, and `pycparser==3.0` from the bundled `requirements.txt` with dependency resolution disabled; without the flag, the installer never creates a virtual environment or invokes `pip`. It first performs a read-only exact-version and import check in the selected host Python, while permitting unrelated host distributions; a mismatch blocks with an explicit permission-bound `--bootstrap-runtime` hint.
 
 If bootstrap creation, pinned installation, or verification is unavailable or fails, installation blocks and the host remains `unsupported`; Guardian must fail closed. This diagnostic bootstrap does not create an always-on protected route.
+
+Generic hosts may run `python <reviewed-package>/scripts/install_agent_skills.py --target-root <host-skill-root> --status` without writing. The result is `current`, `update_required`, `reload_required`, or `invalid`. If a Windows watcher blocks atomic promotion, Guardian restores the prior installation and reports `reload_required` with `host_restart_required`; close or restart that exact host, rerun the same verified update, reload or start a new session, and read back the version and two skills before claiming success.
 
 Skills are portable; automatic routing is not. Installing them on Claude Code, Kimi Code, OpenClaw, or a generic host does not create an always-on protected route. A host is enforceable only when it independently invokes Guardian before raw tools and protects the resulting evidence. Otherwise use is diagnostic or `unsupported`, and Guardian cannot prevent raw-tool bypass.
 
@@ -162,9 +177,11 @@ Plugin source updates use reviewed SemVer and deterministic migrations. Release 
 - rollback is a new signed restoration and never rewrites history;
 - private catalogs, trust anchors, run evidence, and release state remain outside the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.5 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.6 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
 
 Version 0.3.5 adds permission-bound Safe Activation for the two documented compilation-unit pairs. It preserves the complete v0.3.2-v0.3.4 surface, and local activation still cannot create protected production authority.
+
+Version 0.3.6 adds a separately permissioned evaluator-v2 sidecar, zero-write rule inventory, complete machine-rule capability, a separate Usage Rules lane, and recoverable host reload status without rewriting v0.3.2-v0.3.5 evidence. Public Elo cases are synthetic; local score, benchmark results, and append-only history stay outside Git.
 
 See [Trusted Execution](docs/TRUSTED_EXECUTION.md), [Updating and Releases](docs/UPDATING.md), and [Release Evidence Contract](docs/RELEASES.md).
 

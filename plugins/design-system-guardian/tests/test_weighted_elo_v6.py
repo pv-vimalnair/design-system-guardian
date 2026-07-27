@@ -12,34 +12,34 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "benchmarks" / "elo_cases_v5.py"
-PRIOR_SUITE_DIGEST = "5f77c8c1998d35697cea1c21c01b28c955870a2f895461ff16b0cbcf9e99df34"
-V5_MODULE_ID = "guardian-public-cases-v5"
-V5_CASES = {
-    "synthetic-correctness-safe-rule-activation": (
+MODULE_PATH = ROOT / "benchmarks" / "elo_cases_v6.py"
+PRIOR_SUITE_DIGEST = "d96c5d3f5efc34898410ae1331f20adedece5bcc8cad749ee924acb1e3000767"
+V6_MODULE_ID = "guardian-public-cases-v6"
+V6_CASES = {
+    "synthetic-correctness-explicit-evaluator-v2": (
         "correctness",
-        6,
-        "case_correctness_safe_rule_activation",
+        8,
+        "case_correctness_explicit_evaluator_v2",
     ),
-    "synthetic-reliability-v1-state-preserved": (
+    "synthetic-reliability-no-implicit-evaluator-upgrade": (
         "reliability",
-        6,
-        "case_reliability_v1_state_preserved",
-    ),
-    "synthetic-coverage-first-predicate-pairs": (
-        "coverage_usefulness",
-        5,
-        "case_coverage_first_predicate_pairs",
-    ),
-    "synthetic-safety-permission-is-not-rule-approval": (
-        "safety_privacy_integrity",
         7,
-        "case_safety_permission_is_not_rule_approval",
+        "case_reliability_no_implicit_evaluator_upgrade",
     ),
-    "synthetic-portability-no-downgrade": (
+    "synthetic-coverage-six-predicates-two-scopes": (
+        "coverage_usefulness",
+        8,
+        "case_coverage_six_predicates_two_scopes",
+    ),
+    "synthetic-safety-separate-usage-rules-lane": (
+        "safety_privacy_integrity",
+        8,
+        "case_safety_separate_usage_rules_lane",
+    ),
+    "synthetic-portability-rule-list-reload-status": (
         "portability_usability_performance",
-        5,
-        "case_portability_no_downgrade",
+        7,
+        "case_portability_rule_list_reload_status",
     ),
 }
 
@@ -50,9 +50,9 @@ def _json(path: Path) -> dict:
     return value
 
 
-def _load_v5_module() -> object:
+def _load_v6_module() -> object:
     spec = importlib.util.spec_from_file_location(
-        "guardian_public_elo_cases_v5", MODULE_PATH
+        "guardian_public_elo_cases_v6", MODULE_PATH
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -60,35 +60,14 @@ def _load_v5_module() -> object:
     return module
 
 
-class WeightedEloV5EvolutionTest(unittest.TestCase):
-    def test_suite_evolution_is_additive_and_keeps_public_genesis(self) -> None:
+class WeightedEloV6EvolutionTest(unittest.TestCase):
+    def test_suite_evolution_is_additive_and_keeps_local_score_outside_git(self) -> None:
         from guardian_core.canonical import sha256_digest
         from guardian_core.elo import _current_score, _validate_suite_transition, _worker_digest
 
-        current_suite = _json(ROOT / "benchmarks" / "elo-suite.json")
+        suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         current = _json(ROOT / "benchmarks" / "current-score.json")
-        self.assertGreaterEqual(current_suite["suiteVersion"], 5)
-        v5_module_ids = {
-            "guardian-public-cases-v1",
-            "guardian-public-cases-v3",
-            "guardian-public-cases-v4",
-            V5_MODULE_ID,
-        }
-        # Reconstruct the exact v5 projection so later additive suites cannot
-        # weaken or rewrite the authenticated v5 transition.
-        suite = copy.deepcopy(current_suite)
-        suite["suiteVersion"] = 5
-        suite["caseModules"] = [
-            item
-            for item in suite["caseModules"]
-            if item["moduleId"] in v5_module_ids
-        ]
-        suite["achievements"] = [
-            item
-            for item in suite["achievements"]
-            if item["caseModuleId"] in v5_module_ids
-        ]
-        self.assertEqual(suite["suiteVersion"], 5)
+        self.assertEqual(suite["suiteVersion"], 6)
 
         modules = {item["moduleId"]: item for item in suite["caseModules"]}
         self.assertEqual(
@@ -97,22 +76,23 @@ class WeightedEloV5EvolutionTest(unittest.TestCase):
                 "guardian-public-cases-v1",
                 "guardian-public-cases-v3",
                 "guardian-public-cases-v4",
-                V5_MODULE_ID,
+                "guardian-public-cases-v5",
+                V6_MODULE_ID,
             },
         )
         self.assertEqual(
-            modules[V5_MODULE_ID]["moduleDigest"],
+            modules[V6_MODULE_ID]["moduleDigest"],
             hashlib.sha256(MODULE_PATH.read_bytes()).hexdigest(),
         )
-        self.assertEqual(modules[V5_MODULE_ID]["workerDigest"], _worker_digest())
+        self.assertEqual(modules[V6_MODULE_ID]["workerDigest"], _worker_digest())
 
         definitions = {
             item["achievementId"]: item
             for item in suite["achievements"]
-            if item["caseModuleId"] == V5_MODULE_ID
+            if item["caseModuleId"] == V6_MODULE_ID
         }
-        self.assertEqual(set(definitions), set(V5_CASES))
-        for achievement_id, (category, weight, function) in V5_CASES.items():
+        self.assertEqual(set(definitions), set(V6_CASES))
+        for achievement_id, (category, weight, function) in V6_CASES.items():
             definition = definitions[achievement_id]
             self.assertEqual(
                 (
@@ -126,20 +106,21 @@ class WeightedEloV5EvolutionTest(unittest.TestCase):
             self.assertEqual(definition["workerDigest"], _worker_digest())
 
         previous = copy.deepcopy(suite)
-        previous["suiteVersion"] = 4
+        previous["suiteVersion"] = 5
         previous["caseModules"] = [
-            item for item in previous["caseModules"] if item["moduleId"] != V5_MODULE_ID
+            item for item in previous["caseModules"] if item["moduleId"] != V6_MODULE_ID
         ]
         previous["achievements"] = [
             item
             for item in previous["achievements"]
-            if item["caseModuleId"] != V5_MODULE_ID
+            if item["caseModuleId"] != V6_MODULE_ID
         ]
         self.assertEqual(sha256_digest(previous), PRIOR_SUITE_DIGEST)
         _validate_suite_transition(previous, suite)
 
         self.assertEqual(current["score"], 1)
         self.assertEqual(current["achievementIds"], [])
+        self.assertEqual(current["suiteSnapshot"]["suiteVersion"], 3)
         self.assertEqual(_current_score(), current)
 
     def test_cases_are_stdlib_only_synthetic_and_pass_current_checkout(self) -> None:
@@ -175,12 +156,13 @@ class WeightedEloV5EvolutionTest(unittest.TestCase):
             "ExamplePrivateProduct",
             "C:" + chr(92),
             "/Users/",
+            "@example.com",
         ):
             self.assertNotIn(forbidden, source)
 
-        module = _load_v5_module()
+        module = _load_v6_module()
         functions = sorted(name for name in vars(module) if name.startswith("case_"))
-        self.assertEqual(functions, sorted(value[2] for value in V5_CASES.values()))
+        self.assertEqual(functions, sorted(value[2] for value in V6_CASES.values()))
         for function in functions:
             for repetition in (1, 2):
                 with self.subTest(function=function, repetition=repetition):
@@ -204,20 +186,20 @@ class WeightedEloV5EvolutionTest(unittest.TestCase):
                         (0, b"", b""),
                     )
 
-    def test_weighted_safe_activation_progress_is_material_and_bounded(self) -> None:
+    def test_weighted_v036_progress_is_material_and_bounded(self) -> None:
         from guardian_core.elo import _derive_evaluation
 
         suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         cases = []
         for item in suite["achievements"]:
-            is_v5 = item["caseModuleId"] == V5_MODULE_ID
+            is_v6 = item["caseModuleId"] == V6_MODULE_ID
             cases.append(
                 {
                     "achievementId": item["achievementId"],
                     "repetitions": [
                         {
                             "repetition": repetition,
-                            "status": "assertion_failed" if is_v5 else "passed",
+                            "status": "assertion_failed" if is_v6 else "passed",
                         }
                         for repetition in (1, 2)
                     ],
@@ -226,14 +208,14 @@ class WeightedEloV5EvolutionTest(unittest.TestCase):
         baseline = {"cases": cases}
         candidate = copy.deepcopy(baseline)
         for item in candidate["cases"]:
-            if item["achievementId"] in V5_CASES:
+            if item["achievementId"] in V6_CASES:
                 for repetition in item["repetitions"]:
                     repetition["status"] = "passed"
 
         result = _derive_evaluation([], 1, suite, baseline, candidate)
-        self.assertGreater(result["delta"], len(V5_CASES))
+        self.assertGreater(result["delta"], len(V6_CASES))
         self.assertLessEqual(result["score"], 2000)
-        self.assertEqual(set(result["newAchievementIds"]), set(V5_CASES))
+        self.assertEqual(set(result["newAchievementIds"]), set(V6_CASES))
 
 
 if __name__ == "__main__":

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from typing import Any
+
+from .audit import AuditIntegrityError, derive_audit_exit_code
+from .canonical import sha256_digest
 
 
 ALLOWED_ATTRIBUTIONS = {
@@ -33,6 +37,16 @@ _DESIGN_STATUSES = {
 _UX_STATUSES = {"allowed", "conflict", "not_assessed"}
 _COVERAGE_STATUSES = {"allowed", "unsupported", "not_assessed"}
 _ENFORCEMENT_STATUSES = {"allowed", "not_assessed"}
+_USAGE_STATUSES = {
+    "allowed",
+    "conflict",
+    "not_assessed",
+    "unsupported",
+    "invalid",
+    "stale",
+    "source_unavailable",
+    "source_incomplete",
+}
 _RESOLUTION_STATUSES = (
     "allowed",
     "missing",
@@ -104,8 +118,12 @@ def build_post_run_assessment(
 
     audit = _object(audit_result, "audit_result")
     manifest = _object(run_manifest, "run_manifest")
-    if audit.get("schemaVersion") != 1 or manifest.get("schemaVersion") != 1:
-        raise PostRunAssessmentIntegrityError("Final evidence schemaVersion must be 1.")
+    schema_version = audit.get("schemaVersion")
+    if schema_version not in {1, 2} or manifest.get("schemaVersion") != schema_version:
+        raise PostRunAssessmentIntegrityError(
+            "Final evidence schemaVersion must be the same supported version."
+        )
+    is_v2 = schema_version == 2
     for field in _IDENTITY_FIELDS:
         if audit.get(field) != manifest.get(field):
             raise PostRunAssessmentIntegrityError(f"Final evidence {field} values differ.")
@@ -124,6 +142,17 @@ def build_post_run_assessment(
     exit_code = manifest.get("exitCode")
     if isinstance(exit_code, bool) or exit_code not in _RUN_STATUSES:
         raise PostRunAssessmentIntegrityError("Run manifest exitCode must be an integer from 0 through 4.")
+    if is_v2:
+        try:
+            expected_exit_code = int(derive_audit_exit_code(audit))
+        except AuditIntegrityError as error:
+            raise PostRunAssessmentIntegrityError(
+                f"Usage Rules audit evidence is invalid: {error}"
+            ) from error
+        if exit_code != expected_exit_code:
+            raise PostRunAssessmentIntegrityError(
+                "Run manifest exitCode differs from complete v2 audit evidence."
+            )
     if not isinstance(manifest.get("productionReady"), bool) or not isinstance(
         audit.get("productionReady"), bool
     ):
@@ -136,6 +165,11 @@ def build_post_run_assessment(
     coverage = _object(audit.get("coverage"), "coverage")
     enforcement = _object(audit.get("enforcementAuthorityLane"), "enforcementAuthorityLane")
     project = _object(audit.get("projectEvidence"), "projectEvidence")
+    usage = (
+        _object(audit.get("usageRulesLane"), "usageRulesLane")
+        if is_v2
+        else None
+    )
     design_status = _status(design.get("status"), _DESIGN_STATUSES, "designSystemLane")
     ux_status = _status(ux.get("status"), _UX_STATUSES, "uxAccessibilityLane")
     coverage_status = _status(coverage.get("status"), _COVERAGE_STATUSES, "coverage")
@@ -148,6 +182,45 @@ def build_post_run_assessment(
     source_cut_digest = _digest(design.get("sourceCutDigest"), "sourceCutDigest")
     assessed_tree_digest = _digest(project.get("assessedTreeDigest"), "assessedTreeDigest")
     analysis_inputs_digest = _digest(project.get("analysisInputsDigest"), "analysisInputsDigest")
+
+    usage_status = None
+    usage_lane_digest = None
+    active_usage_rules: list[str] = []
+    assessed_usage_rules: list[str] = []
+    violated_usage_rules: list[str] = []
+    informative_usage_rules: list[str] = []
+    unassessed_usage_rules: list[dict[str, str]] = []
+    if usage is not None:
+        usage_status = _status(
+            usage.get("status"), _USAGE_STATUSES, "usageRulesLane"
+        )
+        usage_lane_digest = sha256_digest(usage)
+        if manifest.get("usageRulesLaneDigest") != usage_lane_digest:
+            raise PostRunAssessmentIntegrityError(
+                "Run manifest Usage Rules lane digest differs from the audit."
+            )
+        for field, target in (
+            ("activeRuleIds", active_usage_rules),
+            ("assessedRuleIds", assessed_usage_rules),
+            ("violatedRuleIds", violated_usage_rules),
+            ("informativeRuleIds", informative_usage_rules),
+        ):
+            value = usage.get(field)
+            if not isinstance(value, list) or not all(
+                isinstance(item, str) for item in value
+            ):
+                raise PostRunAssessmentIntegrityError(
+                    f"usageRulesLane.{field} must be an array of rule IDs."
+                )
+            target.extend(value)
+        raw_not_assessed = usage.get("notAssessed")
+        if not isinstance(raw_not_assessed, list) or not all(
+            isinstance(item, dict) for item in raw_not_assessed
+        ):
+            raise PostRunAssessmentIntegrityError(
+                "usageRulesLane.notAssessed must be an array of objects."
+            )
+        unassessed_usage_rules = copy.deepcopy(raw_not_assessed)
 
     violations = design.get("violations")
     gaps = design.get("gaps")
@@ -205,6 +278,23 @@ def build_post_run_assessment(
         add_reason("ux_not_assessed", "capability_candidate", 1)
     if enforcement_status == "not_assessed":
         add_reason("enforcement_not_assessed", "capability_candidate", 1)
+    if usage_status is not None:
+        add_reason(
+            "usage_rule_violation",
+            "project_implementation",
+            len(violated_usage_rules),
+        )
+        add_reason(
+            "usage_rule_not_assessed",
+            "project_configuration",
+            len(unassessed_usage_rules),
+        )
+        if usage_status == "unsupported":
+            add_reason("usage_rules_unsupported", "capability_candidate", 1)
+        elif usage_status == "invalid":
+            add_reason("usage_rules_invalid", "project_implementation", 1)
+        elif usage_status in {"stale", "source_unavailable", "source_incomplete"}:
+            add_reason("usage_rules_source_blocked", "source", 1)
 
     reason_codes = [
         {"reasonCode": reason_code, "attribution": attribution, "count": count}
@@ -214,38 +304,41 @@ def build_post_run_assessment(
         item["attribution"] in {"capability_candidate", "plugin_candidate"}
         for item in reason_codes
     )
-    return {
-        "schemaVersion": 1,
+    evidence_digests = {
+        "runManifest": manifest_digest,
+        "analysisAttestation": analysis_attestation_digest,
+        "sourceCut": source_cut_digest,
+        "assessedTree": assessed_tree_digest,
+        "analysisInputs": analysis_inputs_digest,
+    }
+    statuses = {
+        "run": _RUN_STATUSES[exit_code],
+        "designSystem": design_status,
+        "uxAccessibility": ux_status,
+        "coverage": coverage_status,
+        "enforcementAuthority": enforcement_status,
+    }
+    counts = {
+        "violations": len(violations),
+        "designSystemGaps": len(gaps),
+        "sentinels": sentinel_count,
+        "allowedResolutions": resolution_counts["allowed"],
+        "nonAllowedResolutions": sum(
+            count for status, count in resolution_counts.items() if status != "allowed"
+        ),
+        "assessedUxChecks": sum(status != "not_assessed" for status in ux_statuses),
+        "unassessedUxChecks": sum(status == "not_assessed" for status in ux_statuses),
+    }
+    assessment = {
+        "schemaVersion": schema_version,
         "runId": audit["runId"],
         "profileId": audit["profileId"],
         "snapshotId": snapshot_id,
         "policyDigest": policy_digest,
         "runtimeVersion": runtime_version,
-        "evidenceDigests": {
-            "runManifest": manifest_digest,
-            "analysisAttestation": analysis_attestation_digest,
-            "sourceCut": source_cut_digest,
-            "assessedTree": assessed_tree_digest,
-            "analysisInputs": analysis_inputs_digest,
-        },
-        "statuses": {
-            "run": _RUN_STATUSES[exit_code],
-            "designSystem": design_status,
-            "uxAccessibility": ux_status,
-            "coverage": coverage_status,
-            "enforcementAuthority": enforcement_status,
-        },
-        "counts": {
-            "violations": len(violations),
-            "designSystemGaps": len(gaps),
-            "sentinels": sentinel_count,
-            "allowedResolutions": resolution_counts["allowed"],
-            "nonAllowedResolutions": sum(
-                count for status, count in resolution_counts.items() if status != "allowed"
-            ),
-            "assessedUxChecks": sum(status != "not_assessed" for status in ux_statuses),
-            "unassessedUxChecks": sum(status == "not_assessed" for status in ux_statuses),
-        },
+        "evidenceDigests": evidence_digests,
+        "statuses": statuses,
+        "counts": counts,
         "reasonCodes": reason_codes,
         "evolutionHandoff": {
             "status": "permission_required",
@@ -254,3 +347,28 @@ def build_post_run_assessment(
         },
         "sourceMutationPerformed": False,
     }
+    if usage is not None:
+        evidence_digests["usageRulesLane"] = usage_lane_digest
+        statuses["usageRules"] = usage_status
+        counts.update(
+            {
+                "activeUsageRules": len(active_usage_rules),
+                "assessedUsageRules": len(assessed_usage_rules),
+                "violatedUsageRules": len(violated_usage_rules),
+                "unassessedUsageRules": len(unassessed_usage_rules),
+                "informativeUsageRules": len(informative_usage_rules),
+            }
+        )
+        assessment["usageRules"] = {
+            "evaluatorId": usage["evaluatorId"],
+            "evaluatorContractDigest": usage["evaluatorContractDigest"],
+            "authorizationDigest": usage["authorizationDigest"],
+            "ruleSnapshotId": usage["ruleSnapshotId"],
+            "rulesDigest": usage["rulesDigest"],
+            "activeRuleIds": copy.deepcopy(active_usage_rules),
+            "assessedRuleIds": copy.deepcopy(assessed_usage_rules),
+            "violatedRuleIds": copy.deepcopy(violated_usage_rules),
+            "informativeRuleIds": copy.deepcopy(informative_usage_rules),
+            "notAssessed": copy.deepcopy(unassessed_usage_rules),
+        }
+    return assessment

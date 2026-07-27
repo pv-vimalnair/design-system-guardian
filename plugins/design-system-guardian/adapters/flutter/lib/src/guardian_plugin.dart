@@ -41,5 +41,6 @@ final class DesignSystemGuardianFlutterPlugin extends Plugin {
     registry.registerWarningRule(GuardianSuppressionRule());
     final registerWarning = registry.registerWarningRule;
     registerWarning(GuardianUsageRule());
+    registerWarning(GuardianUsageRuleCoverageRule());
   }
 }

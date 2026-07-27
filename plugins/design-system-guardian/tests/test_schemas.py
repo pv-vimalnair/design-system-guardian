@@ -16,13 +16,21 @@ class CanonicalSchemaTest(unittest.TestCase):
             "resolution.schema.json",
             "build-plan.schema.json",
             "audit-result.schema.json",
+            "audit-result-v2.schema.json",
+            "evaluator-authorization-pointer.schema.json",
+            "evaluator-authorization-record.schema.json",
+            "evaluator-upgrade-permission.schema.json",
             "coverage.schema.json",
             "post-run-assessment.schema.json",
+            "post-run-assessment-v2.schema.json",
             "rule-activation-permission.schema.json",
             "rule-activation-snapshot.schema.json",
             "rule.schema.json",
+            "rules-list.schema.json",
             "rules-validation-report.schema.json",
             "run-manifest.schema.json",
+            "run-manifest-v2.schema.json",
+            "usage-rules-evidence.schema.json",
         }
         actual = {path.name for path in (PLUGIN_ROOT / "schemas").glob("*.schema.json")}
         self.assertEqual(actual, expected)
