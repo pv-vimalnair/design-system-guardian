@@ -1,14 +1,15 @@
 # Trusted execution boundary
 
-Design System Guardian 0.3.5 is a cross-agent public source release. Its local HMAC seals detect accidental corruption and cross-run replay, but they are not production authority against code running as the same operating-system account. An agent process that can read the local sealing key must never turn its own local evidence into a production approval.
+Design System Guardian 0.3.7 is a cross-agent public source release. Its local HMAC seals detect accidental corruption and cross-run replay, but they are not production authority against code running as the same operating-system account. An agent process that can read the local sealing key must never turn its own local evidence into a production approval.
 
-## Three independent lanes
+## Four independent lanes
 
 Guardian reports these independently:
 
 1. design-system compliance;
-2. UX/accessibility quality;
-3. protected production authority.
+2. Usage Rules compliance;
+3. UX/accessibility quality;
+4. protected production authority.
 
 The built-in evaluator can derive violations and gaps from screen and final-flow observations, and Figma read-back can expose unbound or conflicting identities. These are diagnostic failure signals. Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation; neither local mechanism can issue `allowed`.
 
@@ -23,6 +24,19 @@ Usage-rule validation is a local read-only preview. It writes no Guardian or pro
 Version 0.3.5 may activate the first two compilation-unit predicate pairs only after a zero-write preview and explicit permission for the exact candidate digest. Permission enables the evaluator; it does not approve rules. The complete catalog v2 and every activated rule require the selected profile's pinned external catalog-authority signature.
 
 Activation adds sealed evidence to a parallel append-only rule namespace and leaves all v1 state unchanged. Once v2 evidence exists, its absence or integrity failure blocks protected rule work; an older runtime or v1 snapshot is never an automatic fallback. Other predicates and scopes remain `not_assessed` until v0.3.6.
+
+## Exact-run judgment boundary
+
+Version 0.3.7 can derive a complete local subjective judgment assessment from sealed evidence. Guardian explains every finding first and always preserves raw findings beside the effective judgment projection. Only selected conflicts in one exact run can receive an exception, with an optional reason and explicit permission.
+
+    guardian judgment preview --profile <profile-id> --run-id <run-id> --input <candidate.json>
+    guardian judgment apply --input <granted-bundle.json>
+    guardian judgment status --profile <profile-id> --run-id <run-id>
+    guardian judgment revoke --input <granted-revocation.json>
+
+Preview and status are zero-write; apply and revoke append only to local decision history after separate permission. Every new screen or flow is reevaluated. No exception is reusable across a duplicate file, later run, changed source cut, or future version.
+
+The exception can change only the effective judgment outcome. It never changes raw evidence, design-system compliance, Usage Rules, sentinels, stale or incomplete evidence, unsupported or not-assessed coverage, or protected production authority. On an unprotected host, productionReady remains false and raw-tool bypass cannot be prevented. Assessments, reasons, decisions, revocations, and company evidence stay local and never enter Git, Elo, or telemetry.
 
 ## Required production boundary
 
@@ -39,7 +53,7 @@ No environment variable, project-local executable, caller-supplied path, local J
 
 ## Diagnostic behavior
 
-Version 0.3.5 does not integrate protected production authority. Local audit output is diagnostic: violations and gaps can fail, but a clean Figma or UX observation remains `not_assessed` rather than passing. `productionReady=false` whenever protected attestation is unavailable.
+Version 0.3.7 does not integrate protected production authority. Local audit output is diagnostic: violations and gaps can fail, but a clean Figma or UX observation remains `not_assessed` rather than passing. `productionReady=false` whenever protected attestation is unavailable.
 
 The convenience launchers `scripts/guardian` and `scripts/guardian.cmd` deliberately exit `4`; they do not discover Python from `PATH`. A protected host invokes `scripts/guardian.py` through its authority-bound runtime. For diagnostics and repository tests, a host-supplied absolute Python executable may invoke it after its path and SHA-256 are recorded. That route cannot change the protected lane.
 

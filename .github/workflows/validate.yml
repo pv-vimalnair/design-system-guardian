@@ -51,6 +51,19 @@ jobs:
           python "$RUNNER_TEMP/codex/codex-rs/skills/src/assets/samples/skill-creator/scripts/quick_validate.py" plugins/design-system-guardian/skills/build-with-design-system
           python "$RUNNER_TEMP/codex/codex-rs/skills/src/assets/samples/skill-creator/scripts/quick_validate.py" plugins/design-system-guardian/skills/audit-design-system
 
+      - name: Run focused v0.3.7 judgment contracts
+        working-directory: plugins/design-system-guardian
+        run: >-
+          python -m unittest
+          tests.test_v037_public_contract
+          tests.test_judgment_assessment_dsg027
+          tests.test_judgment_decisions_dsg027
+          tests.test_judgment_revocation_dsg027
+          tests.test_judgment_migration_dsg027
+          tests.test_cli_judgment_dsg027
+          tests.test_judgment_projection_dsg027
+          tests.test_judgment_hard_lanes_dsg027
+
       - name: Run core tests
         working-directory: plugins/design-system-guardian
         run: python -m unittest discover -s tests -p "test_*.py"
@@ -66,7 +79,7 @@ jobs:
           from pathlib import Path
           root = Path("plugins/design-system-guardian")
           schemas = sorted(root.rglob("*.schema.json"))
-          assert len(schemas) == 38, [str(path) for path in schemas]
+          assert len(schemas) == 43, [str(path) for path in schemas]
           for path in schemas:
               json.loads(path.read_text(encoding="utf-8"))
 

@@ -2,6 +2,27 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.7 - 2026-07-27 - Exact-run judgment exceptions
+
+### Added
+
+- Added complete subjective judgment assessments over sealed v0.3.6 runs, with every raw finding preserved and a separate derived effective result.
+- Added zero-write judgment preview and status, permission-bound apply, optional reasons, selected-finding scope, and append-only revocation through four portable CLI forms.
+- Updated both existing skills so the agent explains findings first, offers **Fix and evaluate again** or **Approve this exact version anyway**, performs the exact local flow for the user, and reevaluates every new screen or flow.
+- Added five strict judgment schemas and synthetic public Elo v7 cases without adding a third skill, service, adapter, dependency, process, or Figma plugin.
+
+### Compatibility, security, and privacy
+
+- Preserved every v0.3.2-v0.3.6 schema, reader, audit, Usage Rules, UX, release, migration, policy, and exactly-two-skill contract. No historical evidence is rewritten.
+- An approval covers only selected conflict findings in one exact run. It is never a reusable or future waiver and does not transfer to a duplicate file, new screen, later flow, later run, or new version.
+- Judgment exceptions never override design-system compliance, Usage Rules, sentinels, stale or incomplete evidence, unsupported or not-assessed coverage, or protected production authority.
+- Assessments, reasons, decisions, revocations, company evidence, and local Elo scores/results/history stay local and never enter Git, public Elo fixtures, or telemetry.
+- Codex, Claude Code, OpenClaw, Kimi Code, Qwen Code, terminal, and generic Agent Skills surfaces continue to share one core and exactly two visible skills. Portable packaging does not claim automatic routing or a tested runtime where host read-back is unavailable.
+
+### Promotion status
+
+- This is a public source release candidate. It is not a trusted canary or stable promotion because the fixed external/WORM release-head provider and protected production authority remain unavailable.
+
 ## 0.3.6 - 2026-07-27 - Permissioned machine-rule enforcement
 
 ### Added

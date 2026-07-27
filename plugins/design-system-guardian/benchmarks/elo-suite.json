@@ -247,6 +247,70 @@
             "caseModuleId": "guardian-public-cases-v6",
             "caseFunction": "case_portability_rule_list_reload_status",
             "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-correctness-complete-judgment-assessment",
+            "category": "correctness",
+            "weight": 9,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_correctness_complete_judgment_assessment",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-correctness-positive-judgment-approval",
+            "category": "correctness",
+            "weight": 9,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_correctness_positive_judgment_approval",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-coverage-selected-judgment-exception",
+            "category": "coverage_usefulness",
+            "weight": 8,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_coverage_selected_judgment_exception",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-reliability-judgment-revocation",
+            "category": "reliability",
+            "weight": 9,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_reliability_judgment_revocation",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-reliability-judgment-replay-rejection",
+            "category": "reliability",
+            "weight": 9,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_reliability_judgment_replay_rejection",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-safety-hard-lane-non-override",
+            "category": "safety_privacy_integrity",
+            "weight": 10,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_safety_hard_lane_non_override",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-safety-local-judgment-privacy",
+            "category": "safety_privacy_integrity",
+            "weight": 10,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_safety_local_judgment_privacy",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "achievementId": "synthetic-portability-four-judgment-commands",
+            "category": "portability_usability_performance",
+            "weight": 8,
+            "caseModuleId": "guardian-public-cases-v7",
+            "caseFunction": "case_portability_four_judgment_commands",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
         }
     ],
     "caseModules": [
@@ -279,10 +343,16 @@
             "path": "benchmarks/elo_cases_v6.py",
             "moduleDigest": "77a26229e43babaa20ae948d2a9193aa293bf4ca3f1ae8984798cf13713ad74a",
             "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
+        },
+        {
+            "moduleId": "guardian-public-cases-v7",
+            "path": "benchmarks/elo_cases_v7.py",
+            "moduleDigest": "9b7484ca0e52dd4e7774f2071a7faaba6d404d58547644cae7aa77d44d6f6fcf",
+            "workerDigest": "92cd4982579741d4343aba22fc7feb2459a1ef823ad43dd389359362b6b2a009"
         }
     ],
     "model": "guardian-weighted-elo-v1",
     "schemaVersion": 2,
     "suiteId": "guardian-public-synthetic-v1",
-    "suiteVersion": 6
+    "suiteVersion": 7
 }

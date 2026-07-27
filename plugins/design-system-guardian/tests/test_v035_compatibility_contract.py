@@ -98,7 +98,10 @@ class V035CompatibilityContractTest(unittest.TestCase):
         self.assertNotIn('"version": "0.3.4"', rendered)
         for path in manifests:
             text = path.read_text(encoding="utf-8")
-            self.assertTrue("0.3.5" in text or "0.3.6" in text, path)
+            self.assertTrue(
+                "0.3.5" in text or "0.3.6" in text or "0.3.7" in text,
+                path,
+            )
         plugin = json.loads(
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )

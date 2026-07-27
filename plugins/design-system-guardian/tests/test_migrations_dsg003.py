@@ -33,6 +33,10 @@ def registry():
     ))
 
 class MigrationTest(unittest.TestCase):
+    def test_judgment_sidecar_is_not_a_migration_transform(self) -> None:
+        from guardian_core.policy import EXPECTED_POLICY_SHA256
+        self.assertEqual(EXPECTED_POLICY_SHA256, "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f")
+        self.assertFalse(any("judgment" in step.name for step in registry().steps))
     def test_concurrent_divergent_registries_cannot_last_write_win(self) -> None:
         from guardian_core.canonical import read_canonical_json, sha256_digest
         from guardian_core.migrations import MigrationRegistry, MigrationStep, migrate_to_current

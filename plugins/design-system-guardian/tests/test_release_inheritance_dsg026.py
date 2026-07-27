@@ -15,6 +15,7 @@ from typing import Any, Callable
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
 OUTPUT_LIMIT = 16_384
+V036_PUBLIC_COMMIT = "d447b3e344905bbdb0dc23890ba524cbb9622338"
 TAG_SUITES = {
     "v0.3.2": (
         "tests.test_foundation_contract",
@@ -36,6 +37,20 @@ TAG_SUITES = {
         "tests.test_v035_compatibility_contract.V035CompatibilityContractTest."
         "test_all_legacy_schema_contracts_remain_and_v1_contracts_stay_explicit",
         "tests.test_v035_skill_contracts",
+    ),
+    "v0.3.6": (
+        "tests.test_usage_rules_audit_lane_dsg026.UsageRulesAuditLaneTest."
+        "test_v1_output_remains_exact_and_v2_projects_back_to_it",
+        "tests.test_usage_rules_audit_lane_dsg026.UsageRulesAuditLaneTest."
+        "test_truth_table_and_informative_rules_are_non_gating",
+        "tests.test_analysis_attestation_dsg010.AnalysisAttestationTest."
+        "test_exact_runner_and_audit_binding_verifies",
+        "tests.test_enforcement_authority_dsg012.EnforcementAuthorityLaneTest."
+        "test_v01_audit_has_exact_fail_closed_authority_lane",
+        "tests.test_v036_public_contract.V036PublicContractTest."
+        "test_package_exposes_exactly_two_canonical_agent_skills",
+        "tests.test_v036_public_contract.V036PublicContractTest."
+        "test_immutable_policy_digest_is_unchanged",
     ),
 }
 
@@ -89,13 +104,63 @@ def _extract_archive(archive: bytes, destination: Path) -> Path:
     return destination / "plugins" / "design-system-guardian" / "tests"
 
 
+def _resolve_public_tag_commit(
+    tag: str,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+) -> str:
+    try:
+        completed = runner(
+            ["git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as error:
+        raise AssertionError(f"Public tag {tag} could not be resolved: {error}") from error
+    if completed.returncode != 0:
+        raise AssertionError(
+            f"Public tag {tag} could not be resolved: {_bounded(completed.stderr)}"
+        )
+    commit = completed.stdout.decode("ascii", errors="strict").strip()
+    if len(commit) != 40 or any(
+        character not in "0123456789abcdef" for character in commit
+    ):
+        raise AssertionError(f"Public tag {tag} did not resolve to a commit SHA.")
+    return commit
+
+
+def _archive_ref_for_tag(
+    tag: str,
+    *,
+    resolver: Callable[[str], str] = _resolve_public_tag_commit,
+) -> str:
+    if tag != "v0.3.6":
+        return tag
+    resolved = resolver(tag)
+    if resolved != V036_PUBLIC_COMMIT:
+        raise AssertionError(
+            f"Public tag {tag} moved: expected {V036_PUBLIC_COMMIT}, got {resolved}."
+        )
+    return V036_PUBLIC_COMMIT
+
+
 def run_tag_suite(tag: str, modules: tuple[str, ...]) -> dict[str, Any]:
+    try:
+        archive_ref = _archive_ref_for_tag(tag)
+    except AssertionError as error:
+        return {
+            "status": "infrastructure_error",
+            "returnCode": None,
+            "stdout": "",
+            "stderr": str(error),
+        }
     archive = subprocess.run(
         [
             "git",
             "archive",
             "--format=tar",
-            tag,
+            archive_ref,
             "plugins/design-system-guardian/tests",
         ],
         cwd=REPOSITORY_ROOT,
@@ -126,7 +191,25 @@ def run_tag_suite(tag: str, modules: tuple[str, ...]) -> dict[str, Any]:
 
 
 class ReleaseInheritanceTest(unittest.TestCase):
-    def test_public_v032_through_v035_behavior_executes(self) -> None:
+    def test_v036_public_tag_and_archive_ref_are_immutably_pinned(self) -> None:
+        self.assertEqual(
+            _resolve_public_tag_commit("v0.3.6"),
+            V036_PUBLIC_COMMIT,
+        )
+        self.assertEqual(
+            _archive_ref_for_tag(
+                "v0.3.6",
+                resolver=lambda _: V036_PUBLIC_COMMIT,
+            ),
+            V036_PUBLIC_COMMIT,
+        )
+        with self.assertRaisesRegex(AssertionError, "moved"):
+            _archive_ref_for_tag(
+                "v0.3.6",
+                resolver=lambda _: "a" * 40,
+            )
+
+    def test_public_v032_through_v036_behavior_executes(self) -> None:
         for tag, modules in TAG_SUITES.items():
             with self.subTest(tag=tag):
                 result = run_tag_suite(tag, modules)

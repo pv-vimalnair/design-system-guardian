@@ -28,6 +28,7 @@ _ARTIFACT_TYPES = {
     "build-plan",
     "run-manifest",
     "post-run-assessment",
+    "judgment-assessment",
 }
 _ENVELOPE_KEYS = {
     "schemaVersion",
@@ -592,6 +593,128 @@ def render_audit_report(home: Path, envelope: dict[str, Any]) -> str:
     )
     return "\n".join(lines) + "\n"
 
+
+def render_judgment_report(status: dict[str, Any]) -> str:
+    """Render the current verified judgment projection without storing it."""
+
+    if not isinstance(status, dict):
+        raise RunArtifactIntegrityError("Readable judgment status must be an object.")
+    profile_id, run_id, state = (
+        status.get("profileId"), status.get("runId"), status.get("status")
+    )
+    if not all(isinstance(value, str) and value for value in (profile_id, run_id, state)):
+        raise RunArtifactIntegrityError("Readable judgment status identity is invalid.")
+    assessment, projection = status.get("assessment"), status.get("effectiveProjection")
+    if assessment is None and projection is None and state == "not_assessed":
+        return "\n".join(
+            [
+                "# Guardian Judgment Report", "", f"Profile: {_one_line(profile_id)}",
+                f"Run: {_one_line(run_id)}", "Judgment state: not_assessed",
+                "Revocation state: unavailable", "Raw judgment: not_assessed",
+                "Effective judgment: not_assessed",
+                "Protected enforcement authority: not_assessed",
+                "Production ready: false", "Selected finding IDs: None.",
+                "Unselected finding IDs: None.", "",
+                "No complete judgment assessment is available for this exact run.", "",
+            ]
+        )
+    if not isinstance(assessment, dict) or not isinstance(projection, dict):
+        raise RunArtifactIntegrityError(
+            "Readable judgment status requires assessment and projection objects."
+        )
+    instances, projected_instances = assessment.get("instances"), projection.get("instances")
+    if not isinstance(instances, list) or not isinstance(projected_instances, list):
+        raise RunArtifactIntegrityError("Readable judgment instances must be arrays.")
+    if len(instances) != len(projected_instances):
+        raise RunArtifactIntegrityError("Readable judgment projections are incomplete.")
+    projected_by_id = {
+        item.get("instanceId"): item for item in projected_instances if isinstance(item, dict)
+    }
+    if len(projected_by_id) != len(projected_instances):
+        raise RunArtifactIntegrityError("Readable projected judgment instances are invalid.")
+    selected: list[str] = []
+    for item in projected_instances:
+        exceptions = item.get("appliedExceptions")
+        if not isinstance(exceptions, list):
+            raise RunArtifactIntegrityError("Readable judgment exceptions must be an array.")
+        for exception in exceptions:
+            if (
+                not isinstance(exception, dict)
+                or not isinstance(exception.get("findingId"), str)
+                or exception.get("label") != "Passed through a user-approved exception"
+            ):
+                raise RunArtifactIntegrityError("Readable judgment exception is invalid.")
+            selected.append(exception["findingId"])
+    rows: list[tuple[dict[str, Any], dict[str, Any], bool]] = []
+    finding_ids: list[str] = []
+    for instance in instances:
+        if not isinstance(instance, dict):
+            raise RunArtifactIntegrityError("Readable judgment assessment instance is invalid.")
+        projected = projected_by_id.get(instance.get("instanceId"))
+        findings = instance.get("findings")
+        if (
+            not isinstance(projected, dict)
+            or projected.get("rawStatus") != instance.get("rawStatus")
+            or not isinstance(findings, list)
+            or projected.get("findings") != findings
+        ):
+            raise RunArtifactIntegrityError("Readable judgment raw findings were not preserved.")
+        for finding in findings:
+            if not isinstance(finding, dict) or not isinstance(finding.get("findingId"), str):
+                raise RunArtifactIntegrityError("Readable judgment finding is invalid.")
+            finding_ids.append(finding["findingId"])
+            rows.append((instance, finding, finding["findingId"] in selected))
+    if len(selected) != len(set(selected)) or len(finding_ids) != len(set(finding_ids)):
+        raise RunArtifactIntegrityError("Readable judgment finding IDs are not canonical.")
+    selected = sorted(selected)
+    finding_ids = sorted(finding_ids)
+    if not set(selected).issubset(finding_ids):
+        raise RunArtifactIntegrityError("Readable exceptions select unknown findings.")
+    unselected = [item for item in finding_ids if item not in set(selected)]
+    revocation = (
+        "active exception; revocation available"
+        if state == "active" and status.get("revocationPermissionBinding") is not None
+        else "active exception; revocation unavailable" if state == "active"
+        else "revoked" if state == "revoked" else _one_line(state)
+    )
+    production_ready = status.get("productionReady") is True
+    if production_ready != (projection.get("productionReady") is True):
+        raise RunArtifactIntegrityError("Readable production authority result is inconsistent.")
+    lines = [
+        "# Guardian Judgment Report", "", f"Profile: {_one_line(profile_id)}",
+        f"Run: {_one_line(run_id)}", f"Judgment state: {_one_line(state)}",
+        f"Revocation state: {revocation}",
+        f"Raw judgment: {_one_line(assessment.get('rawStatus'))}",
+        f"Effective judgment: {_one_line(projection.get('effectiveStatus'))}",
+        "Protected enforcement authority: " + _one_line(projection.get("enforcementAuthorityStatus")),
+        f"Production ready: {'true' if production_ready else 'false'}",
+        "Selected finding IDs: " + (", ".join(selected) if selected else "None."),
+        "Unselected finding IDs: " + (", ".join(unselected) if unselected else "None."),
+        "", "## Original findings", "",
+    ]
+    if not rows:
+        lines.append("None.")
+    for instance, finding, is_selected in rows:
+        lines.extend([
+            f"### {_one_line(finding['findingId'])}", "",
+            f"- Raw status: {_one_line(instance.get('rawStatus'))}",
+            f"- Rule: {_one_line(finding.get('ruleId'))}",
+            f"- Target: {_one_line(finding.get('targetId'))}",
+            f"- Instance: {_one_line(instance.get('instanceId'))}",
+            f"- What failed: {_one_line(finding.get('explanation'))}",
+            f"- Why it matters: {_one_line(finding.get('impact'))}",
+            f"- Recommended correction: {_one_line(finding.get('correction'))}",
+        ])
+        references = finding.get("evidenceReferences")
+        if not isinstance(references, list) or not all(isinstance(item, dict) for item in references):
+            raise RunArtifactIntegrityError("Readable finding evidence must be an array.")
+        lines.append("- Evidence: " + (", ".join(
+            f"{_one_line(item.get('artifact'))}@{_one_line(item.get('digest'))}" for item in references
+        ) if references else "None."))
+        if is_selected:
+            lines.append("- Exception: Passed through a user-approved exception")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 def write_readable_report(home: Path, *, profile_id: str, run_id: str, report: str) -> Path:
     """Create a deterministic derived report once without rewriting history."""

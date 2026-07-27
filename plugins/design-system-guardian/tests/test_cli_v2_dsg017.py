@@ -60,6 +60,8 @@ class FlutterV2LifecycleCliTest(unittest.TestCase):
             self.assertEqual(audit["coverage"]["adapter"], "flutter")
             self.assertEqual(audit["designSystemLane"]["status"], "allowed")
             self.assertEqual(audit["uxAccessibilityLane"]["status"], "not_assessed")
+            self.assertNotIn("effectiveProjection", audit)
+            self.assertNotIn("readableReport", audit)
             self.assertEqual(file_state(project), before)
             attestation = read_run_artifact(
                 home,

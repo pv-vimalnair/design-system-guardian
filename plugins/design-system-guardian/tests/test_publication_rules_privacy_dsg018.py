@@ -28,8 +28,33 @@ class RulesPublicationPrivacyTest(unittest.TestCase):
                 for marker in forbidden:
                     self.assertNotIn(marker, text)
 
+    def test_judgment_elo_fixtures_use_only_synthetic_public_metadata(self) -> None:
+        forbidden = (
+            "ExamplePrivateCompany",
+            "ExamplePrivateProduct",
+            "PrivateReleaseCandidate",
+            "/Users/",
+            "@example.com",
+        )
+        paths = [
+            ROOT / "benchmarks" / "elo_cases_v7.py",
+        ]
+        for path in paths:
+            with self.subTest(path=path.name):
+                text = path.read_text(encoding="utf-8")
+                for marker in forbidden:
+                    self.assertNotIn(marker, text)
+
     def test_rule_source_runtime_directories_are_not_public_package_paths(self) -> None:
-        for name in ("rules", "rule-sources", "validation-reports"):
+        for name in (
+            "rules",
+            "rule-sources",
+            "validation-reports",
+            "judgments",
+            "decisions",
+            "judgment-decisions",
+            "decision-history",
+        ):
             self.assertFalse((ROOT / name).exists(), name)
 
 

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-guardian.local/schemas/judgment-effective-projection.schema.json",
+  "title": "Design System Guardian effective judgment projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "assessmentDigest", "rawStatus", "effectiveStatus",
+    "complete", "nonJudgmentBlockersClear", "enforcementAuthorityStatus",
+    "productionReady", "instances"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "assessmentDigest": {"$ref": "#/$defs/digest"},
+    "rawStatus": {"$ref": "#/$defs/status"},
+    "effectiveStatus": {"$ref": "#/$defs/status"},
+    "complete": {"type": "boolean"},
+    "nonJudgmentBlockersClear": {"type": "boolean"},
+    "enforcementAuthorityStatus": {
+      "enum": [
+        "allowed", "conflict", "invalid", "not_assessed", "source_unavailable",
+        "source_incomplete", "stale", "unsupported"
+      ]
+    },
+    "productionReady": {"type": "boolean"},
+    "instances": {
+      "type": "array", "maxItems": 8192, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/instance"}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stableId": {"type": "string", "pattern": "^(?:target|instance|finding)-[0-9a-f]{24}$"},
+    "ruleId": {
+      "type": "string", "minLength": 1, "maxLength": 127,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "text128": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+    "text2048": {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S"},
+    "status": {"enum": ["allowed", "conflict", "not_assessed"]},
+    "reference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact", "digest"],
+      "properties": {
+        "artifact": {"$ref": "#/$defs/text128"}, "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "findingId", "ruleId", "targetId", "explanation", "impact",
+        "evidenceReferences", "correction", "evidenceDigest"
+      ],
+      "properties": {
+        "findingId": {"$ref": "#/$defs/stableId"}, "ruleId": {"$ref": "#/$defs/ruleId"},
+        "targetId": {"$ref": "#/$defs/stableId"}, "explanation": {"$ref": "#/$defs/text2048"},
+        "impact": {"$ref": "#/$defs/text2048"},
+        "evidenceReferences": {
+          "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reference"}
+        },
+        "correction": {"$ref": "#/$defs/text2048"}, "evidenceDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "exception": {
+      "type": "object", "additionalProperties": false,
+      "required": ["findingId", "label"],
+      "properties": {
+        "findingId": {"$ref": "#/$defs/stableId"},
+        "label": {"const": "Passed through a user-approved exception"}
+      }
+    },
+    "instance": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "instanceId", "rawStatus", "effectiveStatus", "findings", "appliedExceptions"
+      ],
+      "properties": {
+        "instanceId": {"$ref": "#/$defs/stableId"},
+        "rawStatus": {"$ref": "#/$defs/status"},
+        "effectiveStatus": {"$ref": "#/$defs/status"},
+        "findings": {
+          "type": "array", "maxItems": 256, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/finding"}
+        },
+        "appliedExceptions": {
+          "type": "array", "maxItems": 256, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/exception"}
+        }
+      }
+    }
+  }
+}

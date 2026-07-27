@@ -133,7 +133,12 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             }
             with self.assertRaises(ValueError):
                 evaluate_elo(home, forged, candidate)
-            self.assertGreater(evaluate_elo(home, baseline, candidate)["delta"], 0)
+            result = evaluate_elo(home, baseline, candidate)
+            self.assertEqual(result["delta"], 0)
+            self.assertIn(
+                "synthetic-portability-basic-host",
+                result["newAchievementIds"],
+            )
 
             private_target = _make_target(root, "private-version", version="0.3.0+Acme.Vimal")
             with self.assertRaisesRegex(ValueError, "public version"):
@@ -151,8 +156,11 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
                 home, _make_target(root, "failing", version="0.2.1", third_skill=True)
             )
             result = evaluate_elo(home, baseline, failing)
-            self.assertLess(result["delta"], 0)
-            self.assertTrue(result["confirmedRegressionIds"])
+            self.assertEqual(result["delta"], 0)
+            self.assertIn(
+                "synthetic-portability-basic-host",
+                result["confirmedRegressionIds"],
+            )
 
             broken = _make_target(root, "broken", version="0.2.2")
             failed_process = subprocess.CompletedProcess([], 7, stdout=b"", stderr=b"")

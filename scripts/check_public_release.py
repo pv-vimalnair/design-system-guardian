@@ -44,7 +44,18 @@ ALLOWED_PREFIXES = (
 )
 RUNTIME_PREFIXES = tuple(
     PACKAGE_PREFIX + name + "/"
-    for name in ("profiles", "snapshots", "catalogs", "runs", "trust", "authorities")
+    for name in (
+        "profiles",
+        "snapshots",
+        "catalogs",
+        "runs",
+        "trust",
+        "authorities",
+        "judgments",
+        "decisions",
+        "judgment-decisions",
+        "decision-history",
+    )
 )
 RUNTIME_JSON_KEYS = {"profileId", "snapshotId", "runId"}
 IDENTIFIER_KEYS = {
@@ -56,6 +67,28 @@ IDENTIFIER_KEYS = {
     "canonicalAssetKey",
     "snapshotId",
     "displayName",
+    "findingId",
+    "assessmentDigest",
+    "decisionDigest",
+    "evidenceDigest",
+    "companyStatement",
+    "evidenceContent",
+    "screenContent",
+    "userActivity",
+    "reason",
+}
+JUDGMENT_RUNTIME_JSON_KEYS = {
+    "findingId",
+    "assessmentDigest",
+    "decisionDigest",
+    "revokedDecisionDigest",
+    "activeDecisionDigest",
+    "recordDigest",
+    "permissionDigest",
+    "evidenceDigest",
+    "selectedFindings",
+    "permissionBinding",
+    "reason",
 }
 HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 SECRET_PATTERNS = (
@@ -175,6 +208,19 @@ def _is_link_or_reparse(path: Path) -> bool:
     return path.is_symlink() or bool(attributes & 0x400)
 
 
+def _contains_json_key(value: Any, keys: set[str]) -> bool:
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, dict):
+            if keys.intersection(current):
+                return True
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+    return False
+
+
 def _runtime_json(payload: bytes, path: str) -> bool:
     if not path.endswith(".json"):
         return False
@@ -187,7 +233,12 @@ def _runtime_json(payload: bytes, path: str) -> bool:
         value = json.loads(payload.decode("utf-8", "strict"))
     except (UnicodeError, json.JSONDecodeError):
         return False
-    return isinstance(value, dict) and RUNTIME_JSON_KEYS.issubset(value)
+    if not isinstance(value, dict):
+        return False
+    return RUNTIME_JSON_KEYS.issubset(value) or (
+        {"profileId", "runId"}.issubset(value)
+        and _contains_json_key(value, JUDGMENT_RUNTIME_JSON_KEYS)
+    )
 
 
 def _contains_absolute_home(payload: bytes) -> bool:

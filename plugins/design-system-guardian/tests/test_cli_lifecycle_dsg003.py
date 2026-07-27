@@ -87,6 +87,8 @@ class LifecycleCliTest(unittest.TestCase):
             self.assertEqual(code, 4)
             self.assertFalse(audit["productionReady"])
             self.assertEqual(audit["uxAccessibilityLane"]["status"], "not_assessed")
+            self.assertNotIn("effectiveProjection", audit)
+            self.assertNotIn("readableReport", audit)
             self.assertEqual(file_state(project), before)
             from guardian_core.run_artifacts import read_run_artifact
 

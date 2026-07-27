@@ -77,6 +77,199 @@ class PublicationPrivacyTests(unittest.TestCase):
             **kwargs,
         )
 
+    def test_local_judgment_markers_are_blocked_in_current_and_reachable_bytes(self) -> None:
+        markers = {
+            "companyStatement": "private-company-statement-4ad9c20f",
+            "evidenceContent": "private-screen-evidence-61be834a",
+            "reason": "private-optional-reason-83f50c2d",
+            "findingId": "finding-" + "7b" * 12,
+            "assessmentDigest": "82" * 32,
+            "decisionDigest": "91" * 32,
+            "userActivity": "private-user-activity-57d1aa09",
+            "credential": "ghp_" + "z" * 36,
+            "absolutePath": "C:"
+            + "\\Users\\PrivateReleaseCandidate\\.design-system-guardian\\profiles\\one.json",
+        }
+        for field, marker in markers.items():
+            for history in (False, True):
+                with (
+                    self.subTest(field=field, history=history),
+                    tempfile.TemporaryDirectory() as temp,
+                ):
+                    base = Path(temp)
+                    root = make_repo(base)
+                    local_home = base / "local-only-home"
+                    write(
+                        local_home,
+                        "judgments/private.json",
+                        json.dumps(markers, sort_keys=True) + "\n",
+                    )
+                    relative = "plugins/design-system-guardian/docs/judgment-fixture.json"
+                    write(root, relative, json.dumps({field: marker}) + "\n")
+                    commit(root, "synthetic judgment fixture")
+                    if history:
+                        (root / relative).unlink()
+                        commit(root, "remove synthetic judgment fixture")
+                    result = self.checker.check_public_release(
+                        root,
+                        history=history,
+                        local_home=local_home,
+                        require_clean=True,
+                        check_prior_suite=False,
+                    )
+                    rendered = self.checker.render_result(result)
+                    self.assertFalse(result.ok, rendered)
+                    self.assertNotIn(marker, rendered)
+
+    def test_profile_run_bound_nested_judgment_documents_are_structurally_blocked(self) -> None:
+        marker = "synthetic-local-judgment-content-4f829bd1"
+        finding_id = "finding-" + "6c" * 12
+        assessment_digest = "72" * 32
+        decision_digest = "83" * 32
+        evidence_digest = "94" * 32
+        documents = {
+            "assessment": {
+                "schemaVersion": 1,
+                "profileId": "synthetic-profile",
+                "runId": "synthetic-run",
+                "bindings": {
+                    "profileDigest": "15" * 32,
+                    "evidenceDigest": evidence_digest,
+                },
+                "instances": [
+                    {
+                        "instanceId": "instance-" + "2a" * 12,
+                        "findings": [
+                            {
+                                "findingId": finding_id,
+                                "explanation": marker,
+                                "evidenceReferences": [
+                                    {
+                                        "artifact": "synthetic-capture",
+                                        "digest": evidence_digest,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+            "status-history": {
+                "schemaVersion": 1,
+                "status": "active",
+                "profileId": "synthetic-profile",
+                "runId": "synthetic-run",
+                "assessment": {
+                    "bindings": {"evidenceDigest": evidence_digest},
+                    "instances": [
+                        {
+                            "findings": [
+                                {
+                                    "findingId": finding_id,
+                                    "explanation": marker,
+                                }
+                            ]
+                        }
+                    ],
+                },
+                "historyHead": {
+                    "assessmentDigest": assessment_digest,
+                    "activeDecisionDigest": decision_digest,
+                },
+                "revocationPermissionBinding": {
+                    "decisionDigest": decision_digest,
+                    "reason": marker,
+                },
+            },
+        }
+        for label, document in documents.items():
+            for history in (False, True):
+                with (
+                    self.subTest(label=label, history=history),
+                    tempfile.TemporaryDirectory() as temp,
+                ):
+                    root = make_repo(Path(temp))
+                    relative = (
+                        "plugins/design-system-guardian/docs/"
+                        + label
+                        + "-runtime.json"
+                    )
+                    write(root, relative, json.dumps(document) + "\n")
+                    commit(root, "synthetic nested judgment fixture")
+                    if history:
+                        (root / relative).unlink()
+                        commit(root, "remove synthetic nested judgment fixture")
+                    result = self.checker.check_public_release(
+                        root,
+                        history=history,
+                        local_home=None,
+                        require_clean=True,
+                        check_prior_suite=False,
+                    )
+                    rendered = self.checker.render_result(result)
+                    self.assertFalse(result.ok, rendered)
+                    self.assertIn(
+                        "history_violation" if history else "runtime_state",
+                        result.codes,
+                    )
+                    self.assertNotIn(marker, rendered)
+                    self.assertNotIn(finding_id, rendered)
+                    self.assertNotIn(evidence_digest, rendered)
+                    self.assertNotIn(decision_digest, rendered)
+
+    def test_unbound_judgment_examples_and_public_schemas_remain_legal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = make_repo(Path(temp))
+            write(
+                root,
+                "plugins/design-system-guardian/schemas/synthetic-judgment.schema.json",
+                json.dumps(
+                    {
+                        "properties": {
+                            "profileId": {"type": "string"},
+                            "runId": {"type": "string"},
+                            "reason": {"type": "string"},
+                            "findingId": {"type": "string"},
+                        }
+                    }
+                )
+                + "\n",
+            )
+            write(
+                root,
+                "plugins/design-system-guardian/docs/generic-examples.json",
+                json.dumps(
+                    {
+                        "examples": [
+                            {"reason": "Synthetic public rationale."},
+                            {"findingId": "synthetic-public-example"},
+                        ]
+                    }
+                )
+                + "\n",
+            )
+            write(
+                root,
+                "plugins/design-system-guardian/docs/profile-run-metadata.json",
+                json.dumps(
+                    {
+                        "profileId": "synthetic-profile",
+                        "runId": "synthetic-run",
+                        "summary": {"label": "Synthetic public metadata."},
+                    }
+                )
+                + "\n",
+            )
+            commit(root, "synthetic legal metadata")
+            result = self.checker.check_public_release(
+                root,
+                history=True,
+                local_home=None,
+                require_clean=True,
+                check_prior_suite=False,
+            )
+            self.assertTrue(result.ok, self.checker.render_result(result))
+
     def test_clean_scan_reads_committed_bytes_and_rejects_dirty_tree(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = make_repo(Path(temp))

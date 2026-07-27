@@ -31,6 +31,11 @@ class CanonicalSchemaTest(unittest.TestCase):
             "run-manifest.schema.json",
             "run-manifest-v2.schema.json",
             "usage-rules-evidence.schema.json",
+            "judgment-assessment.schema.json",
+            "judgment-effective-projection.schema.json",
+            "judgment-decision-permission.schema.json",
+            "judgment-history-record.schema.json",
+            "judgment-history-head.schema.json",
         }
         actual = {path.name for path in (PLUGIN_ROOT / "schemas").glob("*.schema.json")}
         self.assertEqual(actual, expected)

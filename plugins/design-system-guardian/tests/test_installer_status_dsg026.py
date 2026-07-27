@@ -63,7 +63,7 @@ class InstallerStatusTest(unittest.TestCase):
 
             path = target / module.SKILL_NAMES[0] / module.BINDING_RELATIVE
             binding = load_json(path)
-            binding["pluginVersion"] = "0.3.6"
+            binding["pluginVersion"] = "0.3.7"
             write_json(path, binding)
             invalid = module.installation_status(target)
             self.assertEqual(invalid["status"], "invalid")

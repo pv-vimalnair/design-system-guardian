@@ -78,7 +78,12 @@ from .rules import (
     parse_description_markers,
     validate_rules,
 )
-from .run_artifacts import read_run_artifact, seal_run_artifact, write_run_artifact
+from .run_artifacts import (
+    read_run_artifact,
+    render_judgment_report,
+    seal_run_artifact,
+    write_run_artifact,
+)
 from .snapshot import SnapshotValidationError, ingest_snapshot
 from .ux_evaluator import (
     UxEvaluationIntegrityError,
@@ -905,6 +910,172 @@ def _rules_list_command(args: argparse.Namespace) -> int:
     return _exit_for_status(str(result["status"]))
 
 
+def _emit_judgment_integrity_failure(*, local_changes_performed: bool = False) -> int:
+    _emit(
+        {
+            "schemaVersion": 1,
+            "status": ResolutionStatus.INVALID.value,
+            "stage": "judgment",
+            "reasonCode": "judgment_integrity_invalid",
+            "message": "Judgment permission, policy, configuration, or retained evidence integrity is invalid.",
+            "permissionRequired": False,
+            "localChangesPerformed": local_changes_performed,
+            "productionReady": False,
+        },
+        error=True,
+    )
+    return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
+
+
+def _require_granted_bundle(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("Judgment bundle must be an object.")
+    permission = value.get("permission")
+    if not isinstance(permission, dict) or permission.get("granted") is not True:
+        raise ValueError("Judgment operations require an explicit grant.")
+    return value
+
+
+def _judgment_status_exit(result: dict[str, object]) -> int:
+    projection = result.get("effectiveProjection")
+    if not isinstance(projection, dict):
+        return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    raw_instances = projection.get("instances")
+    instances = raw_instances if isinstance(raw_instances, list) else []
+    statuses = [
+        projection.get("effectiveStatus"),
+        *[
+            item.get("effectiveStatus")
+            for item in instances
+            if isinstance(item, dict)
+        ],
+    ]
+    authority = projection.get("enforcementAuthorityStatus")
+    if ResolutionStatus.INVALID.value in [*statuses, authority]:
+        return int(ExitCode.INVALID_POLICY_CONFIG_OR_INTEGRITY)
+    if any(
+        status in {
+            ResolutionStatus.STALE.value,
+            ResolutionStatus.SOURCE_UNAVAILABLE.value,
+            ResolutionStatus.SOURCE_INCOMPLETE.value,
+        }
+        for status in [*statuses, authority]
+    ):
+        return int(ExitCode.SOURCE_UNAVAILABLE_STALE_OR_INCOMPLETE)
+    if any(
+        status in {
+            ResolutionStatus.MISSING.value,
+            ResolutionStatus.AMBIGUOUS.value,
+            ResolutionStatus.CONFLICT.value,
+        }
+        for status in statuses
+    ):
+        return int(ExitCode.VIOLATION_OR_SENTINEL)
+    if any(
+        status in {
+            ResolutionStatus.UNSUPPORTED.value,
+            ResolutionStatus.NOT_ASSESSED.value,
+        }
+        for status in statuses
+    ):
+        return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    if authority != ResolutionStatus.ALLOWED.value:
+        return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    return (
+        int(ExitCode.PASS)
+        if result.get("productionReady") is True
+        else int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    )
+
+
+def _judgment_preview_command(args: argparse.Namespace) -> int:
+    from .judgment_decisions import (
+        JudgmentDecisionIntegrityError,
+        preview_judgment_decision,
+    )
+
+    try:
+        result = preview_judgment_decision(
+            default_guardian_home(),
+            profile_id=args.profile,
+            run_id=args.run_id,
+            candidate=read_json(Path(args.input)),
+        )
+    except (JudgmentDecisionIntegrityError, GuardianError, OSError, ValueError):
+        return _emit_judgment_integrity_failure()
+    _emit(result)
+    return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+
+
+def _judgment_apply_command(args: argparse.Namespace) -> int:
+    from .judgment_decisions import (
+        JudgmentDecisionIntegrityError,
+        apply_judgment_decision,
+        read_judgment_status,
+    )
+
+    local_changes_performed = False
+    try:
+        bundle = _require_granted_bundle(read_json(Path(args.input)))
+        result = apply_judgment_decision(default_guardian_home(), bundle)
+        local_changes_performed = bool(result.get("localChangesPerformed"))
+        status = read_judgment_status(
+            default_guardian_home(),
+            profile_id=str(result["profileId"]),
+            run_id=str(result["runId"]),
+        )
+        result["effectiveProjection"] = status["effectiveProjection"]
+        result["readableReport"] = render_judgment_report(status)
+        result["productionReady"] = False
+    except (JudgmentDecisionIntegrityError, GuardianError, OSError, ValueError, KeyError):
+        return _emit_judgment_integrity_failure(
+            local_changes_performed=local_changes_performed
+        )
+    _emit(result)
+    return int(ExitCode.PASS)
+
+
+def _judgment_status_command(args: argparse.Namespace) -> int:
+    from .judgment_decisions import JudgmentDecisionIntegrityError, read_judgment_status
+
+    try:
+        result = read_judgment_status(
+            default_guardian_home(), profile_id=args.profile, run_id=args.run_id
+        )
+        result["readableReport"] = render_judgment_report(result)
+    except (JudgmentDecisionIntegrityError, GuardianError, OSError, ValueError):
+        return _emit_judgment_integrity_failure()
+    _emit(result)
+    return _judgment_status_exit(result)
+
+
+def _judgment_revoke_command(args: argparse.Namespace) -> int:
+    from .judgment_decisions import (
+        JudgmentDecisionIntegrityError,
+        read_judgment_status,
+        revoke_judgment_decision,
+    )
+
+    local_changes_performed = False
+    try:
+        bundle = _require_granted_bundle(read_json(Path(args.input)))
+        result = revoke_judgment_decision(default_guardian_home(), bundle)
+        local_changes_performed = bool(result.get("localChangesPerformed"))
+        status = read_judgment_status(
+            default_guardian_home(),
+            profile_id=str(result["profileId"]),
+            run_id=str(result["runId"]),
+        )
+        result["effectiveProjection"] = status["effectiveProjection"]
+        result["readableReport"] = render_judgment_report(status)
+        result["productionReady"] = False
+    except (JudgmentDecisionIntegrityError, GuardianError, OSError, ValueError, KeyError):
+        return _emit_judgment_integrity_failure(
+            local_changes_performed=local_changes_performed
+        )
+    _emit(result)
+    return int(ExitCode.PASS)
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="guardian")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1106,6 +1277,41 @@ def build_parser() -> argparse.ArgumentParser:
     rules_activate_apply.add_argument("--input", required=True)
     rules_activate_apply.set_defaults(handler=_rules_activate_apply_command)
 
+    judgment = commands.add_parser(
+        "judgment",
+        help="Preview, apply, inspect, or revoke one exact-run judgment decision.",
+    )
+    judgment_commands = judgment.add_subparsers(
+        dest="judgment_command",
+        required=True,
+    )
+    judgment_preview = judgment_commands.add_parser(
+        "preview",
+        help="Explain one exact decision candidate without changing local state.",
+    )
+    judgment_preview.add_argument("--profile", required=True)
+    judgment_preview.add_argument("--run-id", required=True)
+    judgment_preview.add_argument("--input", required=True)
+    judgment_preview.set_defaults(handler=_judgment_preview_command)
+    judgment_apply = judgment_commands.add_parser(
+        "apply",
+        help="Apply one exact explicitly granted judgment decision.",
+    )
+    judgment_apply.add_argument("--input", required=True)
+    judgment_apply.set_defaults(handler=_judgment_apply_command)
+    judgment_status = judgment_commands.add_parser(
+        "status",
+        help="Read and derive the current exact-run judgment without writes.",
+    )
+    judgment_status.add_argument("--profile", required=True)
+    judgment_status.add_argument("--run-id", required=True)
+    judgment_status.set_defaults(handler=_judgment_status_command)
+    judgment_revoke = judgment_commands.add_parser(
+        "revoke",
+        help="Append one exact explicitly granted revocation.",
+    )
+    judgment_revoke.add_argument("--input", required=True)
+    judgment_revoke.set_defaults(handler=_judgment_revoke_command)
     migrate = commands.add_parser("migrate")
     migrate.add_argument("--profile", required=True)
     migrate.add_argument("--artifact", required=True)

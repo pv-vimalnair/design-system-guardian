@@ -26,7 +26,24 @@ Policy precedence is `immutable policy -> evolving validators -> selected compan
 
 Setup, Figma read-back, the UX evaluator, CLI, schemas, Flutter adapter, sentinels, and release machinery are internal infrastructure. They are not extra skills or plugins.
 
-## What is new in 0.3.6
+## What is new in 0.3.7
+
+Guardian now completes subjective judgment assessments instead of leaving every judgment rule not assessed. It must explain every finding first and keep raw findings visible beside the effective judgment result.
+
+For a selected conflict, the build skill offers **Fix and evaluate again** or **Approve this exact version anyway**, with an optional reason. The agent performs the exact local workflow for the user:
+
+    guardian judgment preview --profile <profile-id> --run-id <run-id> --input <candidate.json>
+    guardian judgment apply --input <granted-bundle.json>
+    guardian judgment status --profile <profile-id> --run-id <run-id>
+    guardian judgment revoke --input <granted-revocation.json>
+
+Preview and status are zero-write. Apply and revoke require explicit permission for the exact digest-bound local operation. Approval affects only selected conflict findings for that exact run; there is no reusable or future waiver, and a duplicate file, later run, or new screen does not inherit it. Guardian reevaluates every new screen or flow.
+
+An exception never overrides design-system compliance, Usage Rules, sentinels, stale or incomplete evidence, unsupported or not-assessed coverage, or the protected-authority lane. It cannot create production authority on an unprotected host. Assessments, reasons, decisions, and company evidence remain local and never enter Git, Elo, or telemetry.
+
+Version 0.3.7 preserves every v0.3.2-v0.3.6 schema and evidence contract, the immutable policy digest, and exactly two visible skills. Public Elo v7 evidence is synthetic. Codex, Claude Code, OpenClaw, Kimi Code, Qwen Code, terminal agents, and generic Agent Skills hosts use the same portable commands, but only tested adapters and host read-back support a compatibility claim; installation alone is not automatic routing.
+
+## What 0.3.6 added
 
 - Installing v0.3.6 does not silently expand the v0.3.5 evaluator. The agent runs zero-write `guardian rules upgrade preview`, explains one exact local evaluator change in plain language, asks permission, and applies only the matching bundle.
 - Zero-write `guardian rules list --profile <id>` reports the effective evaluator and each rule's capability without exposing rule prose, company paths, design content, or user data.
@@ -35,7 +52,7 @@ Setup, Figma read-back, the UX evaluator, CLI, schemas, Flutter adapter, sentine
 - Generic Agent Skills installations have zero-write status values `current`, `update_required`, `reload_required`, and `invalid`. A watched-root failure restores the prior install and returns `host_restart_required`; restart that host and rerun the same verified update before claiming v0.3.6 is loaded.
 - Every v0.3.2-v0.3.5 schema and evidence contract remains readable. Public Elo v6 evidence is synthetic; local scores, run results, and history stay outside Git.
 
-Everything below from v0.3.2, v0.3.3, v0.3.4, and v0.3.5 remains part of v0.3.6:
+Everything below from v0.3.2, v0.3.3, v0.3.4, v0.3.5, and v0.3.6 remains part of v0.3.7:
 
 - Permission-bound Safe Activation preserves externally signed rule approval and the exact v0.3.5 evaluator authorization; permission enables an evaluator but never approves rules.
 - Preview-only usage-rule validation: `guardian rules validate` accepts explicit Figma description markers or a local rule artifact, validates the six supported machine predicates, and returns a deterministic report without changing Guardian or project state.
@@ -85,7 +102,7 @@ The Figma adapter requires agents to clear or bind a new frame's default fill, a
 
 ## Flutter-first support
 
-Version 0.3.6 keeps the deep Flutter analyzer adapter and Figma-native observation enforcement. With explicit evaluator-v2 permission it also assesses all six approved machine-rule predicates through exact analyzer-resolved identities, variants, construction relations, and honest `compilation_unit` or `widget_class` scope. Flutter diagnostics still detect raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Figma diagnostics require exact bound-variable, text-style, component-instance, variant/property, source-version, and duplicate-lineage evidence.
+Version 0.3.7 keeps the v0.3.6 deep Flutter analyzer adapter and Figma-native observation enforcement. With explicit evaluator-v2 permission it also assesses all six approved machine-rule predicates through exact analyzer-resolved identities, variants, construction relations, and honest `compilation_unit` or `widget_class` scope. Flutter diagnostics still detect raw or unapproved colors, typography, icons, dimensions, effects, widgets, variants, motion, visual primitives, and suppression attempts. Figma diagnostics require exact bound-variable, text-style, component-instance, variant/property, source-version, and duplicate-lineage evidence.
 
 The built-in UX/accessibility evaluator derives status from evidence; callers cannot submit a pass. Screen checkpoints are diagnostic. The final-flow result is the complete UX lane input. An inaccessible approved asset is reported as a design-system gap; Guardian never silently changes its color, size, motion, or behavior.
 
@@ -148,6 +165,6 @@ Never commit profiles, catalog snapshots, Figma credentials, authority private k
 
 ## Versioning and license
 
-The source version is `0.3.6`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
+The source version is `0.3.7`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
 
 Licensed under the [MIT License](LICENSE).

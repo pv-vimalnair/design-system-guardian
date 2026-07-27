@@ -54,7 +54,24 @@ The retained v0.3.5 evaluator activates only `forbidden_identity_in_scope` with 
 
 Before rule-governed work, run `guardian rules list --profile <profile-id>`. This command is read-only and lists each rule's effective capability without printing rule prose, company paths, design content, or user data. If it reports `evaluator_upgrade_required`, run `guardian rules upgrade preview --profile <profile-id>` without writing. Explain in plain language that Guardian can now check all six approved machine-rule types, including `widget_class` scope, and ask whether it may save this exact evaluator permission locally for the selected profile. The user must not have to copy files, hashes, or commands. Only after explicit permission, run `guardian rules upgrade apply --input <permission-bound-bundle.json>`.
 
-If permission is absent or denied, keep the v0.3.5 evaluator and report every newly supported capability as `not_assessed`. A valid v2 authorization enables all six existing machine predicates, `compilation_unit` and analyzer-proven `widget_class` scope, and the declared child, descendant, and sibling relations. Judgment rules remain `not_assessed`; informative rules remain non-gating. Missing, corrupt, stale, incomplete, or discontinuous activation or evaluator evidence blocks protected rule work. Never fall back to v1.
+If permission is absent or denied, keep the v0.3.5 evaluator and report every newly supported capability as `not_assessed`. A valid v2 authorization enables all six existing machine predicates, `compilation_unit` and analyzer-proven `widget_class` scope, and the declared child, descendant, and sibling relations. The inherited v0.3.6 machine-rule lane leaves judgment rules `not_assessed` until the v0.3.7 assessment evaluates them; incomplete instances remain `not_assessed`, and informative rules remain non-gating. Missing, corrupt, stale, incomplete, or discontinuous activation or evaluator evidence blocks protected rule work. Never fall back to v1.
+
+## Subjective judgment findings and exact-run exceptions
+
+For every v0.3.7 assessment, explain every finding in plain language before asking the user to decide. Always show the raw findings and the derived effective result separately; an exception never deletes or rewrites raw evidence.
+
+For each selected conflict, offer exactly **Fix and evaluate again** or **Approve this exact version anyway**. The user may add an optional reason. The agent performs the mechanics for the user with these exact portable CLI forms:
+
+    guardian judgment preview --profile <profile-id> --run-id <run-id> --input <candidate.json>
+    guardian judgment apply --input <granted-bundle.json>
+    guardian judgment status --profile <profile-id> --run-id <run-id>
+    guardian judgment revoke --input <granted-revocation.json>
+
+Preview is zero-write. Apply requires explicit permission for the exact digest-bound run, assessment, target, source cut, and selected finding IDs; then status must read the decision back. Revocation is a new append-only local record and also requires permission. The optional reason is context only, never approval authority.
+
+An approval applies only to those selected findings in that exact run. There is no reusable or future waiver, and no duplicate file, old run, or matching-looking target inherits it. Reevaluate every new screen or flow and never reuse an old exception.
+
+A judgment exception can affect only the derived judgment outcome. It never overrides design-system compliance, Usage Rules, a sentinel, stale or source_incomplete evidence, unsupported, not_assessed, or the protected-authority lane. It cannot make an unprotected host production-ready. Assessments, reasons, decisions, and company evidence stay local and never enter Git, Elo, or telemetry.
 
 ## Statuses and sentinels
 
