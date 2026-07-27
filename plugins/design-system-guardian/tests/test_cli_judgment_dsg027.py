@@ -77,6 +77,20 @@ def multi_instance_candidate(context: dict) -> tuple[dict, list[str]]:
     )
 
 class JudgmentCliTest(unittest.TestCase):
+    def test_integrity_error_remains_value_error_with_bounded_write_state(self) -> None:
+        from guardian_core.judgment_decisions import JudgmentDecisionIntegrityError
+
+        unchanged = JudgmentDecisionIntegrityError("before write")
+        changed = JudgmentDecisionIntegrityError(
+            "after write", local_changes_performed=True
+        )
+        self.assertIsInstance(unchanged, ValueError)
+        self.assertFalse(unchanged.local_changes_performed)
+        self.assertTrue(changed.local_changes_performed)
+        with self.assertRaises(TypeError):
+            JudgmentDecisionIntegrityError(
+                "invalid flag", local_changes_performed=1  # type: ignore[arg-type]
+            )
     def test_exact_four_command_surface_is_registered(self) -> None:
         from guardian_core.cli import build_parser
 
@@ -146,6 +160,7 @@ class JudgmentCliTest(unittest.TestCase):
         code, failure = invoke(home, ["judgment", "apply", "--input", str(denied_path)])
         self.assertEqual(code, 2)
         self.assertEqual(failure["status"], "invalid")
+        self.assertFalse(failure["localChangesPerformed"])
         self.assertEqual(file_state(home), before_denial)
 
         granted = copy.deepcopy(denied)
@@ -254,6 +269,134 @@ class JudgmentCliTest(unittest.TestCase):
             "Selected finding IDs: " + ", ".join(sorted(traversal_ids)),
             status["readableReport"],
         )
+
+    def test_partial_apply_head_failure_reports_durable_writes_and_retries(self) -> None:
+        temporary, home, context = provision_home()
+        self.addCleanup(temporary.cleanup)
+        profile = context["runPin"]["profileId"]
+        run = context["runPin"]["runId"]
+        root = Path(temporary.name)
+        candidate_path = root / "candidate.json"
+        write_json(candidate_path, candidate())
+        with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
+            _, preview = invoke(
+                home,
+                [
+                    "judgment", "preview", "--profile", profile,
+                    "--run-id", run, "--input", str(candidate_path),
+                ],
+            )
+        grant_path = root / "grant.json"
+        write_json(
+            grant_path,
+            {
+                "schemaVersion": 1, "profileId": profile, "runId": run,
+                "candidate": candidate(),
+                "permission": {**preview["permissionBinding"], "granted": True},
+            },
+        )
+        sensitive = f"private reason and evidence at {root}"
+        with (
+            patch("guardian_core.judgment_decisions._reopen_context", return_value=context),
+            patch(
+                "guardian_core.judgment_decisions.contained_atomic_write_json",
+                side_effect=OSError(sensitive),
+            ),
+        ):
+            code, failure = invoke(
+                home, ["judgment", "apply", "--input", str(grant_path)]
+            )
+        self.assertEqual(code, 2)
+        self.assertTrue(failure["localChangesPerformed"])
+        self.assertNotIn(sensitive, json.dumps(failure, sort_keys=True))
+        audit = home / "profiles" / profile / "audits" / run
+        self.assertTrue((audit / "judgment-assessment.sealed.json").is_file())
+        self.assertEqual(len(list((audit / "judgment-history").glob("*.json"))), 1)
+        self.assertFalse((audit / "current-judgment-history.json").exists())
+
+        with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
+            retry_code, retry = invoke(
+                home, ["judgment", "apply", "--input", str(grant_path)]
+            )
+        self.assertEqual(retry_code, 0)
+        self.assertTrue(retry["changed"])
+        self.assertEqual(retry["status"], "active")
+
+    def test_partial_revoke_head_failure_reports_durable_write_and_retries(self) -> None:
+        temporary, home, context = provision_home()
+        self.addCleanup(temporary.cleanup)
+        profile = context["runPin"]["profileId"]
+        run = context["runPin"]["runId"]
+        root = Path(temporary.name)
+        candidate_path = root / "candidate.json"
+        write_json(candidate_path, candidate())
+        with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
+            _, preview = invoke(
+                home,
+                [
+                    "judgment", "preview", "--profile", profile,
+                    "--run-id", run, "--input", str(candidate_path),
+                ],
+            )
+        grant_path = root / "grant.json"
+        write_json(
+            grant_path,
+            {
+                "schemaVersion": 1, "profileId": profile, "runId": run,
+                "candidate": candidate(),
+                "permission": {**preview["permissionBinding"], "granted": True},
+            },
+        )
+        with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
+            apply_code, applied = invoke(
+                home, ["judgment", "apply", "--input", str(grant_path)]
+            )
+        self.assertEqual(apply_code, 0)
+        with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
+            _, active = invoke(
+                home, ["judgment", "status", "--profile", profile, "--run-id", run]
+            )
+        revoke_path = root / "revoke.json"
+        write_json(
+            revoke_path,
+            {
+                "schemaVersion": 1, "profileId": profile, "runId": run,
+                "permission": {
+                    **active["revocationPermissionBinding"], "granted": True,
+                },
+            },
+        )
+        audit = home / "profiles" / profile / "audits" / run
+        head = audit / "current-judgment-history.json"
+        sensitive = f"private reason and evidence at {root}"
+
+        def interrupt_head(*_args) -> None:
+            head.unlink()
+            raise OSError(sensitive)
+
+        with (
+            patch("guardian_core.judgment_decisions._reopen_context", return_value=context),
+            patch(
+                "guardian_core.judgment_decisions.contained_atomic_write_json",
+                side_effect=interrupt_head,
+            ),
+        ):
+            code, failure = invoke(
+                home, ["judgment", "revoke", "--input", str(revoke_path)]
+            )
+        self.assertEqual(code, 2)
+        self.assertTrue(failure["localChangesPerformed"])
+        self.assertNotIn(sensitive, json.dumps(failure, sort_keys=True))
+        self.assertEqual(len(list((audit / "judgment-history").glob("*.json"))), 2)
+        self.assertFalse(head.exists())
+
+        with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
+            retry_code, retry = invoke(
+                home, ["judgment", "revoke", "--input", str(revoke_path)]
+            )
+        self.assertEqual(retry_code, 0)
+        self.assertTrue(retry["changed"])
+        self.assertEqual(retry["status"], "revoked")
 
     def test_post_write_projection_failure_reports_applied_and_revoked_history(self) -> None:
         from guardian_core.judgment_decisions import read_judgment_status

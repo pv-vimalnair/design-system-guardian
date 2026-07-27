@@ -66,6 +66,16 @@ _HEAD_KEYS = {
 class JudgmentDecisionIntegrityError(ValueError):
     """Raised when a decision, inherited binding, or history is ambiguous."""
 
+    def __init__(
+        self,
+        *args: object,
+        local_changes_performed: bool = False,
+    ) -> None:
+        if type(local_changes_performed) is not bool:
+            raise TypeError("local_changes_performed must be boolean.")
+        super().__init__(*args)
+        self.local_changes_performed = local_changes_performed
+
 
 def _mapping(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(value, Mapping):
@@ -632,6 +642,7 @@ def apply_judgment_decision(home: Path, bundle: object) -> dict[str, object]:
             "runId": run_id, "changed": False, "localChangesPerformed": False,
             "productionReady": False,
         }
+    local_changes_performed = False
     try:
         with profile_transaction_lock(home, profile_id):
             context = _reopen_context(home, profile_id=profile_id, run_id=run_id)
@@ -694,6 +705,7 @@ def apply_judgment_decision(home: Path, bundle: object) -> dict[str, object]:
                 profile_id=profile_id, run_id=run_id, payload=stored_assessment,
             )
             write_run_artifact(home, envelope)
+            local_changes_performed = True
             if records and head is None:
                 partial = records[-1]
                 if partial["recordType"] != "approval" or partial["permissionBinding"] != supplied:
@@ -704,6 +716,7 @@ def apply_judgment_decision(home: Path, bundle: object) -> dict[str, object]:
             else:
                 record = _record(home, supplied, record_type="approval")
                 _write_record(home, record)
+                local_changes_performed = True
             _, head_path = _history_paths(home, profile_id, run_id)
             contained_atomic_write_json(
                 home, head_path, _head(home, record, record["decisionDigest"])
@@ -711,10 +724,18 @@ def apply_judgment_decision(home: Path, bundle: object) -> dict[str, object]:
             loaded, loaded_head = _read_history(home, profile_id, run_id)
             if loaded[-1] != record or loaded_head is None:
                 raise JudgmentDecisionIntegrityError("Decision failed post-write verification.")
-    except JudgmentDecisionIntegrityError:
+    except JudgmentDecisionIntegrityError as error:
+        if local_changes_performed and not error.local_changes_performed:
+            raise JudgmentDecisionIntegrityError(
+                *error.args,
+                local_changes_performed=True,
+            ) from error
         raise
     except (AuthorityIntegrityError, OSError, PathIntegrityError, TimeoutError, ValueError) as error:
-        raise JudgmentDecisionIntegrityError(f"Decision storage failed: {error}") from error
+        raise JudgmentDecisionIntegrityError(
+            f"Decision storage failed: {error}",
+            local_changes_performed=local_changes_performed,
+        ) from error
     return {
         "schemaVersion": 1, "status": "active", "profileId": profile_id,
         "runId": run_id, "changed": True, "decision": copy.deepcopy(record),
@@ -852,6 +873,7 @@ def revoke_judgment_decision(home: Path, bundle: object) -> dict[str, object]:
             "runId": run_id, "changed": False, "localChangesPerformed": False,
             "productionReady": False,
         }
+    local_changes_performed = False
     try:
         with profile_transaction_lock(home, profile_id):
             records, head = _read_history(home, profile_id, run_id, allow_partial=True)
@@ -918,15 +940,24 @@ def revoke_judgment_decision(home: Path, bundle: object) -> dict[str, object]:
                     revoked_decision_digest=supplied["decisionDigest"],
                 )
                 _write_record(home, record)
+                local_changes_performed = True
             _, head_path = _history_paths(home, profile_id, run_id)
             contained_atomic_write_json(home, head_path, _head(home, record, None))
             loaded, loaded_head = _read_history(home, profile_id, run_id)
             if loaded[-1] != record or loaded_head is None:
                 raise JudgmentDecisionIntegrityError("Revocation failed post-write verification.")
-    except JudgmentDecisionIntegrityError:
+    except JudgmentDecisionIntegrityError as error:
+        if local_changes_performed and not error.local_changes_performed:
+            raise JudgmentDecisionIntegrityError(
+                *error.args,
+                local_changes_performed=True,
+            ) from error
         raise
     except (AuthorityIntegrityError, OSError, PathIntegrityError, TimeoutError, ValueError) as error:
-        raise JudgmentDecisionIntegrityError(f"Revocation storage failed: {error}") from error
+        raise JudgmentDecisionIntegrityError(
+            f"Revocation storage failed: {error}",
+            local_changes_performed=local_changes_performed,
+        ) from error
     return {
         "schemaVersion": 1, "status": "revoked", "profileId": profile_id,
         "runId": run_id, "changed": True, "revocation": copy.deepcopy(record),

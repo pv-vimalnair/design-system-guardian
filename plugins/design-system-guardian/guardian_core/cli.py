@@ -1027,7 +1027,13 @@ def _judgment_apply_command(args: argparse.Namespace) -> int:
         result["effectiveProjection"] = status["effectiveProjection"]
         result["readableReport"] = render_judgment_report(status)
         result["productionReady"] = False
-    except (JudgmentDecisionIntegrityError, GuardianError, OSError, ValueError, KeyError):
+    except JudgmentDecisionIntegrityError as error:
+        return _emit_judgment_integrity_failure(
+            local_changes_performed=(
+                local_changes_performed or error.local_changes_performed
+            )
+        )
+    except (GuardianError, OSError, ValueError, KeyError):
         return _emit_judgment_integrity_failure(
             local_changes_performed=local_changes_performed
         )
@@ -1069,7 +1075,13 @@ def _judgment_revoke_command(args: argparse.Namespace) -> int:
         result["effectiveProjection"] = status["effectiveProjection"]
         result["readableReport"] = render_judgment_report(status)
         result["productionReady"] = False
-    except (JudgmentDecisionIntegrityError, GuardianError, OSError, ValueError, KeyError):
+    except JudgmentDecisionIntegrityError as error:
+        return _emit_judgment_integrity_failure(
+            local_changes_performed=(
+                local_changes_performed or error.local_changes_performed
+            )
+        )
+    except (GuardianError, OSError, ValueError, KeyError):
         return _emit_judgment_integrity_failure(
             local_changes_performed=local_changes_performed
         )
