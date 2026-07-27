@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianTextStyleRule extends AnalysisRule {
   GuardianTextStyleRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects raw or unapproved TextStyle construction and references.',
       );

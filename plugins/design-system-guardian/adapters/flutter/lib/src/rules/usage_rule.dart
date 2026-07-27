@@ -40,7 +40,7 @@ int? firstUsageRuleViolationIndex(
 final class GuardianUsageRule extends AnalysisRule {
   GuardianUsageRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Enforces exact approved design-system usage rules per compilation unit.',
       );
@@ -122,7 +122,7 @@ final class _UsageRuleUnitVisitor extends SimpleAstVisitor<void> {
 final class GuardianUsageRuleCoverageRule extends AnalysisRule {
   GuardianUsageRuleCoverageRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Reports explicit incomplete machine-rule construction evidence.',
       );

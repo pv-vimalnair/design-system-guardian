@@ -12,7 +12,7 @@ import 'rule_support.dart';
 final class GuardianSentinelPresenceRule extends AnalysisRule {
   GuardianSentinelPresenceRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Makes every fixed diagnostic sentinel fail production readiness.',
       );
@@ -54,8 +54,8 @@ final class _SentinelPresenceVisitor extends SimpleAstVisitor<void> {
     if (config != null) {
       final arguments = <String, Expression>{};
       for (final argument in node.argumentList.arguments) {
-        if (argument is NamedExpression) {
-          arguments[argument.name.label.name] = argument.expression;
+        if (argument is NamedArgument) {
+          arguments[argument.name.lexeme] = argument.argumentExpression;
         }
       }
       final requestExpression = arguments['requestId'];

@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianIconRule extends AnalysisRule {
   GuardianIconRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects framework, generated, substituted, or unapproved icon identities.',
       );

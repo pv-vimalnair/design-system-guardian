@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianWidgetRule extends AnalysisRule {
   GuardianWidgetRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects widgets and components without an exact approved constructor mapping.',
       );

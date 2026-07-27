@@ -164,4 +164,4 @@ jobs:
 
       - name: Run Dart rule tests
         working-directory: plugins/design-system-guardian/adapters/flutter
-        run: flutter test
+        run: dart test

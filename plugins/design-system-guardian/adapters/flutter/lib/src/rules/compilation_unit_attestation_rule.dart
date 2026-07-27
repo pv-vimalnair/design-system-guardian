@@ -15,7 +15,7 @@ import '../config/adapter_config.dart';
 final class GuardianCompilationUnitAttestationRule extends AnalysisRule {
   GuardianCompilationUnitAttestationRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Attests that Guardian analyzed this compilation unit with the pinned config.',
       );

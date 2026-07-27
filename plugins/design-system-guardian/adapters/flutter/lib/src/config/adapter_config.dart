@@ -546,7 +546,7 @@ final class GuardianAdapterConfigRepository {
     }
     return ConfigBinding.valid(
       GuardianAdapterConfig(
-        schemaVersion: schemaVersion as int,
+        schemaVersion: schemaVersion,
         profileId: profileId,
         policyDigest: policyDigest,
         snapshotId: snapshotId,

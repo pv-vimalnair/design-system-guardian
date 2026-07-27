@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianVariantRule extends AnalysisRule {
   GuardianVariantRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Requires explicit, exact approved identities for governed componentVariants.',
       );

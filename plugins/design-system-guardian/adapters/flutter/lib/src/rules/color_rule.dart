@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianColorRule extends AnalysisRule {
   GuardianColorRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects raw, framework-default, or unapproved color identities.',
       );

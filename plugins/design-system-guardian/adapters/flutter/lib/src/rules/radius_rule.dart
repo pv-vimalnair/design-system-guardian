@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianRadiusRule extends AnalysisRule {
   GuardianRadiusRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description: 'Rejects raw or unapproved corner-radius values.',
       );
 
@@ -31,7 +31,7 @@ final class GuardianRadiusRule extends AnalysisRule {
     RuleContext context,
   ) {
     final visitor = _RadiusVisitor(this, context);
-    registry.addNamedExpression(this, visitor);
+    registry.addNamedArgument(this, visitor);
     registry.addInstanceCreationExpression(this, visitor);
     registry.addMethodInvocation(this, visitor);
     registry.addFunctionExpressionInvocation(this, visitor);
@@ -45,9 +45,9 @@ final class _RadiusVisitor extends SimpleAstVisitor<void> {
   final RuleContext context;
 
   @override
-  void visitNamedExpression(NamedExpression node) {
-    if (!radiusArguments.contains(node.name.label.name)) return;
-    _check(node.expression);
+  void visitNamedArgument(NamedArgument node) {
+    if (!radiusArguments.contains(node.name.lexeme)) return;
+    _check(node.argumentExpression);
   }
 
   @override
@@ -81,7 +81,8 @@ final class _RadiusVisitor extends SimpleAstVisitor<void> {
     if (config == null) return;
     final expression = raw.unParenthesized;
     final identity = canonicalExpressionIdentity(expression);
-    final rawLiteral = expression is NumericLiteral;
+    final rawLiteral =
+        expression is IntegerLiteral || expression is DoubleLiteral;
     final frameworkDefault = isFrameworkDefaultIdentity(identity);
     if (rawLiteral ||
         frameworkDefault ||

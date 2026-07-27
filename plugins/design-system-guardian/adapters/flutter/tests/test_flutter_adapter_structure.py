@@ -44,10 +44,10 @@ class FlutterAdapterStructureTests(unittest.TestCase):
             "color_rule.dart": "addInstanceCreationExpression",
             "text_style_rule.dart": "addInstanceCreationExpression",
             "icon_rule.dart": "addPrefixedIdentifier",
-            "dimension_rule.dart": "addNamedExpression",
+            "dimension_rule.dart": "addNamedArgument",
             "effect_rule.dart": "addInstanceCreationExpression",
             "motion_rule.dart": "addInstanceCreationExpression",
-            "radius_rule.dart": "addNamedExpression",
+            "radius_rule.dart": "addNamedArgument",
             "sentinel_presence_rule.dart": "addInstanceCreationExpression",
             "widget_rule.dart": "addInstanceCreationExpression",
             "variant_rule.dart": "addInstanceCreationExpression",
@@ -82,7 +82,8 @@ class FlutterAdapterStructureTests(unittest.TestCase):
             self.assertIn(category, rules)
         self.assertIn("canonicalElementIdentity", rules)
         self.assertIn("isApproved", rules)
-        self.assertIn("NumericLiteral", rules)
+        self.assertIn("IntegerLiteral", rules)
+        self.assertIn("DoubleLiteral", rules)
         self.assertIn("frameworkDefault", rules)
 
     def test_config_contract_is_digest_verified_and_bound_to_pinned_run(self) -> None:

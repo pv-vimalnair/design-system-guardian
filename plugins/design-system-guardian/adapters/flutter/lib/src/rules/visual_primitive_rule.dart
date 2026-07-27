@@ -183,7 +183,7 @@ String? _setterName(String? elementName) {
 final class GuardianVisualPrimitiveRule extends AnalysisRule {
   GuardianVisualPrimitiveRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects raw drawing, custom painting, and unapproved visual assets.',
       );

@@ -19,10 +19,10 @@ void main() {
 /// this test protects the hierarchy boundary that wrappers previously bypassed.
 final class _GovernedTypeProbeRule extends AnalysisRule {
   _GovernedTypeProbeRule()
-      : super(
-          name: code.name,
-          description: 'Exercises Guardian resolved-type classification.',
-        );
+    : super(
+        name: code.lowerCaseName,
+        description: 'Exercises Guardian resolved-type classification.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_test_governed_type_probe',
@@ -82,16 +82,16 @@ class WrappedColor extends Color {
 void bad() {
   const WrappedColor(0xff000000);
   const BoxDecoration();
-  const Cubic(0, 0, 1, 1);
+  const Duration(milliseconds: 1);
 }
 ''';
-    const wrapped = 'WrappedColor(0xff000000)';
-    const decoration = 'BoxDecoration()';
-    const cubic = 'Cubic(0, 0, 1, 1)';
+    const wrapped = 'const WrappedColor(0xff000000)';
+    const decoration = 'const BoxDecoration()';
+    const motion = 'const Duration(milliseconds: 1)';
     await assertDiagnostics(source, [
       lint(source.indexOf(wrapped), wrapped.length),
       lint(source.indexOf(decoration), decoration.length),
-      lint(source.indexOf(cubic), cubic.length),
+      lint(source.indexOf(motion), motion.length),
     ]);
   }
 

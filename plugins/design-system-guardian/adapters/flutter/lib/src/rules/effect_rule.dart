@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianEffectRule extends AnalysisRule {
   GuardianEffectRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects raw or unapproved shadows, blurs, gradients, and visual effects.',
       );

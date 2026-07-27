@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianDimensionRule extends AnalysisRule {
   GuardianDimensionRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects raw or unapproved spacing, sizing, radius, and elevation values.',
       );
@@ -32,7 +32,7 @@ final class GuardianDimensionRule extends AnalysisRule {
     RuleContext context,
   ) {
     final visitor = _DimensionVisitor(this, context);
-    registry.addNamedExpression(this, visitor);
+    registry.addNamedArgument(this, visitor);
     registry.addInstanceCreationExpression(this, visitor);
     registry.addMethodInvocation(this, visitor);
     registry.addFunctionExpressionInvocation(this, visitor);
@@ -46,10 +46,10 @@ final class _DimensionVisitor extends SimpleAstVisitor<void> {
   final RuleContext context;
 
   @override
-  void visitNamedExpression(NamedExpression node) {
-    final property = node.name.label.name;
+  void visitNamedArgument(NamedArgument node) {
+    final property = node.name.lexeme;
     if (!visualDimensionArguments.contains(property)) return;
-    _check(node.expression);
+    _check(node.argumentExpression);
   }
 
   @override
@@ -83,7 +83,8 @@ final class _DimensionVisitor extends SimpleAstVisitor<void> {
     if (config == null) return;
 
     final expression = raw.unParenthesized;
-    final rawLiteral = expression is NumericLiteral;
+    final rawLiteral =
+        expression is IntegerLiteral || expression is DoubleLiteral;
     final identity = canonicalExpressionIdentity(expression);
     final frameworkDefault = isFrameworkDefaultIdentity(identity);
     if (rawLiteral ||

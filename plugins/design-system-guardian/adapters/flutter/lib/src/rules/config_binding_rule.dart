@@ -10,7 +10,7 @@ import '../config/adapter_config.dart';
 final class GuardianConfigBindingRule extends AnalysisRule {
   GuardianConfigBindingRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Requires a complete, digest-verified adapter config bound to a pinned Guardian run.',
       );

@@ -218,7 +218,7 @@ class PublicationContractTests(unittest.TestCase):
             "dart format --output=none --set-exit-if-changed",
             "dart analyze lib",
             "dart analyze test/usage_rule_v2_test.dart",
-            "flutter test",
+            "dart test",
         ):
             self.assertIn(command, workflow)
 

@@ -295,7 +295,7 @@ void main() {
 final class _ResolvedOwnershipProbeRule extends AnalysisRule {
   _ResolvedOwnershipProbeRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description: 'Exercises analyzer-resolved Guardian ownership.',
       );
 

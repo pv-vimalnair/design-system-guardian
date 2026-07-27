@@ -46,7 +46,6 @@ String? canonicalExpressionIdentity(Expression expression) {
     ),
     PropertyAccess node => canonicalElementIdentity(node.propertyName.element),
     SimpleIdentifier node => canonicalElementIdentity(node.element),
-    NamedArgument node => canonicalExpressionIdentity(node.argumentExpression),
     _ => null,
   };
 }

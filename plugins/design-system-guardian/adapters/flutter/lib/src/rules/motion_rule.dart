@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianMotionRule extends AnalysisRule {
   GuardianMotionRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects raw or unapproved durations, curves, tweens, and motion identities.',
       );

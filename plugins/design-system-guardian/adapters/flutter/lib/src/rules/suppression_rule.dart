@@ -11,7 +11,7 @@ import 'rule_support.dart';
 final class GuardianSuppressionRule extends AnalysisRule {
   GuardianSuppressionRule()
     : super(
-        name: code.name,
+        name: code.lowerCaseName,
         description:
             'Rejects attempts to suppress or bypass Guardian diagnostics.',
       );
