@@ -322,7 +322,12 @@ class JudgmentCliTest(unittest.TestCase):
         self.assertTrue(retry["changed"])
         self.assertEqual(retry["status"], "active")
 
-    def test_partial_revoke_head_failure_reports_durable_write_and_retries(self) -> None:
+    def test_partial_revoke_head_failure_preserves_prefix_and_recovers(self) -> None:
+        from guardian_core.judgment_decisions import (
+            JudgmentDecisionIntegrityError,
+            _read_history,
+        )
+
         temporary, home, context = provision_home()
         self.addCleanup(temporary.cleanup)
         profile = context["runPin"]["profileId"]
@@ -348,7 +353,7 @@ class JudgmentCliTest(unittest.TestCase):
             },
         )
         with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
-            apply_code, applied = invoke(
+            apply_code, _ = invoke(
                 home, ["judgment", "apply", "--input", str(grant_path)]
             )
         self.assertEqual(apply_code, 0)
@@ -356,29 +361,32 @@ class JudgmentCliTest(unittest.TestCase):
             _, active = invoke(
                 home, ["judgment", "status", "--profile", profile, "--run-id", run]
             )
-        revoke_path = root / "revoke.json"
-        write_json(
-            revoke_path,
-            {
-                "schemaVersion": 1, "profileId": profile, "runId": run,
-                "permission": {
-                    **active["revocationPermissionBinding"], "granted": True,
-                },
+        revoke_bundle = {
+            "schemaVersion": 1,
+            "profileId": profile,
+            "runId": run,
+            "permission": {
+                **active["revocationPermissionBinding"],
+                "granted": True,
             },
-        )
+        }
+        revoke_path = root / "revoke.json"
+        write_json(revoke_path, revoke_bundle)
         audit = home / "profiles" / profile / "audits" / run
+        history = audit / "judgment-history"
         head = audit / "current-judgment-history.json"
+        records_before = sorted(history.glob("*.json"))
+        self.assertEqual(len(records_before), 1)
+        self.assertTrue(head.is_file())
+        approval_before = records_before[0].read_bytes()
+        head_before = head.read_bytes()
         sensitive = f"private reason and evidence at {root}"
-
-        def interrupt_head(*_args) -> None:
-            head.unlink()
-            raise OSError(sensitive)
 
         with (
             patch("guardian_core.judgment_decisions._reopen_context", return_value=context),
             patch(
                 "guardian_core.judgment_decisions.contained_atomic_write_json",
-                side_effect=interrupt_head,
+                side_effect=OSError(sensitive),
             ),
         ):
             code, failure = invoke(
@@ -387,8 +395,40 @@ class JudgmentCliTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertTrue(failure["localChangesPerformed"])
         self.assertNotIn(sensitive, json.dumps(failure, sort_keys=True))
-        self.assertEqual(len(list((audit / "judgment-history").glob("*.json"))), 2)
-        self.assertFalse(head.exists())
+        records_after = sorted(history.glob("*.json"))
+        self.assertEqual(len(records_after), 2)
+        self.assertEqual(records_after[0].read_bytes(), approval_before)
+        self.assertTrue(head.is_file())
+        self.assertEqual(head.read_bytes(), head_before)
+        with self.assertRaises(JudgmentDecisionIntegrityError):
+            _read_history(home, profile, run)
+        partial_records, partial_head = _read_history(
+            home, profile, run, allow_partial=True
+        )
+        self.assertIsNone(partial_head)
+        self.assertEqual(
+            [record["recordType"] for record in partial_records],
+            ["approval", "revocation"],
+        )
+        partial_bytes = {
+            path.name: path.read_bytes() for path in records_after
+        }
+
+        divergent = copy.deepcopy(revoke_bundle)
+        divergent["permission"]["runManifestDigest"] = "0" * 64
+        divergent_path = root / "divergent-revoke.json"
+        write_json(divergent_path, divergent)
+        with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
+            divergent_code, divergent_failure = invoke(
+                home, ["judgment", "revoke", "--input", str(divergent_path)]
+            )
+        self.assertEqual(divergent_code, 2)
+        self.assertFalse(divergent_failure["localChangesPerformed"])
+        self.assertEqual(head.read_bytes(), head_before)
+        self.assertEqual(
+            {path.name: path.read_bytes() for path in sorted(history.glob("*.json"))},
+            partial_bytes,
+        )
 
         with patch("guardian_core.judgment_decisions._reopen_context", return_value=context):
             retry_code, retry = invoke(
@@ -397,6 +437,11 @@ class JudgmentCliTest(unittest.TestCase):
         self.assertEqual(retry_code, 0)
         self.assertTrue(retry["changed"])
         self.assertEqual(retry["status"], "revoked")
+        self.assertNotEqual(head.read_bytes(), head_before)
+        self.assertEqual(
+            {path.name: path.read_bytes() for path in sorted(history.glob("*.json"))},
+            partial_bytes,
+        )
 
     def test_post_write_projection_failure_reports_applied_and_revoked_history(self) -> None:
         from guardian_core.judgment_decisions import read_judgment_status

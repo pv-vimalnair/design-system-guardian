@@ -451,6 +451,7 @@ def _read_history(home: Path, profile_id: str, run_id: str, *, allow_partial=Fal
     if [item["sequence"] for item in records] != list(range(1, len(records) + 1)):
         raise JudgmentDecisionIntegrityError("Judgment history contains a gap or fork.")
     previous = active = None
+    active_after = []
     for record in records:
         digest = sha256_digest(record)
         if record["previousRecordDigest"] != previous:
@@ -462,9 +463,22 @@ def _read_history(home: Path, profile_id: str, run_id: str, *, allow_partial=Fal
                 raise JudgmentDecisionIntegrityError("Revocation does not bind the active decision.")
             active = None
         previous = digest
+        active_after.append(active)
     if not head_path.exists():
-        if records and not allow_partial:
-            raise JudgmentDecisionIntegrityError("Judgment history head is missing.")
+        if records:
+            if not allow_partial:
+                raise JudgmentDecisionIntegrityError("Judgment history head is missing.")
+            first = records[0]
+            if (
+                len(records) != 1
+                or first["recordType"] != "approval"
+                or first["profileId"] != profile_id
+                or first["runId"] != run_id
+                or first["previousRecordDigest"] is not None
+            ):
+                raise JudgmentDecisionIntegrityError(
+                    "Judgment history lacks an exact recoverable first-record head."
+                )
         return records, None
     try:
         head = _validate_head(home, read_canonical_json(head_path))
@@ -476,14 +490,52 @@ def _read_history(home: Path, profile_id: str, run_id: str, *, allow_partial=Fal
         raise JudgmentDecisionIntegrityError("Judgment history head exists without records.")
     last = records[-1]
     if (
-        head["profileId"] != profile_id or head["runId"] != run_id
-        or head["sequence"] != last["sequence"]
-        or head["recordDigest"] != sha256_digest(last)
-        or head["assessmentDigest"] != last["assessmentDigest"]
-        or head["activeDecisionDigest"] != active
+        head["profileId"] == profile_id
+        and head["runId"] == run_id
+        and head["sequence"] == last["sequence"]
+        and head["recordDigest"] == sha256_digest(last)
+        and head["assessmentDigest"] == last["assessmentDigest"]
+        and head["activeDecisionDigest"] == active
     ):
-        raise JudgmentDecisionIntegrityError("Judgment head conflicts with append-only history.")
-    return records, head
+        return records, head
+    if not allow_partial or len(records) < 2:
+        raise JudgmentDecisionIntegrityError(
+            "Judgment head conflicts with append-only history."
+        )
+    prefix = records[-2]
+    prefix_active = active_after[-2]
+    same_inherited_binding = all(
+        record["profileId"] == profile_id
+        and record["runId"] == run_id
+        and record["assessmentDigest"] == head["assessmentDigest"]
+        and record["bindings"] == prefix["bindings"]
+        for record in records
+    )
+    valid_transition = (
+        last["recordType"] == "approval"
+        and prefix_active is None
+        and active == last["decisionDigest"]
+    ) or (
+        last["recordType"] == "revocation"
+        and prefix_active is not None
+        and last["revokedDecisionDigest"] == prefix_active
+        and active is None
+    )
+    if (
+        head["profileId"] == profile_id
+        and head["runId"] == run_id
+        and head["sequence"] == prefix["sequence"] == last["sequence"] - 1
+        and head["recordDigest"] == sha256_digest(prefix)
+        and head["assessmentDigest"] == prefix["assessmentDigest"]
+        and head["activeDecisionDigest"] == prefix_active
+        and last["previousRecordDigest"] == head["recordDigest"]
+        and same_inherited_binding
+        and valid_transition
+    ):
+        return records, None
+    raise JudgmentDecisionIntegrityError(
+        "Judgment head conflicts with append-only history."
+    )
 
 
 def _head(home: Path, record: Mapping[str, Any], active: str | None) -> dict[str, Any]:
