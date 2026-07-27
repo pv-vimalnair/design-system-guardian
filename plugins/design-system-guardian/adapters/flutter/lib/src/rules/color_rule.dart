@@ -10,22 +10,27 @@ import 'rule_support.dart';
 
 final class GuardianColorRule extends AnalysisRule {
   GuardianColorRule()
-      : super(
-          name: code.name,
-          description: 'Rejects raw, framework-default, or unapproved color identities.',
-        );
+    : super(
+        name: code.name,
+        description:
+            'Rejects raw, framework-default, or unapproved color identities.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_unapproved_color',
     'Color must resolve to an exact approved design-system identity.',
-    correctionMessage: 'Use an approved color token or a Guardian MISSING COLOR sentinel.',
+    correctionMessage:
+        'Use an approved color token or a Guardian MISSING COLOR sentinel.',
   );
 
   @override
   LintCode get diagnosticCode => code;
 
   @override
-  void registerNodeProcessors(RuleVisitorRegistry registry, RuleContext context) {
+  void registerNodeProcessors(
+    RuleVisitorRegistry registry,
+    RuleContext context,
+  ) {
     final visitor = _ColorVisitor(this, context);
     registry.addInstanceCreationExpression(this, visitor);
     registry.addMethodInvocation(this, visitor);
@@ -52,7 +57,8 @@ final class _ColorVisitor extends SimpleAstVisitor<void> {
   void visitMethodInvocation(MethodInvocation node) => _check(node);
 
   @override
-  void visitFunctionExpressionInvocation(FunctionExpressionInvocation node) => _check(node);
+  void visitFunctionExpressionInvocation(FunctionExpressionInvocation node) =>
+      _check(node);
 
   @override
   void visitIndexExpression(IndexExpression node) => _check(node);
@@ -65,7 +71,8 @@ final class _ColorVisitor extends SimpleAstVisitor<void> {
 
   @override
   void visitSimpleIdentifier(SimpleIdentifier node) {
-    if (node.parent is PrefixedIdentifier || node.parent is PropertyAccess) return;
+    if (node.parent is PrefixedIdentifier || node.parent is PropertyAccess)
+      return;
     _check(node);
   }
 

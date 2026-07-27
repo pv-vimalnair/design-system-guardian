@@ -11,23 +11,31 @@ import 'rule_support.dart';
 
 final class GuardianSentinelPresenceRule extends AnalysisRule {
   GuardianSentinelPresenceRule()
-      : super(
-          name: code.name,
-          description: 'Makes every fixed diagnostic sentinel fail production readiness.',
-        );
+    : super(
+        name: code.name,
+        description:
+            'Makes every fixed diagnostic sentinel fail production readiness.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_sentinel_present',
     'Guardian diagnostic sentinel is present; {0}. This build is not production ready.',
-    correctionMessage: 'Fulfil the linked design-system request, then replace the sentinel with that exact approved identity.',
+    correctionMessage:
+        'Fulfil the linked design-system request, then replace the sentinel with that exact approved identity.',
   );
 
   @override
   LintCode get diagnosticCode => code;
 
   @override
-  void registerNodeProcessors(RuleVisitorRegistry registry, RuleContext context) {
-    registry.addInstanceCreationExpression(this, _SentinelPresenceVisitor(this, context));
+  void registerNodeProcessors(
+    RuleVisitorRegistry registry,
+    RuleContext context,
+  ) {
+    registry.addInstanceCreationExpression(
+      this,
+      _SentinelPresenceVisitor(this, context),
+    );
   }
 }
 
@@ -63,7 +71,8 @@ final class _SentinelPresenceVisitor extends SimpleAstVisitor<void> {
           ? null
           : canonicalExpressionIdentity(kindExpression);
       final evidence = GuardianSentinelEvidenceRepository.load(config);
-      valid = requestId != null &&
+      valid =
+          requestId != null &&
           requestId.isNotEmpty &&
           policyDigest == config.policyDigest &&
           kindIdentity != null &&

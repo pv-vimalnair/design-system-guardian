@@ -147,8 +147,9 @@ const _approvedWrapperCategories = <String>{
 };
 
 bool _hasForbiddenVisualPrimitiveType(DartType? type) =>
-    canonicalTypeHierarchyIdentities(type)
-        .any(_forbiddenVisualPrimitiveTypes.contains);
+    canonicalTypeHierarchyIdentities(
+      type,
+    ).any(_forbiddenVisualPrimitiveTypes.contains);
 
 bool _isForbiddenResolvedIdentity(String? identity) =>
     identity != null &&
@@ -181,11 +182,11 @@ String? _setterName(String? elementName) {
 
 final class GuardianVisualPrimitiveRule extends AnalysisRule {
   GuardianVisualPrimitiveRule()
-      : super(
-          name: code.name,
-          description:
-              'Rejects raw drawing, custom painting, and unapproved visual assets.',
-        );
+    : super(
+        name: code.name,
+        description:
+            'Rejects raw drawing, custom painting, and unapproved visual assets.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_unapproved_visual_primitive',
@@ -315,8 +316,10 @@ final class _VisualPrimitiveVisitor extends SimpleAstVisitor<void> {
     }
     final config = validConfig(context);
     final valueIdentity = canonicalExpressionIdentity(node.rightHandSide);
-    final exactSignedSetter =
-        _isApprovedDesignSystemWrapper(config, writeIdentity);
+    final exactSignedSetter = _isApprovedDesignSystemWrapper(
+      config,
+      writeIdentity,
+    );
     final exactSignedValue =
         config?.isApproved('dimensions', valueIdentity) ?? false;
     if (!exactSignedSetter || !exactSignedValue) {
@@ -344,10 +347,10 @@ final class _VisualPrimitiveVisitor extends SimpleAstVisitor<void> {
       return;
     }
 
-    final returnsRawPrimitive =
-        _hasForbiddenVisualPrimitiveType(node.staticType);
-    final invokesRawPrimitive =
-        _hasForbiddenVisualPrimitiveType(receiverType);
+    final returnsRawPrimitive = _hasForbiddenVisualPrimitiveType(
+      node.staticType,
+    );
+    final invokesRawPrimitive = _hasForbiddenVisualPrimitiveType(receiverType);
     if (!returnsRawPrimitive && !invokesRawPrimitive) return;
 
     final config = validConfig(context);

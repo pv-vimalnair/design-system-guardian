@@ -10,22 +10,27 @@ import 'rule_support.dart';
 
 final class GuardianEffectRule extends AnalysisRule {
   GuardianEffectRule()
-      : super(
-          name: code.name,
-          description: 'Rejects raw or unapproved shadows, blurs, gradients, and visual effects.',
-        );
+    : super(
+        name: code.name,
+        description:
+            'Rejects raw or unapproved shadows, blurs, gradients, and visual effects.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_unapproved_effect',
     'Visual effect must resolve to an exact approved design-system identity.',
-    correctionMessage: 'Use an approved effect token; do not recreate or approximate it.',
+    correctionMessage:
+        'Use an approved effect token; do not recreate or approximate it.',
   );
 
   @override
   LintCode get diagnosticCode => code;
 
   @override
-  void registerNodeProcessors(RuleVisitorRegistry registry, RuleContext context) {
+  void registerNodeProcessors(
+    RuleVisitorRegistry registry,
+    RuleContext context,
+  ) {
     final visitor = _EffectVisitor(this, context);
     registry.addInstanceCreationExpression(this, visitor);
     registry.addMethodInvocation(this, visitor);
@@ -52,7 +57,8 @@ final class _EffectVisitor extends SimpleAstVisitor<void> {
   void visitMethodInvocation(MethodInvocation node) => _check(node);
 
   @override
-  void visitFunctionExpressionInvocation(FunctionExpressionInvocation node) => _check(node);
+  void visitFunctionExpressionInvocation(FunctionExpressionInvocation node) =>
+      _check(node);
 
   @override
   void visitIndexExpression(IndexExpression node) => _check(node);
@@ -65,7 +71,8 @@ final class _EffectVisitor extends SimpleAstVisitor<void> {
 
   @override
   void visitSimpleIdentifier(SimpleIdentifier node) {
-    if (node.parent is PrefixedIdentifier || node.parent is PropertyAccess) return;
+    if (node.parent is PrefixedIdentifier || node.parent is PropertyAccess)
+      return;
     _check(node);
   }
 

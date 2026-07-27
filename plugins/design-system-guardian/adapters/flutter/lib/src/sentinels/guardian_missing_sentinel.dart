@@ -22,8 +22,8 @@ final class GuardianMissingSentinel extends StatelessWidget {
     required this.requestId,
     required this.policyDigest,
     super.key,
-  })  : assert(requestId != ''),
-        assert(policyDigest != '');
+  }) : assert(requestId != ''),
+       assert(policyDigest != '');
 
   static const namespace = 'design_system_guardian.sentinel.v1';
   static const manifestDigest =
@@ -43,7 +43,8 @@ final class GuardianMissingSentinel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
-      label: '${kind.label}; request $requestId; policy $policyDigest; not production ready',
+      label:
+          '${kind.label}; request $requestId; policy $policyDigest; not production ready',
       child: CustomPaint(
         painter: const _DiagonalStripePainter(),
         child: ConstrainedBox(
@@ -92,7 +93,10 @@ final class _DiagonalStripePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = GuardianMissingSentinel.background);
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = GuardianMissingSentinel.background,
+    );
     final stripe = Paint()
       ..color = GuardianMissingSentinel.border
       ..strokeWidth = 6;

@@ -3,8 +3,7 @@ import 'dart:io';
 
 import '../config/adapter_config.dart';
 
-const sentinelEvidenceEnvironment =
-    'DESIGN_SYSTEM_GUARDIAN_SENTINEL_EVIDENCE';
+const sentinelEvidenceEnvironment = 'DESIGN_SYSTEM_GUARDIAN_SENTINEL_EVIDENCE';
 
 final class GuardianSentinelExpectation {
   const GuardianSentinelExpectation({
@@ -32,12 +31,11 @@ final class GuardianSentinelEvidence {
 
   factory GuardianSentinelEvidence.valid(
     List<GuardianSentinelExpectation> entries,
-  ) =>
-      GuardianSentinelEvidence._(
-        true,
-        null,
-        List<GuardianSentinelExpectation>.unmodifiable(entries),
-      );
+  ) => GuardianSentinelEvidence._(
+    true,
+    null,
+    List<GuardianSentinelExpectation>.unmodifiable(entries),
+  );
 
   final bool isValid;
   final String? reason;

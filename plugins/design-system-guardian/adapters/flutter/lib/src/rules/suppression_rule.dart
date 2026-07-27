@@ -10,22 +10,27 @@ import 'rule_support.dart';
 
 final class GuardianSuppressionRule extends AnalysisRule {
   GuardianSuppressionRule()
-      : super(
-          name: code.name,
-          description: 'Rejects attempts to suppress or bypass Guardian diagnostics.',
-        );
+    : super(
+        name: code.name,
+        description:
+            'Rejects attempts to suppress or bypass Guardian diagnostics.',
+      );
 
   static const LintCode code = LintCode(
     'guardian_suppression_forbidden',
     'Design System Guardian diagnostics cannot be suppressed.',
-    correctionMessage: 'Remove the suppression and resolve the design-system violation.',
+    correctionMessage:
+        'Remove the suppression and resolve the design-system violation.',
   );
 
   @override
   LintCode get diagnosticCode => code;
 
   @override
-  void registerNodeProcessors(RuleVisitorRegistry registry, RuleContext context) {
+  void registerNodeProcessors(
+    RuleVisitorRegistry registry,
+    RuleContext context,
+  ) {
     registry.addCompilationUnit(this, _SuppressionVisitor(this, context));
   }
 }
@@ -47,7 +52,8 @@ final class _SuppressionVisitor extends SimpleAstVisitor<void> {
     while (true) {
       Token? comment = token.precedingComments;
       while (comment != null) {
-        if (_isGuardianSuppression(comment.lexeme) && reportedOffsets.add(comment.offset)) {
+        if (_isGuardianSuppression(comment.lexeme) &&
+            reportedOffsets.add(comment.offset)) {
           rule.reportAtToken(comment);
         }
         comment = comment.next;
@@ -59,12 +65,15 @@ final class _SuppressionVisitor extends SimpleAstVisitor<void> {
 
   bool _isGuardianSuppression(String source) {
     final normalized = source.toLowerCase();
-    final hasIgnoreDirective = normalized.contains('ignore:') ||
+    final hasIgnoreDirective =
+        normalized.contains('ignore:') ||
         normalized.contains('ignore_for_file:') ||
         normalized.contains('ignore_for_file=');
-    final targetsGuardian = normalized.contains('design_system_guardian_flutter/') ||
+    final targetsGuardian =
+        normalized.contains('design_system_guardian_flutter/') ||
         normalized.contains('guardian_');
-    final bypassMarker = normalized.contains('guardian: ignore') ||
+    final bypassMarker =
+        normalized.contains('guardian: ignore') ||
         normalized.contains('guardian-ignore') ||
         normalized.contains('guardian_bypass');
     return (hasIgnoreDirective && targetsGuardian) || bypassMarker;
