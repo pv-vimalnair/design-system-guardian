@@ -173,6 +173,8 @@
       "properties": {
         "reason": {"type": "string", "minLength": 1},
         "denyWins": {"type": "boolean"},
+        "authorityMode": {"const": "personal_local"},
+        "independentProvenance": {"const": false},
         "policyDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "productionReady": {"type": "boolean"},
         "candidateCount": {"type": "integer", "minimum": 2},
@@ -186,7 +188,23 @@
         "properties": {"type": "object"},
         "codeMapping": {"type": ["object", "null"]},
         "workingFileInstance": {"$ref": "#/$defs/workingFileInstanceEvidence"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["authorityMode"]},
+          "then": {
+            "required": [
+              "authorityMode",
+              "independentProvenance",
+              "productionReady"
+            ]
+          }
+        },
+        {
+          "if": {"required": ["independentProvenance"]},
+          "then": {"required": ["authorityMode"]}
+        }
+      ]
     },
     "sentinel": {
       "type": "object",

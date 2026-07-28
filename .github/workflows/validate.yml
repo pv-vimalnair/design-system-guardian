@@ -64,6 +64,20 @@ jobs:
           tests.test_judgment_projection_dsg027
           tests.test_judgment_hard_lanes_dsg027
 
+      - name: Run focused v0.3.8 personal selection contracts
+        working-directory: plugins/design-system-guardian
+        run: >-
+          python -m unittest
+          tests.test_v038_public_contract
+          tests.test_personal_selection_dsg028
+          tests.test_personal_selection_adversarial_dsg028
+          tests.test_personal_trust_dsg028
+          tests.test_cli_personal_selection_dsg028
+          tests.test_figma_personal_selection_dsg028
+          tests.test_flutter_personal_pin_dsg028
+          tests.test_publication_personal_privacy_dsg028
+          tests.test_weighted_elo_v8
+
       - name: Run core tests
         working-directory: plugins/design-system-guardian
         run: python -m unittest discover -s tests -p "test_*.py"
@@ -79,7 +93,7 @@ jobs:
           from pathlib import Path
           root = Path("plugins/design-system-guardian")
           schemas = sorted(root.rglob("*.schema.json"))
-          assert len(schemas) == 43, [str(path) for path in schemas]
+          assert len(schemas) >= 43, [str(path) for path in schemas]
           for path in schemas:
               json.loads(path.read_text(encoding="utf-8"))
 

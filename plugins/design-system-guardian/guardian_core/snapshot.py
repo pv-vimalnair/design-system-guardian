@@ -339,7 +339,29 @@ def _build_unsigned_snapshot(
         token["approved"] = True
         token["provenance"] = copy.deepcopy(token_provenance)
 
-    registry = validate_registry(profile, source_cut, catalog["registry"])
+    # A freshly selected personal working file can legitimately contain no
+    # component instances yet. Enterprise catalogs retain the historical
+    # exact-instance requirement.
+    from .personal_selection import load_personal_profile_authority
+
+    personal_authority = load_personal_profile_authority(
+        home,
+        profile["profileId"],
+        missing_ok=True,
+    )
+    if (
+        personal_authority is not None
+        and personal_authority.get("profileDigest") != sha256_digest(profile)
+    ):
+        raise SnapshotValidationError(
+            "Personal profile authority differs from the installed profile."
+        )
+    registry = validate_registry(
+        profile,
+        source_cut,
+        catalog["registry"],
+        allow_unused_working_files=personal_authority is not None,
+    )
     approved_code_mapping_present = any(
         mapping.get("approved") is True
         for plural in ("components", "icons")
@@ -920,7 +942,13 @@ def ingest_snapshot(home: Path, profile_document: Any, catalog_document: Any) ->
 
 
 
-def load_snapshot(home: Path, profile_id: str, snapshot_id: str | None = None) -> dict[str, Any]:
+def load_snapshot(
+    home: Path,
+    profile_id: str,
+    snapshot_id: str | None = None,
+    *,
+    recover_missing_current: bool = True,
+) -> dict[str, Any]:
     """Verify HMAC authority and reconstruct externally approved normalized evidence."""
 
     normalized_home = home.expanduser().absolute()
@@ -954,6 +982,7 @@ def load_snapshot(home: Path, profile_id: str, snapshot_id: str | None = None) -
         profile,
         policy_digest,
         current,
+        recover_missing_current=recover_missing_current,
     )
     if snapshot_id is None:
         if current is None:
@@ -963,7 +992,11 @@ def load_snapshot(home: Path, profile_id: str, snapshot_id: str | None = None) -
 
 
 def validate_registry(
-    profile: dict[str, Any], source_cut: dict[str, Any], registry_document: Any
+    profile: dict[str, Any],
+    source_cut: dict[str, Any],
+    registry_document: Any,
+    *,
+    allow_unused_working_files: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     """Validate published identities and exact remote instances in signed working files."""
 
@@ -997,7 +1030,7 @@ def validate_registry(
                 )
             )
         normalized[plural].sort(key=lambda item: item["identity"])
-    if used_working_files != set(working_versions):
+    if not allow_unused_working_files and used_working_files != set(working_versions):
         raise SnapshotValidationError(
             "Every non-library Figma file in the source cut must have an exact working-instance binding."
         )

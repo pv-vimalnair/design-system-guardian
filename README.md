@@ -9,13 +9,13 @@
 
 # Design System Guardian
 
-Design System Guardian is one public, updatable cross-agent package for teams whose design system is the source of truth. Codex, Claude Code, OpenClaw, Kimi Code, Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the same two skills and the same deterministic Guardian core.
+Design System Guardian is one public, updatable cross-agent package for individual users who need to work faithfully with a company's or client's design system. Codex, Claude Code, OpenClaw, Kimi Code, Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the same two skills and the same deterministic Guardian core.
 
 ## The rule that cannot be overwritten
 
 > Only an exact, explicitly approved identity from the selected profile and pinned catalog may be selected. If an identity is genuinely missing, Guardian shows a conspicuous diagnostic sentinel. It never swaps in the closest color, a framework icon, an equal-looking literal, or a manually recreated component.
 
-Policy precedence is `immutable policy -> evolving validators -> selected company profile -> pinned catalog`. Deny always wins. The immutable policy digest remains `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`.
+Policy precedence is `immutable policy -> evolving validators -> selected profile -> pinned catalog`. Deny always wins. The immutable policy digest remains `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`.
 
 ## Two skills, one guardian
 
@@ -25,6 +25,18 @@ Policy precedence is `immutable policy -> evolving validators -> selected compan
 | `audit-design-system` | You want an independent read-only compliance audit plus a separate UX/accessibility assessment. |
 
 Setup, Figma read-back, the UX evaluator, CLI, schemas, Flutter adapter, sentinels, and release machinery are internal infrastructure. They are not extra skills or plugins.
+
+## What is new in 0.3.8
+
+Guardian now starts every new Guardian task and every changed Figma file by asking the user which detected design-system libraries to **Use** and which to **Do not use**. Multiple published libraries may be selected together. The confirmation is bound to the exact task, local project, target Figma file identity and version, and discovered library versions.
+
+Guardian never silently reuses a previous choice for another task, client, project, duplicate, or Figma file. Every unselected library is forbidden for that run. If the user selects no library, visual work stops; Guardian does not invent a design system, fall back to framework defaults, or treat discovery as approval.
+
+Before preview, the existing Figma connection must return complete one-to-one catalog read-back evidence. Each token carries its exact variable or style key, selected source version, and resolved content digest; each component or icon carries its exact published file, node, asset key, source version, design-contract digest, and Code Connect mapping digest. Missing, duplicated, unselected, or mismatched content stops before local trust is written. Because both catalog and read-back are caller-carried, this proves exact local consistency; it does not prove independent Figma or company provenance.
+
+The personal-local route is the default user experience. Its selection, file keys, library names, catalog, profile, snapshot, and run evidence stay under the account-owned Guardian home and never enter Git, public Elo fixtures, telemetry, or the plugin package. Organizations may still opt into the existing externally signed enterprise onboarding and catalog-authority route; v0.3.8 does not weaken, replace, or silently migrate it.
+
+Version 0.3.8 preserves every v0.3.2-v0.3.7 behavior, the immutable policy digest, and exactly two visible skills. Installation still does not create automatic routing or protected production authority.
 
 ## What is new in 0.3.7
 
@@ -67,14 +79,15 @@ The v0.3.4 `guardian rules validate` foundation remains read-only and preview-on
 
 ## Build and audit workflow
 
-1. When a Guardian skill is explicitly invoked, the agent runs `guardian setup status` internally. If setup is needed, it validates the design-system-owner-provided local candidate with `guardian setup preview`, asks permission in plain language, and calls `guardian setup apply` only for that exact digest-bound candidate.
-2. Select one company profile and refresh and pin one complete catalog snapshot for the whole task.
-3. When approved usage rules need activation, preview the exact signed catalog v2, ask permission, and apply only its digest-bound bundle. Permission never substitutes for catalog approval.
-4. Run `guardian rules list --profile <id>` read-only. If expanded evaluator coverage is needed, preview the evaluator-v2 upgrade, explain the exact local change in plain language, ask permission, and apply only its digest-bound bundle.
-5. Record user intent, hierarchy, states, accessibility, component intent, and every planned approved visual identity.
-6. Bind every Figma variable, text style, component, icon, variant, and property exactly; read the result back from the supported adapter. Compose approved primitives only.
-7. Run the quick screen checkpoint when each screen is complete. Before handoff, rerun every screen in the final-flow evaluation.
-8. Read back the implementation, run the independent audit, finalize sealed evidence, and report design-system, Usage Rules, UX/accessibility, and protected-authority lanes separately.
+1. At the start of every new Guardian task, create a new run ID and run `guardian selection status --run-id <run-id>` read-only. If the target Figma file changes, start a new run and ask again; never inherit an earlier selection.
+2. Through the existing Figma connection, discover the complete published library candidates and collect exact one-to-one token/component/icon catalog read-back for the selected versions. Show every candidate as **Use** or **Do not use**, then run zero-write `guardian selection preview --run-id <run-id> --input <discovery.json>`. Apply only the exact confirmed bundle with `guardian selection apply --input <permission-bound-selection.json>`. At least one library must be selected; every unselected library is forbidden.
+3. If the user or organization chooses the optional signed enterprise route, retain the existing `guardian setup status`, `guardian setup preview`, and permission-bound `guardian setup apply` flow without replacing its authority, profile, or catalog.
+4. When approved usage rules need activation, preview the exact signed catalog v2, ask permission, and apply only its digest-bound bundle. Permission never substitutes for catalog approval.
+5. Run `guardian rules list --profile <id>` read-only. If expanded evaluator coverage is needed, preview the evaluator-v2 upgrade, explain the exact local change in plain language, ask permission, and apply only its digest-bound bundle.
+6. Record user intent, hierarchy, states, accessibility, component intent, and every planned approved visual identity.
+7. Bind every Figma variable, text style, component, icon, variant, and property exactly; read the result back from the supported adapter. Compose approved primitives only.
+8. Run the quick screen checkpoint when each screen is complete. Before handoff, rerun every screen in the final-flow evaluation.
+9. Read back the implementation, run the independent audit, finalize sealed evidence, and report design-system, Usage Rules, UX/accessibility, and protected-authority lanes separately.
 
 The setup candidate is prepared once by an authorized design-system owner and stays local. A public plugin cannot create a company catalog authority or approve discovered assets by itself. If the required candidate, source evidence, host capability, or protected authority is unavailable, Guardian reports the exact blocker instead of weakening the rule.
 
@@ -82,7 +95,7 @@ Unavailable, incomplete, stale, ambiguous, conflicting, invalid, unsupported, an
 
 ## Missing means conspicuous
 
-Only proven absence in a fresh, complete snapshot creates `MISSING ICON`, `MISSING COLOR`, `MISSING TEXT STYLE`, or another fixed sentinel. Every sentinel includes request and policy evidence, cannot be promoted automatically, and sets `productionReady=false`.
+Only canonical `missing` from a fresh, complete snapshot creates `MISSING ICON`, `MISSING COLOR`, `MISSING TEXT STYLE`, or another fixed sentinel. In `personal_local` mode this means absent from the complete user-selected local catalog, not independently proven absent from Figma; the evidence is labeled `independentProvenance=false`. Every sentinel includes request and policy evidence, cannot be promoted automatically, and sets `productionReady=false`.
 
 ## Architecture and trust boundary
 
@@ -106,7 +119,7 @@ Version 0.3.7 keeps the v0.3.6 deep Flutter analyzer adapter and Figma-native ob
 
 The built-in UX/accessibility evaluator derives status from evidence; callers cannot submit a pass. Screen checkpoints are diagnostic. The final-flow result is the complete UX lane input. An inaccessible approved asset is reported as a design-system gap; Guardian never silently changes its color, size, motion, or behavior.
 
-Local Figma and UX evidence is diagnostic. Violations and gaps can fail immediately. Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. Never label those local lanes `allowed`; `productionReady=false` remains mandatory. A project without a supported adapter returns `unsupported`.
+Local evidence is diagnostic. Violations and gaps can fail immediately; enterprise or unbound caller-carried Figma evidence and caller-carried UX evidence remain `not_assessed` until protected host attestation. Clean Figma and Flutter results bound to a version 2 personal-local task pin also remain `not_assessed`. Protected production authority remains unavailable and `productionReady=false` remains mandatory. A project without a supported adapter returns `unsupported`.
 
 ## Install on Codex and other agents
 
@@ -138,7 +151,7 @@ Before installing or updating, compare the fetched full Git commit with the revi
 
 ## CLI and exit codes
 
-The portable `guardian` CLI exposes permission-bound `setup status`, `setup preview`, and `setup apply`; `rules validate`, `rules activate preview`, `rules activate apply`, zero-write `rules list`, and permission-bound `rules upgrade preview` and `rules upgrade apply`; plus `doctor`, `profile validate`, `snapshot ingest`, `preflight`, `resolve`, `adapter flutter config`, `adapter figma config`, `ux checkpoint`, `audit`, `finalize`, `self-check`, profile-artifact `migrate`, and the `elo show`, `elo migrate`, `elo benchmark`, and `elo evaluate` commands.
+The portable `guardian` CLI exposes `selection status`, `selection preview`, and `selection apply` for the personal route; permission-bound `setup status`, `setup preview`, and `setup apply` for the enterprise route; `rules validate`, `rules activate preview`, `rules activate apply`, zero-write `rules list`, and permission-bound `rules upgrade preview` and `rules upgrade apply`; plus `doctor`, `profile validate`, `snapshot ingest`, `preflight`, `resolve`, `adapter flutter config`, `adapter figma config`, `ux checkpoint`, `audit`, `finalize`, `self-check`, profile-artifact `migrate`, and the `elo show`, `elo migrate`, `elo benchmark`, and `elo evaluate` commands.
 
 | Exit | Meaning |
 | ---: | --- |
@@ -161,10 +174,10 @@ The acceptance rule is every discovered core, Figma, UX, onboarding, and Flutter
 
 ## Security and private data
 
-Never commit profiles, catalog snapshots, Figma credentials, authority private keys, trust anchors, audit records, local setup bundles, release signatures, or generated run evidence. Public updates are built from a clean source tree; local company and user data are not part of the release. Read [the plugin security policy](plugins/design-system-guardian/SECURITY.md) before enrolling an authority.
+Never commit personal selections, target or library file keys, profiles, catalog snapshots, Figma credentials, authority private keys, trust anchors, audit records, local setup bundles, release signatures, or generated run evidence. Public updates are built from a clean source tree; local company and user data are not part of the release. Read [the plugin security policy](plugins/design-system-guardian/SECURITY.md) before enrolling an authority.
 
 ## Versioning and license
 
-The source version is `0.3.7`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
+The source version is `0.3.8`. Source publication is not a trusted stable release: canary/stable promotion still requires the designated external authority, signed evidence, and the fixed external release-head provider. See [Updating and Releases](plugins/design-system-guardian/docs/UPDATING.md) and the [changelog](plugins/design-system-guardian/CHANGELOG.md).
 
 Licensed under the [MIT License](LICENSE).

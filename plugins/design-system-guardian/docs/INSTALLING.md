@@ -1,6 +1,6 @@
 # Installing on Agent Hosts
 
-Design System Guardian 0.3.7 has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the integrity-bound generic installer.
+Design System Guardian 0.3.8 has one canonical core and exactly two canonical Agent Skills. Codex, Claude Code, OpenClaw, and Kimi Code load the same package through thin host manifests. Qwen Code, terminal agents, Deep Code, and other Agent Skills-compatible hosts use the integrity-bound generic installer.
 
 Review and pin the full Git commit before installation. A movable branch name is convenient for discovery but is not release authority.
 
@@ -9,7 +9,7 @@ Review and pin the full Git commit before installation. A movable branch name is
 - Python 3.11 or newer for Guardian diagnostics.
 - Filesystem and command execution in the agent host.
 - An existing Figma connection for Figma work, or complete supported project evidence for another adapter.
-- A design-system-owner-provided local onboarding candidate for a company that has not been enrolled yet.
+- Complete Figma library discovery for the target file. An owner-provided signed onboarding candidate is required only when the user or organization chooses the optional enterprise route.
 - A protected, authority-bound Guardian command for any production gate.
 
 If a host cannot load the skills, execute the CLI, access bundled resources, or provide complete supported evidence, it must report `unsupported` or the exact source state and stop. No sealed Guardian manifest means the work is not Guardian-approved.
@@ -21,7 +21,7 @@ codex plugin marketplace add pv-vimalnair/design-system-guardian --ref main --js
 codex plugin add design-system-guardian@pv-vimalnair-design-system-guardian --json
 ```
 
-Start a new task and confirm version `0.3.7` and only `build-with-design-system` and `audit-design-system` are exposed. An install command without this read-back is not a completed reload.
+Start a new task and confirm version `0.3.8` and only `build-with-design-system` and `audit-design-system` are exposed. An install command without this read-back is not a completed reload.
 
 ## Claude Code
 
@@ -30,7 +30,7 @@ claude plugin marketplace add pv-vimalnair/design-system-guardian
 claude plugin install design-system-guardian@pv-vimalnair-design-system-guardian
 ```
 
-Start a new Claude Code session. Confirm version `0.3.7`; the same two skills must be namespaced under `design-system-guardian`.
+Start a new Claude Code session. Confirm version `0.3.8`; the same two skills must be namespaced under `design-system-guardian`.
 
 ## OpenClaw
 
@@ -42,7 +42,7 @@ openclaw plugins install design-system-guardian --marketplace pv-vimalnair/desig
 openclaw plugins inspect design-system-guardian
 ```
 
-Restart the Gateway or start a new session. Inspection must report version `0.3.7` and a compatible bundle with exactly the two Guardian skills.
+Restart the Gateway or start a new session. Inspection must report version `0.3.8` and a compatible bundle with exactly the two Guardian skills.
 
 ## Kimi Code
 
@@ -54,7 +54,7 @@ From Kimi Code, install the public GitHub repository and reload:
 /plugins info design-system-guardian
 ```
 
-The repository-root `kimi.plugin.json` points to version `0.3.7`, the same nested canonical skills, and the same Guardian package. `/reload` plus `/plugins info` is required read-back.
+The repository-root `kimi.plugin.json` points to version `0.3.8`, the same nested canonical skills, and the same Guardian package. `/reload` plus `/plugins info` is required read-back.
 
 ## Qwen Code, terminal, Deep Code, and generic Agent Skills hosts
 
@@ -106,6 +106,20 @@ The installer exports only the two skill folders. Each installed skill receives 
 
 The agent, not the ordinary user, runs these commands internally:
 
+1. For every new Guardian task, create a new run ID and run `guardian selection status --run-id <run-id>` without writing. A different target Figma file requires a different run and another confirmation.
+2. Through the genuine existing Figma connection, discover the complete published library candidates and exact one-to-one catalog read-back for the target file. Never author or reconstruct discovery/read-back; compute content digests from independently read Figma values, not from the catalog being checked. Every canonical token must carry its exact selected variable/style binding and resolved content digest; every component/icon must carry its exact published file, node, asset key, version, design-contract digest, and Code Connect mapping digest. Show each candidate as **Use** or **Do not use**. Do not preselect or silently inherit the prior task's answer.
+3. Run `guardian selection preview --run-id <run-id> --input <discovery.json>`. Explain the exact project, target file, selected and excluded libraries, versions, and catalog binding.
+4. Only after the user confirms, run `guardian selection apply --input <permission-bound-selection.json>` and read back status. At least one published library must be selected; zero selected libraries block visual work.
+5. Use only the selected libraries. Every unselected library is forbidden for that run, even if it was selected for another client, project, task, or Figma file.
+
+Personal selection records, file keys, names, catalogs, profiles, snapshots, and run evidence stay under account-owned Guardian local state. They are not copied into the plugin, marketplace package, project, Git history, public Elo fixtures, or telemetry.
+
+The catalog read-back remains local and is labeled `unprotected_caller_carried`. Guardian rejects incomplete, duplicated, excluded, or internally mismatched catalog/read-back evidence before apply. A same-account caller can still fabricate matching inputs, so this local lane is not independently proven Figma or company approval and never makes `productionReady=true`.
+
+### Optional signed enterprise onboarding
+
+The v0.3.7 enterprise path remains available and unchanged for organizations that require externally signed catalog authority:
+
 1. `guardian setup status --profile <id>` checks readiness without writing.
 2. If setup is missing, the agent validates the local owner-provided candidate with `guardian setup preview --input <candidate.json>`.
 3. The agent explains the exact local profile, Figma allowlist, and digests, then asks for permission.
@@ -132,7 +146,7 @@ The agent runs these commands for the user. Preview and status are read-only. Ap
 
 This decision layer is additive over v0.3.6. It never changes raw evidence or design-system, Usage Rules, sentinel, stale/incomplete, unsupported, not-assessed, or protected-authority results. Assessments, reasons, decisions, revocations, and company evidence remain local and never enter Git, Elo, or telemetry.
 
-The candidate must contain the catalog authority public key path, one exact profile, and one signed complete catalog snapshot. Guardian cannot safely generate a company's catalog authority or decide that discovered Figma assets are approved. An authorized design-system owner prepares that candidate once; users do not install a second Guardian copy or manually copy a policy seal.
+For the optional enterprise route, the candidate must contain the catalog authority public key path, one exact profile, and one signed complete catalog snapshot. Guardian cannot safely generate a company's catalog authority or decide that discovered Figma assets are enterprise-approved. An authorized design-system owner prepares that candidate once; users do not install a second Guardian copy or manually copy a policy seal.
 
 All installed company design-system data is local-only under `~/.design-system-guardian/`. It is never added to the plugin, marketplace package, GitHub update, or telemetry.
 
@@ -195,10 +209,10 @@ Status is one of `current`, `update_required`, `reload_required`, or `invalid`. 
 - Rerun the installer after a Python upgrade so its exact path and digest are rebound.
 - If atomic promotion is blocked by a Windows watcher, Guardian restores the prior intact installation and returns `reload_required` with `host_restart_required`. Close or restart only the named agent host, rerun the same verified `--replace` command, start a new task or session, and rerun `--status`. Guardian never kills a process or overwrites the watched root in place.
 
-After every native or generic update, read back version `0.3.7` and exactly the two canonical skills. Do not claim a host is updated while it reports an older version, `update_required`, `reload_required`, or `invalid`.
+After every native or generic update, read back version `0.3.8` and exactly the two canonical skills. Do not claim a host is updated while it reports an older version, `update_required`, `reload_required`, or `invalid`.
 
 Every update must preserve the immutable policy digest. A missing or changed policy, package, interpreter, skill, launcher, or binding blocks execution. Updates never include local profiles, catalogs, Figma observations, audit history, prompts, product source, credentials, or user activity.
 
 ## What universal support means
 
-Guardian skills are portable to hosts that implement Agent Skills or equivalent instruction loading, permit bundled-resource access, run the CLI, and supply a supported adapter. Portability is not automatic routing. Without an always-on protected route, local Figma/UX evidence is diagnostic, clean evidence stays `not_assessed`, and raw-tool bypass cannot be prevented. A plain chat surface remains `unsupported`.
+Guardian skills are portable to hosts that implement Agent Skills or equivalent instruction loading, permit bundled-resource access, run the CLI, and supply a supported adapter. Portability is not automatic routing. Clean schema-v2 `personal_local` adapter coverage remains `not_assessed` for Figma and Flutter; caller-carried UX evidence remains `not_assessed` too. Without an always-on protected route, `productionReady=false` and raw-tool bypass cannot be prevented. A plain chat surface remains `unsupported`.

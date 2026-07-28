@@ -509,8 +509,8 @@ def _validate_pin(run_pin: Any) -> dict[str, Any]:
         raise AuditIntegrityError("Audit requires one verified run pin object.")
     for field in ("runId", "profileId", "snapshotId", "policyDigest", "sourceState"):
         _require_nonempty_string(run_pin.get(field), f"run pin {field}")
-    if run_pin.get("schemaVersion") != 1:
-        raise AuditIntegrityError("Audit supports only run pin schemaVersion 1.")
+    if run_pin.get("schemaVersion") not in {1, 2}:
+        raise AuditIntegrityError("Audit supports only run pin schemaVersion 1 or 2.")
     if not _HEX_64.fullmatch(str(run_pin["snapshotId"])):
         raise AuditIntegrityError("Run pin snapshotId must be a lowercase SHA-256 digest.")
     if not _HEX_64.fullmatch(str(run_pin["policyDigest"])):
@@ -563,11 +563,17 @@ def _validate_adapter(adapter_result: Any, source_cut: dict[str, Any]) -> tuple[
         raise AuditIntegrityError("Adapter evidence has unknown or missing fields.")
     keys = set(adapter_result)
     has_usage_rules = keys == _ADAPTER_KEYS | {"usageRulesEvidence"}
-    if keys != _ADAPTER_KEYS and not has_usage_rules:
+    has_personal_assurance = keys == _ADAPTER_KEYS | {"assuranceMode"}
+    if keys != _ADAPTER_KEYS and not has_usage_rules and not has_personal_assurance:
         raise AuditIntegrityError("Adapter evidence has unknown or missing fields.")
     if adapter_result.get("schemaVersion") != 1:
         raise AuditIntegrityError("Audit supports only adapter evidence schemaVersion 1.")
-    _require_nonempty_string(adapter_result.get("adapter"), "adapter")
+    adapter = _require_nonempty_string(adapter_result.get("adapter"), "adapter")
+    if has_personal_assurance and (
+        adapter != "figma"
+        or adapter_result.get("assuranceMode") != "personal_local"
+    ):
+        raise AuditIntegrityError("Personal assurance is valid only for exact local Figma evidence.")
     if has_usage_rules:
         if adapter_result["adapter"] != "flutter":
             raise AuditIntegrityError(
@@ -647,16 +653,55 @@ def _validate_adapter(adapter_result: Any, source_cut: dict[str, Any]) -> tuple[
 def adapter_audit_projection(
     adapter_result: Any,
     source_cut: dict[str, Any],
+    *,
+    run_pin: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Return the fail-closed audit projection for one normalized adapter result.
 
-    Portable Figma observations are caller-carried local evidence in v0.3.3.
-    Exact violations remain useful, but a clean observation cannot authorize an
-    ``allowed`` coverage claim until a protected host receipt exists.
+    Personal catalogs and Figma observations are caller-carried local evidence.
+    Exact violations remain useful, but a clean personal adapter result cannot
+    authorize design-system coverage because the CLI cannot independently prove
+    the catalog's Figma or company provenance.
     """
 
     coverage, diagnostics = _validate_adapter(adapter_result, source_cut)
-    if coverage["adapter"] != "figma":
+    personal_pin: dict[str, Any] | None = None
+    if isinstance(run_pin, dict) and run_pin.get("schemaVersion") == 2:
+        personal_pin = _validate_pin(run_pin)
+        if personal_pin.get("authorityMode") != "personal_local":
+            raise AuditIntegrityError(
+                "Version 2 adapter coverage requires personal_local authority."
+            )
+        selection_digest = personal_pin.get("selectionDigest")
+        if (
+            not isinstance(selection_digest, str)
+            or not _HEX_64.fullmatch(selection_digest)
+        ):
+            raise AuditIntegrityError(
+                "Personal adapter coverage requires a valid selection digest."
+            )
+        if personal_pin.get("sourceCut") != source_cut:
+            raise AuditIntegrityError(
+                "Personal adapter coverage differs from the task pin source-cut vector."
+            )
+
+    if adapter_result.get("assuranceMode") == "personal_local":
+        pin = personal_pin if personal_pin is not None else _validate_pin(run_pin)
+        if pin.get("schemaVersion") != 2 or pin.get("authorityMode") != "personal_local":
+            raise AuditIntegrityError(
+                "Personal Figma assurance requires an exact personal_local task pin."
+            )
+        selection_digest = pin.get("selectionDigest")
+        if not isinstance(selection_digest, str) or not _HEX_64.fullmatch(selection_digest):
+            raise AuditIntegrityError(
+                "Personal Figma assurance requires a valid selection digest."
+            )
+        if pin.get("sourceCut") != source_cut:
+            raise AuditIntegrityError(
+                "Personal Figma assurance differs from the task pin source-cut vector."
+            )
+
+    if coverage["adapter"] != "figma" and personal_pin is None:
         return coverage, diagnostics
 
     categories = copy.deepcopy(coverage["categories"])
@@ -845,6 +890,7 @@ def _authoritatively_resolve(
             snapshot=verified_snapshot,
             request=item["request"],
             policy_digest=pin["policyDigest"],
+            authority_mode=pin.get("authorityMode"),
         )
         for item in declared
     ]
@@ -1162,7 +1208,7 @@ def evaluate_audit(
             f"Pinned snapshot freshness evidence is invalid: {error}"
         ) from error
     coverage, diagnostics = adapter_audit_projection(
-        adapter_result, pin["sourceCut"]
+        adapter_result, pin["sourceCut"], run_pin=pin
     )
     embedded_usage_evidence = adapter_result.get("usageRulesEvidence")
     if embedded_usage_evidence is not None:

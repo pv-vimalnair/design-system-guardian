@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "benchmarks" / "elo_cases_v7.py"
 PRIOR_SUITE_DIGEST = "29f2eb0ff0b8aca5c1d5b098a7226f0c8b707ef95c0c638d997dd00a2f20606c"
 V7_MODULE_ID = "guardian-public-cases-v7"
+V8_MODULE_ID = "guardian-public-cases-v8"
 V7_CASES = {
     "synthetic-correctness-complete-judgment-assessment": (
         "correctness", 9, "case_correctness_complete_judgment_assessment",
@@ -114,9 +115,17 @@ class WeightedEloV7EvolutionTest(unittest.TestCase):
         from guardian_core.canonical import sha256_digest
         from guardian_core.elo import _current_score, _validate_suite_transition, _worker_digest
 
-        suite = _json(ROOT / "benchmarks" / "elo-suite.json")
+        current_suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         current = _json(ROOT / "benchmarks" / "current-score.json")
-        self.assertEqual(suite["suiteVersion"], 7)
+        self.assertEqual(current_suite["suiteVersion"], 8)
+        suite = copy.deepcopy(current_suite)
+        suite["suiteVersion"] = 7
+        suite["caseModules"] = [
+            item for item in suite["caseModules"] if item["moduleId"] != V8_MODULE_ID
+        ]
+        suite["achievements"] = [
+            item for item in suite["achievements"] if item["caseModuleId"] != V8_MODULE_ID
+        ]
 
         modules = {item["moduleId"]: item for item in suite["caseModules"]}
         self.assertEqual(

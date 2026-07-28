@@ -22,7 +22,11 @@ from .audit import (
 )
 from .audit_attestation import build_analysis_attestation
 from .canonical import atomic_write_json, canonical_json_text, read_canonical_json, read_json, sha256_digest
-from .catalog_authority import verify_pinned_catalog_authority, verify_runtime_dependency
+from .catalog_authority import (
+    personal_catalog_authority_key_id,
+    verify_pinned_catalog_authority,
+    verify_runtime_dependency,
+)
 from .contracts import ExitCode, ResolutionStatus
 from .dtcg import DtcgValidationError
 from .elo import benchmark_elo, evaluate_elo, read_elo_state
@@ -57,12 +61,18 @@ from .onboarding import (
     prepare_onboarding_permission,
 )
 from .paths import GuardianPaths, assert_guardian_storage_path, default_guardian_home
+from .personal_selection import (
+    apply_personal_selection,
+    inspect_personal_selection,
+    prepare_selection_preview,
+)
 from .policy import (
     ELO_ENROLLMENT_NAME,
     TRUST_SCHEMA_VERSION,
     install_policy_anchor,
     migrate_legacy_elo_genesis,
     verify_elo_enrollment,
+    verify_personal_capability,
     verify_policy_anchor,
 )
 from .preflight import PreflightError, load_run_pin, preflight_snapshot
@@ -202,6 +212,38 @@ def _setup_apply(args: argparse.Namespace) -> int:
     return _exit_for_status(status)
 
 
+def _selection_status(args: argparse.Namespace) -> int:
+    result = inspect_personal_selection(
+        default_guardian_home(),
+        run_id=args.run_id,
+    )
+    _emit(result)
+    return (
+        int(ExitCode.PASS)
+        if result.get("status") == ResolutionStatus.ALLOWED.value
+        else int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+    )
+
+
+def _selection_preview(args: argparse.Namespace) -> int:
+    result = prepare_selection_preview(
+        default_guardian_home(),
+        run_id=args.run_id,
+        discovery=read_json(Path(args.input)),
+    )
+    _emit(result)
+    return int(ExitCode.UNSUPPORTED_ADAPTER_OR_INCOMPLETE_COVERAGE)
+
+
+def _selection_apply(args: argparse.Namespace) -> int:
+    result = apply_personal_selection(
+        default_guardian_home(),
+        read_json(Path(args.input)),
+    )
+    _emit(result)
+    return _exit_for_status(str(result["status"]))
+
+
 def _doctor(args: argparse.Namespace) -> int:
     home = default_guardian_home()
     supplied_key = (
@@ -224,7 +266,12 @@ def _doctor(args: argparse.Namespace) -> int:
             )
         digest = verify_policy_anchor(home)
         installed = False
-        _, key_id = verify_pinned_catalog_authority(home)
+        paths = GuardianPaths(home)
+        if paths.catalog_authority_public_key.is_file():
+            _, key_id = verify_pinned_catalog_authority(home)
+        else:
+            verify_personal_capability(home)
+            key_id = personal_catalog_authority_key_id(home)
     dependency_version = verify_runtime_dependency()
     _emit(
         {
@@ -1118,6 +1165,34 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = commands.add_parser("doctor", help="Verify Guardian integrity and environment readiness.")
     doctor.add_argument("--install-policy", action="store_true", help="Create the immutable policy anchor once.")
+    selection = commands.add_parser(
+        "selection",
+        help="Confirm one local design system for the exact current task and Figma file.",
+    )
+    selection_commands = selection.add_subparsers(
+        dest="selection_command",
+        required=True,
+    )
+    selection_status = selection_commands.add_parser(
+        "status",
+        help="Inspect exact-run selection readiness without changing local state.",
+    )
+    selection_status.add_argument("--run-id", required=True)
+    selection_status.set_defaults(handler=_selection_status)
+    selection_preview = selection_commands.add_parser(
+        "preview",
+        help="Validate discovery and return a zero-write exact permission request.",
+    )
+    selection_preview.add_argument("--run-id", required=True)
+    selection_preview.add_argument("--input", required=True)
+    selection_preview.set_defaults(handler=_selection_preview)
+    selection_apply = selection_commands.add_parser(
+        "apply",
+        help="Apply only the exact user-confirmed task and file selection.",
+    )
+    selection_apply.add_argument("--input", required=True)
+    selection_apply.set_defaults(handler=_selection_apply)
+
     doctor.add_argument(
         "--catalog-authority-public-key",
         help="Ed25519 public PEM to pin when installing a new trust anchor.",

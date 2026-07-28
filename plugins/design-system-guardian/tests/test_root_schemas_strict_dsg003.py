@@ -174,6 +174,7 @@ class StrictRootSchemasTest(unittest.TestCase):
             "post-run-assessment-v2.schema.json",
             "build-plan.schema.json",
             "coverage.schema.json",
+            "design-system-selection.schema.json",
             "profile.schema.json",
             "resolution.schema.json",
             "rule-activation-permission.schema.json",

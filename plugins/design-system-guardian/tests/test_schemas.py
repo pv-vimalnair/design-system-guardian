@@ -11,6 +11,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 class CanonicalSchemaTest(unittest.TestCase):
     def test_required_schema_set_exists_and_is_valid_json(self) -> None:
         expected = {
+            "design-system-selection.schema.json",
             "profile.schema.json",
             "snapshot.schema.json",
             "resolution.schema.json",

@@ -1,6 +1,6 @@
 # Trusted execution boundary
 
-Design System Guardian 0.3.7 is a cross-agent public source release. Its local HMAC seals detect accidental corruption and cross-run replay, but they are not production authority against code running as the same operating-system account. An agent process that can read the local sealing key must never turn its own local evidence into a production approval.
+Design System Guardian 0.3.8 is a cross-agent public source release. Its local HMAC seals detect accidental corruption and cross-run replay, but they are not production authority against code running as the same operating-system account. An agent process that can read the local sealing key must never turn its own local evidence into a production approval.
 
 ## Four independent lanes
 
@@ -11,9 +11,25 @@ Guardian reports these independently:
 3. UX/accessibility quality;
 4. protected production authority.
 
-The built-in evaluator can derive violations and gaps from screen and final-flow observations, and Figma read-back can expose unbound or conflicting identities. These are diagnostic failure signals. Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation; neither local mechanism can issue `allowed`.
+The built-in evaluator can derive violations and gaps from screen and final-flow observations, Figma read-back can expose unbound or conflicting identities, and the Flutter analyzer can expose code/catalog mismatches. These are diagnostic failure signals. Clean schema-v2 personal-local Figma or Flutter coverage and caller-carried UX evidence remain `not_assessed` until protected host attestation.
 
-A local run may fail design-system or UX lanes from proven violations or gaps. In the clean case it must report those caller-carried lanes as `not_assessed`, protected authority as unavailable, and `productionReady=false`. Never flatten diagnostic evidence into a green badge.
+A local run may fail design-system or UX lanes from proven violations or gaps. In every clean caller-carried case, both lanes remain `not_assessed`. Protected production authority remains unavailable and `productionReady=false`; never flatten local consistency into a green badge.
+
+## Personal task and Figma-file selection
+
+The default personal-local route requires a fresh explicit library decision for every Guardian task and every target Figma file:
+
+    guardian selection status --run-id <run-id>
+    guardian selection preview --run-id <run-id> --input <discovery.json>
+    guardian selection apply --input <permission-bound-selection.json>
+
+Status and preview are zero-write. The user must mark every complete discovered published library candidate **Use** or **Do not use** before apply. At least one library must be selected, every unselected library is forbidden, and a prior choice never transfers to another task, client, project, run, duplicate, file identity, or file version.
+
+The discovery input also carries `catalogReadback` from the existing Figma connection. Guardian requires one exact proof for every canonical token, component, and icon; binds token value/type/mode/metadata, component variants/properties, and Code Connect mappings; rejects duplicate locators and selected-version mismatches; and binds the read-back digest into permission and selection evidence. Its authority is explicitly `unprotected_caller_carried`: it establishes local catalog/read-back consistency, not independent Figma provenance or a company signature.
+
+The resulting local HMAC seal binds exact evidence and prevents silent cross-run reuse while that evidence remains intact. It does not prove independent company approval, prevent a same-account process from bypassing Guardian, or make `productionReady=true`. Personal selection state stays local and never enters Git, public Elo fixtures, telemetry, or the plugin package.
+
+Organizations may instead use the existing externally signed enterprise onboarding and catalog-authority route. Personal selection neither replaces nor weakens that authority, and enterprise profiles remain enterprise-bound unless the user explicitly starts a separate personal-local task flow.
 
 ## Preview-only usage rules
 
@@ -53,7 +69,7 @@ No environment variable, project-local executable, caller-supplied path, local J
 
 ## Diagnostic behavior
 
-Version 0.3.7 does not integrate protected production authority. Local audit output is diagnostic: violations and gaps can fail, but a clean Figma or UX observation remains `not_assessed` rather than passing. `productionReady=false` whenever protected attestation is unavailable.
+Version 0.3.8 does not integrate protected production authority. Local audit output is diagnostic: violations and gaps can fail, while clean schema-v2 personal-local Figma or Flutter coverage and caller-carried UX evidence remain `not_assessed`. None of these local results supplies protected authority; `productionReady=false` whenever protected attestation is unavailable.
 
 The convenience launchers `scripts/guardian` and `scripts/guardian.cmd` deliberately exit `4`; they do not discover Python from `PATH`. A protected host invokes `scripts/guardian.py` through its authority-bound runtime. For diagnostics and repository tests, a host-supplied absolute Python executable may invoke it after its path and SHA-256 are recorded. That route cannot change the protected lane.
 

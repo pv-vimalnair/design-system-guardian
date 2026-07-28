@@ -2,6 +2,28 @@
 
 All notable changes use SemVer. Entries describe source candidates. Local signed history under `~/.design-system-guardian/releases/` is a non-authoritative projection; actual promotion status requires the canonical external/WORM latest head plus matching signed release evidence.
 
+## 0.3.8 - 2026-07-28 - Personal task and Figma-file selection
+
+### Added
+
+- Added a default personal-local flow that asks the user, at every new Guardian task and target Figma file, which complete discovered library candidates to **Use** and **Do not use**.
+- Added zero-write selection status and preview plus permission-bound apply for one exact run, project, target Figma file identity/version, library decision set, catalog, and adapter binding.
+- Added complete one-to-one personal catalog/read-back consistency binding for every canonical token, component, and icon, including exact selected source versions, stable Figma keys, token content, component variants/properties, Code Connect mappings, published asset locators, and duplicate-locator rejection.
+- Added task-bound personal profile, snapshot, and selection evidence without adding another visible skill.
+
+### Compatibility, security, and privacy
+
+- Preserved every v0.3.2-v0.3.7 behavior, the immutable policy digest, and exactly `build-with-design-system` and `audit-design-system`.
+- Preserved the optional externally signed enterprise onboarding, catalog-authority, Usage Rules, evaluator, judgment, release, and protected-authority routes without silently migrating or weakening them.
+- A selection is never reused across a new task, client, project, run, duplicate, or Figma file. A changed target file identity or version requires a new explicit confirmation.
+- At least one published library must be selected before visual work. Every unselected library is forbidden, and discovery alone is never approval.
+- Drifted catalog identities or content without matching exact read-back fail before local state is written. Because a same-account caller can fabricate both sides, the evidence remains explicitly `unprotected_caller_carried`, clean coverage remains `not_assessed`, and it is never an enterprise signature or protected production authority.
+- Personal selections, file identities, library names, catalogs, profiles, snapshots, and run evidence remain local and never enter Git, public Elo fixtures, telemetry, or the plugin package.
+
+### Promotion status
+
+- This is a public source release candidate. Personal-local confirmation is not protected production authority, and the fixed external/WORM release-head provider remains unavailable.
+
 ## 0.3.7 - 2026-07-27 - Exact-run judgment exceptions
 
 ### Added

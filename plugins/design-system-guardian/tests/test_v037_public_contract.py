@@ -9,7 +9,7 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
-VERSION = "0.3.7"
+SUPPORTED_VERSIONS = {"0.3.7", "0.3.8"}
 POLICY_DIGEST = "3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f"
 SKILL_NAMES = {"audit-design-system", "build-with-design-system"}
 JUDGMENT_SCHEMAS = {
@@ -44,7 +44,7 @@ def _json(path: Path) -> dict[str, object]:
 
 
 class V037PublicContractTest(unittest.TestCase):
-    def test_every_public_version_surface_is_exactly_v037(self) -> None:
+    def test_every_public_version_surface_preserves_v037_or_newer_contract(self) -> None:
         marketplace = _json(REPOSITORY_ROOT / ".claude-plugin" / "marketplace.json")
         manifests = (
             _json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json"),
@@ -52,15 +52,18 @@ class V037PublicContractTest(unittest.TestCase):
             _json(REPOSITORY_ROOT / "kimi.plugin.json"),
             marketplace["plugins"][0],
         )
-        self.assertTrue(all(manifest["version"] == VERSION for manifest in manifests))
+        versions = {str(manifest["version"]) for manifest in manifests}
+        self.assertEqual(len(versions), 1)
+        version = versions.pop()
+        self.assertIn(version, SUPPORTED_VERSIONS)
 
         from guardian_core.release import RUNTIME_VERSION
 
-        self.assertEqual(RUNTIME_VERSION, VERSION)
+        self.assertEqual(RUNTIME_VERSION, version)
         pubspec = (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(
             encoding="utf-8"
         )
-        self.assertRegex(pubspec, rf"(?m)^version: {re.escape(VERSION)}$")
+        self.assertRegex(pubspec, rf"(?m)^version: {re.escape(version)}$")
 
     def test_two_skills_policy_and_v037_schema_additions_are_preserved(self) -> None:
         skills = {
@@ -83,7 +86,7 @@ class V037PublicContractTest(unittest.TestCase):
             path.relative_to(PLUGIN_ROOT).as_posix()
             for path in PLUGIN_ROOT.rglob("*.schema.json")
         }
-        self.assertEqual(len(schemas), 43)
+        self.assertGreaterEqual(len(schemas), 43)
         self.assertTrue(JUDGMENT_SCHEMAS.issubset(schemas))
 
     def test_skills_explain_the_exact_run_judgment_flow(self) -> None:
@@ -186,7 +189,7 @@ class V037PublicContractTest(unittest.TestCase):
         self.assertIn('python -m unittest discover -s tests -p "test_*.py"', workflow)
         self.assertIn("tests.test_v037_public_contract", workflow)
         self.assertIn("tests.test_cli_judgment_dsg027", workflow)
-        self.assertIn("assert len(schemas) == 43", workflow)
+        self.assertIn("assert len(schemas) >= 43", workflow)
 
 
 if __name__ == "__main__":

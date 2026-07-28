@@ -11,21 +11,35 @@ Setup, adapter dispatch, Figma collection, UX evaluation, schemas, sentinels, an
 
 ## Immutable rule
 
-Only exact, explicitly approved identities from one selected company profile and one pinned, complete catalog snapshot may be selected. Similar names, nearest colors, equal-value literals, framework defaults, wrappers, substitutes, community assets, generated icons, manual recreation, rounding, and name-based guessing are not approval.
+Only exact, explicitly approved identities from one selected profile and one pinned, complete catalog snapshot may be selected. Similar names, nearest colors, equal-value literals, framework defaults, wrappers, substitutes, community assets, generated icons, manual recreation, rounding, and name-based guessing are not approval.
 
 Only a proven `missing` result from a fresh, complete source may create a fixed diagnostic sentinel. A sentinel is conspicuous, remains outside the design system, and always sets `productionReady=false`. Unavailable, incomplete, stale, ambiguous, conflicting, invalid, unsupported, and not-assessed states never become `missing`.
 
 Policy precedence is:
 
-`immutable policy -> evolving validators -> selected company profile -> pinned catalog`
+`immutable policy -> evolving validators -> selected profile -> pinned catalog`
 
 Deny always wins. The unchanged create-once policy digest is:
 
 `3bf2913583cee2d791aed5093bc1df905b26dcdbb0c4d945f0ae5b2eddaaa99f`
 
-## Permission-bound setup
+## Personal-local task and Figma-file selection
 
-An agent first runs `guardian setup status` without modifying anything. When setup is needed, an authorized design-system owner supplies one local candidate containing the catalog authority public key, exact profile, and signed complete catalog. The agent runs `guardian setup preview --input <candidate.json>`, explains the exact profile, Figma allowlist, and digests in plain language, and asks the user once.
+The default individual-user route starts fresh for every Guardian task and every target Figma file. The agent creates a new run ID, runs `guardian selection status --run-id <run-id>` without writing, discovers the complete published library candidates for the exact target file, and asks the user to mark every candidate **Use** or **Do not use**.
+
+Through the existing Figma connection, discovery must also carry complete one-to-one catalog read-back. Every token must match one exact selected variable or style binding, resolved content, stable key, and source version; every component and icon must match one exact published file, node ID, asset key, source version, design contract, and Code Connect mapping. A missing proof, duplicate locator, excluded source, or content/version mismatch blocks preview before Guardian writes local state. Matching caller-carried catalog and read-back remain consistent local guidance, not independently proven Figma provenance.
+
+The agent validates the discovery with `guardian selection preview --run-id <run-id> --input <discovery.json>`. Preview is zero-write and returns the exact task, project, target-file, library-decision, catalog, and adapter binding that needs confirmation. Only after the user confirms may the agent run `guardian selection apply --input <permission-bound-selection.json>`.
+
+At least one published library must be selected. Every unselected library is forbidden for that run. Guardian never silently inherits a choice from another task, client, project, run, duplicate, or Figma file. A changed target file identity or version requires a new run and a new confirmation before visual work.
+
+Personal selection records, file identities, profiles, catalogs, and snapshots stay in account-owned Guardian local state. Library names may be shown only in the current local **Use** / **Do not use** interaction; the evidence never enters the plugin package, Git, public Elo fixtures, telemetry, or generated product files. This local permission authorizes only the exact personal task selection; it does not approve enterprise Usage Rules or create protected production authority.
+
+The read-back is intentionally labeled `unprotected_caller_carried`: Guardian verifies exact coverage and consistency, while the host's existing Figma connection supplies the local evidence. It is not an independent company signature, cannot make `productionReady=true`, and does not claim protection from a same-account process that bypasses Guardian.
+
+## Optional signed enterprise setup
+
+Organizations may opt into the unchanged externally signed enterprise route. An agent first runs `guardian setup status` without modifying anything. When setup is needed, an authorized design-system owner supplies one local candidate containing the catalog authority public key, exact profile, and signed complete catalog. The agent runs `guardian setup preview --input <candidate.json>`, explains the exact profile, Figma allowlist, and digests in plain language, and asks the user once.
 
 Only after explicit permission does the agent add the preview's exact digest binding and run `guardian setup apply --input <permitted-bundle.json>`. Apply validates in isolation and promotes the complete local state atomically. It never invents a catalog authority, approves Figma discovery, replaces a different profile revision, or uploads company data.
 
@@ -113,7 +127,7 @@ A Plugin API mismatch blocks or reports the affected operation. It never authori
 
 `guardian ux checkpoint --profile <id> --run-id <id> --input <json>` accepts `{schemaVersion:1,target,observations}` for a non-authoritative quick screen checkpoint. The evaluator derives each check result; callers cannot submit a pass.
 
-The final version 2 `guardian audit` accepts `uxEvidence` and reruns the final-flow evaluation across every selected screen plus navigation, reachability, errors, recovery, and cross-screen state. A proven violation or gap can fail the run. Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation.
+The final version 2 `guardian audit` accepts `uxEvidence` and reruns the final-flow evaluation across every selected screen plus navigation, reachability, errors, recovery, and cross-screen state. A proven violation or gap can fail the run. Clean personal-local Figma or Flutter coverage and caller-carried UX evidence remain `not_assessed` until protected host attestation.
 
 Guardian reports four independent lanes:
 
@@ -124,7 +138,7 @@ Guardian reports four independent lanes:
 
 The Usage Rules lane is `allowed` only when every active gating machine rule is fully assessed without violation. Exact violations produce `conflict`; incomplete relationships, judgment rules, and uncovered gating work remain `not_assessed`. Informative rules do not gate. The inherited design-system projection and the Usage Rules lane must agree or the result is invalid.
 
-A compliant design can still fail Usage Rules or UX, and an accessible unauthorized substitute still fails design-system compliance. Local Figma and UX evidence is diagnostic: violations and gaps can fail, but clean evidence cannot pass. Never label those local lanes `allowed`; without protected host or CI attestation they remain `not_assessed` and `productionReady=false`.
+A compliant design can still fail Usage Rules or UX, and an accessible unauthorized substitute still fails design-system compliance. Local Figma, personal-local Flutter, and UX evidence is diagnostic: violations and gaps can fail, while clean caller-carried evidence remains `not_assessed`. Protected production authority remains unavailable and `productionReady=false` without protected host or CI attestation.
 
 An inaccessible approved asset is a design-system gap. Guardian never silently changes its color, size, motion, or behavior.
 
@@ -140,6 +154,7 @@ The CLI implementation is `scripts/guardian.py`. Protected gating requires an au
 
 The command surface is:
 
+- `selection status`, `selection preview`, `selection apply`
 - `setup status`, `setup preview`, `setup apply`
 - `doctor`
 - `profile validate`
@@ -160,7 +175,7 @@ The command surface is:
 - `migrate`
 - `elo show`, `elo migrate`, `elo benchmark`, `elo evaluate`
 
-Exit codes are deterministic: `1` reports violations or sentinels, `2` policy/configuration/integrity failure, `3` unavailable/stale/incomplete source, and `4` unsupported or not-assessed coverage. Exit `0` requires supported protected host attestation; clean caller-carried Figma or UX evidence cannot produce it.
+Exit codes are deterministic: `1` reports violations or sentinels, `2` policy/configuration/integrity failure, `3` unavailable/stale/incomplete source, and `4` unsupported or not-assessed coverage. Exit `0` requires supported protected host attestation; clean personal-local, enterprise, or otherwise caller-carried Figma or UX evidence cannot produce it.
 
 ## Trust and private data
 
@@ -193,7 +208,9 @@ Plugin source updates use reviewed SemVer and deterministic migrations. Release 
 - rollback is a new signed restoration and never rewrites history;
 - private catalogs, trust anchors, run evidence, and release state remain outside the replaceable cache.
 
-A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.7 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
+A marketplace, bundle, generic-skill, or cachebuster installation is an unsigned source installation. In 0.3.8 the external/WORM release-head provider remains an unconditional compile-time blocker. Source publication does not claim a trusted canary or stable promotion.
+
+Version 0.3.8 adds the default personal-local, per-task and per-Figma-file **Use** / **Do not use** selection flow. It never reuses an earlier selection silently, blocks visual work when no library is selected, forbids every unselected library, and leaves the signed enterprise route unchanged. Personal selection and discovery evidence remain local.
 
 Version 0.3.5 adds permission-bound Safe Activation for the two documented compilation-unit pairs. It preserves the complete v0.3.2-v0.3.4 surface, and local activation still cannot create protected production authority.
 

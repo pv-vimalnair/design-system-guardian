@@ -28,6 +28,7 @@ PACKAGE_PREFIX = "plugins/design-system-guardian/"
 SUITE_PATH = PACKAGE_PREFIX + "benchmarks/elo-suite.json"
 ELO_SOURCE_PATH = PACKAGE_PREFIX + "guardian_core/elo.py"
 PUBLIC_POLICY_PATH = PACKAGE_PREFIX + "policy/policy-v1.json"
+GENERIC_LAUNCHER_PATH = PACKAGE_PREFIX + "scripts/generic_skill_launcher.py"
 ALLOWED_EXACT = {
     ".gitattributes",
     ".gitignore",
@@ -55,9 +56,23 @@ RUNTIME_PREFIXES = tuple(
         "decisions",
         "judgment-decisions",
         "decision-history",
+        "personal",
     )
 )
 RUNTIME_JSON_KEYS = {"profileId", "snapshotId", "runId"}
+PERSONAL_RUNTIME_JSON_KEYS = {"runId", "selectionDigest", "targetFigmaFile"}
+PERSONAL_DISCOVERY_JSON_KEYS = {
+    "projectRoot",
+    "targetFigmaFile",
+    "discoveryComplete",
+    "candidates",
+    "adapters",
+    "catalog",
+}
+IDENTIFIER_ARRAY_KEYS = {
+    "selectedLibraryFileKeys",
+    "excludedLibraryFileKeys",
+}
 IDENTIFIER_KEYS = {
     "profileId",
     "companyId",
@@ -70,6 +85,17 @@ IDENTIFIER_KEYS = {
     "findingId",
     "assessmentDigest",
     "decisionDigest",
+    "selectionDigest",
+    "selectionSetDigest",
+    "permissionBindingDigest",
+    "discoveryDigest",
+    "projectBindingDigest",
+    "catalogInputDigest",
+    "catalogReadbackDigest",
+    "adaptersDigest",
+    "clientLabel",
+    "companyLabel",
+    "designSystemName",
     "evidenceDigest",
     "companyStatement",
     "evidenceContent",
@@ -236,6 +262,10 @@ def _runtime_json(payload: bytes, path: str) -> bool:
     if not isinstance(value, dict):
         return False
     return RUNTIME_JSON_KEYS.issubset(value) or (
+        PERSONAL_RUNTIME_JSON_KEYS.issubset(value)
+    ) or (
+        PERSONAL_DISCOVERY_JSON_KEYS.issubset(value)
+    ) or (
         {"profileId", "runId"}.issubset(value)
         and _contains_json_key(value, JUDGMENT_RUNTIME_JSON_KEYS)
     )
@@ -275,15 +305,32 @@ def _scan_tree(root: Path, commit: str) -> tuple[set[str], dict[str, bytes]]:
     return codes, public_blobs
 
 
-def _walk_identifiers(value: Any) -> Iterable[str]:
+def _walk_identifiers(value: Any, parent_key: str | None = None) -> Iterable[str]:
     if isinstance(value, dict):
         for key, item in value.items():
             if key in IDENTIFIER_KEYS and isinstance(item, str) and len(item.strip()) >= 8:
                 yield item.strip()
-            yield from _walk_identifiers(item)
+            if (
+                key == "name"
+                and parent_key in {"candidates", "libraryDecisions", "targetFigmaFile"}
+                and isinstance(item, str)
+                and len(item.strip()) >= 8
+            ):
+                yield item.strip()
+            if key in IDENTIFIER_ARRAY_KEYS and isinstance(item, list):
+                for identifier in item:
+                    if isinstance(identifier, str) and len(identifier.strip()) >= 8:
+                        yield identifier.strip()
+            yield from _walk_identifiers(item, key)
     elif isinstance(value, list):
         for item in value:
-            yield from _walk_identifiers(item)
+            if (
+                parent_key in IDENTIFIER_ARRAY_KEYS
+                and isinstance(item, str)
+                and len(item.strip()) >= 8
+            ):
+                yield item.strip()
+            yield from _walk_identifiers(item, parent_key)
 
 
 def _public_blob_path(key: str) -> str:
@@ -315,6 +362,9 @@ def _scan_local_matches(local_home: Path, public_blobs: dict[str, bytes]) -> set
         for key, payload in public_blobs.items()
         if _public_blob_path(key) != PUBLIC_POLICY_PATH
     }
+    launcher_payload = public_blobs.get(GENERIC_LAUNCHER_PATH)
+    launcher_hash = hashlib.sha256(launcher_payload).digest() if launcher_payload is not None else None
+    launcher_skills = {"audit-design-system", "build-with-design-system"}
     public_identifiers = _semantic_public_identifiers(public_blobs)
     local_identifiers: set[str] = set()
     walk_errors: list[OSError] = []
@@ -345,7 +395,17 @@ def _scan_local_matches(local_home: Path, public_blobs: dict[str, bytes]) -> set
             except OSError:
                 codes.add("local_state_unavailable")
                 continue
-            if relative != "trust/policy-v1.json" and hashlib.sha256(payload).digest() in public_hashes:
+            payload_hash = hashlib.sha256(payload).digest()
+            parts = PurePosixPath(relative).parts
+            expected_launcher_backup = (
+                launcher_hash is not None
+                and payload_hash == launcher_hash
+                and len(parts) >= 5
+                and parts[0] == "install-backups"
+                and parts[-3] in launcher_skills
+                and parts[-2:] == ("scripts", "guardian.py")
+            )
+            if relative != "trust/policy-v1.json" and payload_hash in public_hashes and not expected_launcher_backup:
                 codes.add("local_file_match")
             if path.suffix.lower() == ".json":
                 try:

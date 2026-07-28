@@ -47,7 +47,7 @@ def _digest(value: Any, field: str) -> str:
 
 
 def _identity(run_pin: Mapping[str, Any]) -> dict[str, str]:
-    if not isinstance(run_pin, Mapping) or run_pin.get("schemaVersion") != 1:
+    if not isinstance(run_pin, Mapping) or run_pin.get("schemaVersion") not in {1, 2}:
         raise AnalysisAttestationIntegrityError("Analysis attestation requires a verified run pin.")
     output: dict[str, str] = {}
     for field in ("runId", "profileId", "snapshotId", "policyDigest"):
@@ -132,7 +132,9 @@ def _verify_audit_projection(
 ) -> None:
     try:
         coverage, diagnostics = adapter_audit_projection(
-            dict(normalized_adapter_result), dict(run_pin["sourceCut"])
+            dict(normalized_adapter_result),
+            dict(run_pin["sourceCut"]),
+            run_pin=dict(run_pin),
         )
     except (ValueError, KeyError) as error:
         raise AnalysisAttestationIntegrityError(

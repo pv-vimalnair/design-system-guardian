@@ -85,7 +85,8 @@ class V036PublicContractTest(unittest.TestCase):
         self.assertEqual(
             {manifest["description"] for manifest in manifests.values()},
             {
-                "Enforces exact approved design-system identities with Figma "
+                "Requires explicit per-task and per-Figma-file library selection, "
+                "then enforces exact approved design-system identities with Figma "
                 "read-back, UX checks, preview-only rule validation, "
                 "permission-bound machine-rule evaluation, exact-run judgment exceptions, and fail-closed evidence."
             },

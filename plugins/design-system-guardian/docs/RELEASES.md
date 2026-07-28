@@ -1,8 +1,26 @@
 # Release Evidence Contract
 
+## v0.3.8 source coordinates
+
+The current public source candidate is 0.3.8. Codex, Claude Code, Kimi Code, the Flutter package, and generic Agent Skills bindings must match guardian_core.release.RUNTIME_VERSION. OpenClaw reuses the compatible Codex/Claude bundle and Qwen Code uses the same two integrity-bound Agent Skills. Every surface resolves to one Guardian core and exactly build-with-design-system and audit-design-system.
+
+This source candidate adds personal-local, per-task and per-Figma-file design-system selection:
+
+    guardian selection status --run-id <run-id>
+    guardian selection preview --run-id <run-id> --input <discovery.json>
+    guardian selection apply --input <permission-bound-selection.json>
+
+The user must explicitly mark every complete discovered library candidate **Use** or **Do not use**. At least one published library must be selected, every unselected library is forbidden, and a previous selection never carries to another task, client, project, run, duplicate, or Figma file.
+
+The existing Figma connection must also provide complete one-to-one catalog read-back for every canonical token, component, and icon, including token content, component variants/properties, and Code Connect mappings. Guardian rejects missing, duplicate, excluded, or version-drifted catalog/read-back mismatches before personal state is created and records the local evidence as `unprotected_caller_carried`, never as protected production attestation or independently proven Figma provenance.
+
+Version 0.3.8 preserves every v0.3.2-v0.3.7 manifest, schema, authorization, channel event, score, history record, and exactly-two-skill contract. The externally signed enterprise onboarding and catalog route remains optional and unchanged. Personal selection evidence remains local and is not release authority, protected production authority, public Elo evidence, or telemetry.
+
+A host reporting update_required, reload_required, or invalid has not loaded v0.3.8. reload_required with host_restart_required means the prior intact installation was restored; restart the exact watching host, rerun the same verified update, start a new task or session, and require version 0.3.8 plus two-skill read-back.
+
 ## v0.3.7 source coordinates
 
-The current public source candidate is 0.3.7. Codex, Claude Code, Kimi Code, the Flutter package, and generic Agent Skills bindings must match guardian_core.release.RUNTIME_VERSION. OpenClaw reuses the compatible Codex/Claude bundle and Qwen Code uses the same two integrity-bound Agent Skills. Every surface resolves to one Guardian core and exactly build-with-design-system and audit-design-system.
+The v0.3.7 public source candidate used the same Codex, Claude Code, Kimi Code, Flutter, OpenClaw, Qwen Code, and generic Agent Skills distribution model with exactly build-with-design-system and audit-design-system.
 
 This source candidate adds complete subjective judgment assessment plus selected exact-run conflict exceptions. Guardian explains every finding first, preserves raw findings, derives an effective result separately, accepts an optional reason, and supports append-only revocation through these exact portable forms:
 
@@ -17,7 +35,7 @@ Version 0.3.7 preserves every v0.3.2-v0.3.6 manifest, schema, authorization, cha
 
 A host reporting update_required, reload_required, or invalid has not loaded v0.3.7. reload_required with host_restart_required means the prior intact installation was restored; restart the exact watching host, rerun the same verified update, start a new task or session, and require version 0.3.7 plus two-skill read-back. This installation state is not release authority, and portable packaging does not prove automatic routing or an untested host runtime.
 
-A public release must come from a clean authenticated public lineage. If a development branch contains internal planning artifacts or private local-path evidence, publish from the canonical public v0.3.6 lineage and replay only approved public source changes; do not rewrite that development history in place. The current public docs and manifests contain no absolute local path.
+A public release must come from a clean authenticated public lineage. For v0.3.8, if a development branch contains internal planning artifacts or private local-path evidence, publish from the canonical public v0.3.7 lineage and replay only approved public source changes; do not rewrite that development history in place. The current public docs and manifests contain no absolute local path.
 
 ## Signed action manifest
 

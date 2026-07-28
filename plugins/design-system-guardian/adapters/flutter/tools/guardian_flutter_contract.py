@@ -108,6 +108,7 @@ _IDENTITY_CATEGORIES = {
 }
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
+_PERSONAL_PROFILE_ID = re.compile(r"^personal-[0-9a-f]{40}$")
 _CODE_IDENTITY = re.compile(r"^(?:dart|package):[^#\s]+#[A-Za-z_$][A-Za-z0-9_$.]*$")
 _PACKAGE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _REPOSITORY_COMMIT = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
@@ -220,6 +221,16 @@ def _nonempty_string(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value:
         raise ContractError(f"{label} must be a non-empty string")
     return value
+
+
+def _sorted_strings(value: Any, label: str, *, allow_empty: bool = True) -> list[str]:
+    if not isinstance(value, list) or (not allow_empty and not value):
+        raise ContractError(f"{label} must be an exact string array")
+    if any(not isinstance(item, str) or not item for item in value):
+        raise ContractError(f"{label} contains an invalid string")
+    if value != sorted(set(value)):
+        raise ContractError(f"{label} must be sorted and unique")
+    return list(value)
 
 
 def _safe_relative_path(value: Any, label: str) -> str:
@@ -625,12 +636,65 @@ def validate_adapter_config(config: Mapping[str, Any]) -> dict[str, Any]:
 def _validate_run_pin(run_pin: Mapping[str, Any]) -> dict[str, Any]:
     for field in ("runId", "profileId", "snapshotId", "policyDigest"):
         _nonempty_string(run_pin.get(field), f"run pin {field}")
-    if run_pin.get("schemaVersion") != 1 or not isinstance(run_pin.get("sourceCut"), dict):
+    if run_pin.get("schemaVersion") not in {1, 2} or not isinstance(run_pin.get("sourceCut"), dict):
         raise ContractError("run pin schema or sourceCut is invalid")
     if not _DIGEST.fullmatch(str(run_pin["snapshotId"])):
         raise ContractError("run pin snapshotId must be a lowercase SHA-256 digest")
     if not _DIGEST.fullmatch(str(run_pin["policyDigest"])):
         raise ContractError("run pin policyDigest must be a lowercase SHA-256 digest")
+    if run_pin["schemaVersion"] == 2:
+        if run_pin.get("authorityMode") != "personal_local":
+            raise ContractError("personal Flutter pin authority is invalid")
+        if not _PERSONAL_PROFILE_ID.fullmatch(str(run_pin["profileId"])):
+            raise ContractError("personal Flutter pin profileId is invalid")
+        if not _DIGEST.fullmatch(str(run_pin.get("selectionDigest"))):
+            raise ContractError("personal Flutter pin selectionDigest is invalid")
+        target = run_pin.get("targetFigmaFile")
+        if not isinstance(target, dict):
+            raise ContractError("personal Flutter target Figma file is invalid")
+        _require_exact_keys(target, {"fileKey", "version"}, "personal Flutter target")
+        target_file_key = _nonempty_string(target.get("fileKey"), "targetFigmaFile.fileKey")
+        _nonempty_string(target.get("version"), "targetFigmaFile.version")
+        selected = _sorted_strings(
+            run_pin.get("selectedLibraryFileKeys"),
+            "selectedLibraryFileKeys",
+            allow_empty=False,
+        )
+        excluded = _sorted_strings(
+            run_pin.get("excludedLibraryFileKeys"),
+            "excludedLibraryFileKeys",
+        )
+        if set(selected) & set(excluded) or target_file_key in set(selected) | set(excluded):
+            raise ContractError("personal Flutter target and library files must be disjoint")
+        decisions = run_pin.get("libraryDecisions")
+        if not isinstance(decisions, list) or not decisions:
+            raise ContractError("personal Flutter pin requires exact library decisions")
+        decision_keys: list[str] = []
+        selected_decisions: list[str] = []
+        excluded_decisions: list[str] = []
+        for index, item in enumerate(decisions):
+            if not isinstance(item, dict):
+                raise ContractError(f"libraryDecisions[{index}] must be an object")
+            _require_exact_keys(
+                item,
+                {"fileKey", "version", "published", "decision"},
+                f"libraryDecisions[{index}]",
+            )
+            file_key = _nonempty_string(item.get("fileKey"), "libraryDecisions.fileKey")
+            _nonempty_string(item.get("version"), "libraryDecisions.version")
+            if not isinstance(item.get("published"), bool):
+                raise ContractError("personal Flutter library published status must be boolean")
+            decision = item.get("decision")
+            if decision not in {"use", "do_not_use"}:
+                raise ContractError("personal Flutter library decision is invalid")
+            if decision == "use" and item["published"] is not True:
+                raise ContractError("unpublished Flutter design-system library is selected")
+            decision_keys.append(file_key)
+            (selected_decisions if decision == "use" else excluded_decisions).append(file_key)
+        if decision_keys != sorted(set(decision_keys)):
+            raise ContractError("personal Flutter library decisions must be sorted and unique")
+        if selected_decisions != selected or excluded_decisions != excluded:
+            raise ContractError("personal Flutter decisions must partition every candidate")
     return json.loads(_canonical_json_bytes(run_pin))
 
 

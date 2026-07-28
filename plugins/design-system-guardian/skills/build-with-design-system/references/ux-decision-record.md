@@ -17,7 +17,7 @@ Required fields:
 - the complete v0.3.7 judgment assessment digest, every raw finding, and the derived effective result;
 - any selected exact-run conflict exception, its optional reason, decision digest, and current revocation status;
 - known design-system or accessibility gaps, never an unauthorized workaround;
-- the separate expected design-system, UX/accessibility, and protected production authority lanes; clean caller-carried Figma/UX evidence is expected to remain `not_assessed` until protected host attestation.
+- the separate expected design-system, UX/accessibility, and protected production authority lanes; clean caller-carried Figma and UX evidence remains `not_assessed` until protected host attestation, including exact version 2 personal-local read-back, and local `productionReady` remains false.
 
 Update product-intent content only when product intent changes. Reevaluate every new screen or flow; never copy an exception to a duplicate file, later run, or future version. Do not switch the pinned snapshot, hand-author a pass, or silently replace a blocked identity.
 

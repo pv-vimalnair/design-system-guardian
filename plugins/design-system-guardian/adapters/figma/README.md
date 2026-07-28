@@ -54,13 +54,12 @@ states is converted to `missing`.
 
 ### Portable authority boundary
 
-The portable host has no protected receipt proving that the shipped
-collector executable produced caller-carried JSON. Therefore exact run and
-project bindings prevent replay, and exact violations remain actionable
-diagnostics, but clean Figma categories are deliberately `not_assessed`. They
-cannot become an `allowed` coverage or production claim. A future protected
-host may promote clean coverage only after verifying a collector execution
-receipt that is outside caller control.
+The portable host has no protected receipt proving that the shipped collector
+executable produced caller-carried JSON. Exact run and project bindings prevent
+replay, and exact violations remain actionable. Enterprise or unbound clean
+Figma categories are deliberately `not_assessed`. Exact normalized read-back
+bound to a schema-v2 `personal_local` task pin remains `not_assessed` too.
+Protected authority requires a collector execution receipt outside caller control.
 
 ## What counts as proof
 
