@@ -134,7 +134,7 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 evaluate_elo(home, forged, candidate)
             result = evaluate_elo(home, baseline, candidate)
-            self.assertEqual(result["delta"], 0)
+            self.assertGreater(result["delta"], 0)
             self.assertIn(
                 "synthetic-portability-basic-host",
                 result["newAchievementIds"],
@@ -156,7 +156,7 @@ class WeightedEloTrustedBenchmarkReviewTest(unittest.TestCase):
                 home, _make_target(root, "failing", version="0.2.1", third_skill=True)
             )
             result = evaluate_elo(home, baseline, failing)
-            self.assertEqual(result["delta"], 0)
+            self.assertLess(result["delta"], 0)
             self.assertIn(
                 "synthetic-portability-basic-host",
                 result["confirmedRegressionIds"],

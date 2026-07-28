@@ -16,6 +16,7 @@ MODULE_PATH = ROOT / "benchmarks" / "elo_cases_v6.py"
 PRIOR_SUITE_DIGEST = "d96c5d3f5efc34898410ae1331f20adedece5bcc8cad749ee924acb1e3000767"
 V6_MODULE_ID = "guardian-public-cases-v6"
 V7_MODULE_ID = "guardian-public-cases-v7"
+V8_MODULE_ID = "guardian-public-cases-v8"
 V6_CASES = {
     "synthetic-correctness-explicit-evaluator-v2": (
         "correctness",
@@ -68,16 +69,16 @@ class WeightedEloV6EvolutionTest(unittest.TestCase):
 
         current_suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         current = _json(ROOT / "benchmarks" / "current-score.json")
-        self.assertEqual(current_suite["suiteVersion"], 7)
+        self.assertEqual(current_suite["suiteVersion"], 8)
         suite = copy.deepcopy(current_suite)
         suite["suiteVersion"] = 6
         suite["caseModules"] = [
-            item for item in suite["caseModules"] if item["moduleId"] != V7_MODULE_ID
+            item for item in suite["caseModules"] if item["moduleId"] not in {V7_MODULE_ID, V8_MODULE_ID}
         ]
         suite["achievements"] = [
             item
             for item in suite["achievements"]
-            if item["caseModuleId"] != V7_MODULE_ID
+            if item["caseModuleId"] not in {V7_MODULE_ID, V8_MODULE_ID}
         ]
 
         modules = {item["moduleId"]: item for item in suite["caseModules"]}
