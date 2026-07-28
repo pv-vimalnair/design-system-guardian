@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from tests.test_cli_lifecycle_dsg003 import invoke, write_canonical
 from tests.test_personal_selection_dsg028 import (
+    apply_selection,
     personal_discovery,
     permitted_selection,
 )
@@ -114,6 +115,61 @@ class GuardianPersonalSelectionCliTest(unittest.TestCase):
                     self.assertEqual(code, 2)
                     self.assertEqual(result["status"], "invalid")
                     self.assertFalse(home.exists())
+
+    def test_status_reports_invalid_when_personal_authority_is_orphaned(self) -> None:
+        from guardian_core.paths import GuardianPaths
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "guardian-home"
+            project = root / "project"
+            project.mkdir()
+            applied = apply_selection(home, project, run_id="run-cli-orphan")
+            authority_path = GuardianPaths(home).personal_profile_authority(
+                applied["profileId"]
+            )
+            authority_path.unlink()
+
+            code, result = invoke(
+                home,
+                ["selection", "status", "--run-id", "run-cli-orphan"],
+            )
+
+            self.assertEqual(code, 2)
+            self.assertEqual(result["status"], "invalid")
+            self.assertIn("authority", result["message"].lower())
+            self.assertFalse(authority_path.exists())
+
+    def test_doctor_accepts_complete_personal_only_trust_read_only(self) -> None:
+        from guardian_core.catalog_authority import personal_catalog_authority_key_id
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "guardian-home"
+            project = root / "project"
+            project.mkdir()
+            apply_selection(home, project, run_id="run-cli-doctor")
+            expected_key_id = personal_catalog_authority_key_id(home)
+
+            before = {
+                path.relative_to(home).as_posix(): path.read_bytes()
+                for path in home.rglob("*")
+                if path.is_file()
+            }
+            code, result = invoke(home, ["doctor"])
+
+            self.assertEqual(code, 0)
+            self.assertEqual(result["status"], "allowed")
+            self.assertEqual(
+                result["catalogAuthorityKeyId"],
+                expected_key_id,
+            )
+            after = {
+                path.relative_to(home).as_posix(): path.read_bytes()
+                for path in home.rglob("*")
+                if path.is_file()
+            }
+            self.assertEqual(after, before)
 
 
 if __name__ == "__main__":

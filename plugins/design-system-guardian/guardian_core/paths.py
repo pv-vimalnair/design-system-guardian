@@ -162,6 +162,30 @@ class GuardianPaths:
         return self.trust / "catalog-authority-ed25519.binding.json"
 
     @property
+    def personal_capability(self) -> Path:
+        return self.trust / "personal-local-capability-v1.sealed.json"
+
+    @property
+    def personal(self) -> Path:
+        return self.home / "personal"
+
+    @property
+    def personal_profile_authorities(self) -> Path:
+        return self.personal / "profile-authorities"
+
+    def personal_profile_authority(self, profile_id: str) -> Path:
+        path = self.personal_profile_authorities / f"{validate_profile_id(profile_id)}.json"
+        return assert_guardian_storage_path(self.home, path)
+
+    @property
+    def personal_task_selections(self) -> Path:
+        return self.personal / "task-selections"
+
+    def personal_task_selection(self, run_id: str) -> Path:
+        path = self.personal_task_selections / f"{validate_run_id(run_id)}.json"
+        return assert_guardian_storage_path(self.home, path)
+
+    @property
     def evolution(self) -> Path:
         return self.home / "evolution"
 

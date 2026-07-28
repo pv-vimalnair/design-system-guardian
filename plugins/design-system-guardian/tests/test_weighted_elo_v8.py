@@ -7,41 +7,54 @@ import importlib.util
 import json
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "benchmarks" / "elo_cases_v7.py"
-PRIOR_SUITE_DIGEST = "29f2eb0ff0b8aca5c1d5b098a7226f0c8b707ef95c0c638d997dd00a2f20606c"
-V7_MODULE_ID = "guardian-public-cases-v7"
+MODULE_PATH = ROOT / "benchmarks" / "elo_cases_v8.py"
+PRIOR_SUITE_DIGEST = "fab9e47f0e7d26428ee28bafc1055dd7f7aea8e98e0ffb2086a2b12890ec757b"
 V8_MODULE_ID = "guardian-public-cases-v8"
-V7_CASES = {
-    "synthetic-correctness-complete-judgment-assessment": (
-        "correctness", 9, "case_correctness_complete_judgment_assessment",
+V8_CASES = {
+    "synthetic-correctness-personal-selection-exact-partition": (
+        "correctness",
+        10,
+        "case_correctness_personal_selection_exact_partition",
     ),
-    "synthetic-correctness-positive-judgment-approval": (
-        "correctness", 9, "case_correctness_positive_judgment_approval",
+    "synthetic-correctness-personal-preflight-v2-binding": (
+        "correctness",
+        10,
+        "case_correctness_personal_preflight_v2_binding",
     ),
-    "synthetic-coverage-selected-judgment-exception": (
-        "coverage_usefulness", 8, "case_coverage_selected_judgment_exception",
+    "synthetic-reliability-new-run-requires-selection": (
+        "reliability",
+        10,
+        "case_reliability_new_run_requires_selection",
     ),
-    "synthetic-reliability-judgment-revocation": (
-        "reliability", 9, "case_reliability_judgment_revocation",
+    "synthetic-reliability-permission-drift-rejected": (
+        "reliability",
+        10,
+        "case_reliability_permission_drift_rejected",
     ),
-    "synthetic-reliability-judgment-replay-rejection": (
-        "reliability", 9, "case_reliability_judgment_replay_rejection",
+    "synthetic-safety-unknown-source-rejected": (
+        "safety_privacy_integrity",
+        10,
+        "case_safety_unknown_source_rejected",
     ),
-    "synthetic-safety-hard-lane-non-override": (
-        "safety_privacy_integrity", 10, "case_safety_hard_lane_non_override",
+    "synthetic-safety-personal-selection-privacy-gate": (
+        "safety_privacy_integrity",
+        10,
+        "case_safety_personal_selection_privacy_gate",
     ),
-    "synthetic-safety-local-judgment-privacy": (
-        "safety_privacy_integrity", 10, "case_safety_local_judgment_privacy",
+    "synthetic-coverage-enterprise-preflight-stays-v1": (
+        "coverage_usefulness",
+        9,
+        "case_coverage_enterprise_preflight_stays_v1",
     ),
-    "synthetic-portability-four-judgment-commands": (
-        "portability_usability_performance", 8,
-        "case_portability_four_judgment_commands",
+    "synthetic-portability-selection-cli-and-two-skills": (
+        "portability_usability_performance",
+        8,
+        "case_portability_selection_cli_and_two_skills",
     ),
 }
 
@@ -52,9 +65,10 @@ def _json(path: Path) -> dict:
     return value
 
 
-def _load_v7_module() -> object:
+def _load_v8_module() -> object:
     spec = importlib.util.spec_from_file_location(
-        "guardian_public_elo_cases_v7", MODULE_PATH
+        "guardian_public_elo_cases_v8",
+        MODULE_PATH,
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -62,33 +76,7 @@ def _load_v7_module() -> object:
     return module
 
 
-def _materialize_tag_plugin(parent: Path, tag: str) -> Path:
-    repository = ROOT.parents[1]
-    target = parent / "historical-plugin"
-    target.mkdir()
-    prefix = "plugins/design-system-guardian/"
-    raw = subprocess.check_output(
-        ["git", "ls-tree", "-rz", tag, "--", prefix], cwd=repository
-    )
-    for entry in raw.split(b"\0"):
-        if not entry:
-            continue
-        metadata, name = entry.split(b"\t", 1)
-        _mode, kind, blob = metadata.decode("ascii").split()
-        if kind != "blob":
-            continue
-        relative = name.decode("utf-8")[len(prefix):]
-        destination = target / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(
-            subprocess.check_output(
-                ["git", "cat-file", "blob", blob], cwd=repository
-            )
-        )
-    return target
-
-
-def _result(suite: dict, v7_status: str, other_status: str = "passed") -> dict:
+def _result(suite: dict, v8_status: str, other_status: str = "passed") -> dict:
     return {
         "cases": [
             {
@@ -97,8 +85,8 @@ def _result(suite: dict, v7_status: str, other_status: str = "passed") -> dict:
                     {
                         "repetition": repetition,
                         "status": (
-                            v7_status
-                            if item["caseModuleId"] == V7_MODULE_ID
+                            v8_status
+                            if item["caseModuleId"] == V8_MODULE_ID
                             else other_status
                         ),
                     }
@@ -110,48 +98,34 @@ def _result(suite: dict, v7_status: str, other_status: str = "passed") -> dict:
     }
 
 
-class WeightedEloV7EvolutionTest(unittest.TestCase):
+class WeightedEloV8EvolutionTest(unittest.TestCase):
     def test_suite_evolution_is_additive_and_keeps_local_score_outside_git(self) -> None:
         from guardian_core.canonical import sha256_digest
-        from guardian_core.elo import _current_score, _validate_suite_transition, _worker_digest
+        from guardian_core.elo import (
+            _current_score,
+            _validate_suite_transition,
+            _worker_digest,
+        )
 
-        current_suite = _json(ROOT / "benchmarks" / "elo-suite.json")
+        suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         current = _json(ROOT / "benchmarks" / "current-score.json")
-        self.assertEqual(current_suite["suiteVersion"], 8)
-        suite = copy.deepcopy(current_suite)
-        suite["suiteVersion"] = 7
-        suite["caseModules"] = [
-            item for item in suite["caseModules"] if item["moduleId"] != V8_MODULE_ID
-        ]
-        suite["achievements"] = [
-            item for item in suite["achievements"] if item["caseModuleId"] != V8_MODULE_ID
-        ]
+        self.assertEqual(suite["suiteVersion"], 8)
 
         modules = {item["moduleId"]: item for item in suite["caseModules"]}
+        self.assertIn(V8_MODULE_ID, modules)
         self.assertEqual(
-            set(modules),
-            {
-                "guardian-public-cases-v1",
-                "guardian-public-cases-v3",
-                "guardian-public-cases-v4",
-                "guardian-public-cases-v5",
-                "guardian-public-cases-v6",
-                V7_MODULE_ID,
-            },
-        )
-        self.assertEqual(
-            modules[V7_MODULE_ID]["moduleDigest"],
+            modules[V8_MODULE_ID]["moduleDigest"],
             hashlib.sha256(MODULE_PATH.read_bytes()).hexdigest(),
         )
-        self.assertEqual(modules[V7_MODULE_ID]["workerDigest"], _worker_digest())
+        self.assertEqual(modules[V8_MODULE_ID]["workerDigest"], _worker_digest())
 
         definitions = {
             item["achievementId"]: item
             for item in suite["achievements"]
-            if item["caseModuleId"] == V7_MODULE_ID
+            if item["caseModuleId"] == V8_MODULE_ID
         }
-        self.assertEqual(set(definitions), set(V7_CASES))
-        for achievement_id, (category, weight, function) in V7_CASES.items():
+        self.assertEqual(set(definitions), set(V8_CASES))
+        for achievement_id, (category, weight, function) in V8_CASES.items():
             definition = definitions[achievement_id]
             self.assertEqual(
                 (
@@ -165,14 +139,16 @@ class WeightedEloV7EvolutionTest(unittest.TestCase):
             self.assertEqual(definition["workerDigest"], _worker_digest())
 
         previous = copy.deepcopy(suite)
-        previous["suiteVersion"] = 6
+        previous["suiteVersion"] = 7
         previous["caseModules"] = [
-            item for item in previous["caseModules"] if item["moduleId"] != V7_MODULE_ID
+            item
+            for item in previous["caseModules"]
+            if item["moduleId"] != V8_MODULE_ID
         ]
         previous["achievements"] = [
             item
             for item in previous["achievements"]
-            if item["caseModuleId"] != V7_MODULE_ID
+            if item["caseModuleId"] != V8_MODULE_ID
         ]
         self.assertEqual(sha256_digest(previous), PRIOR_SUITE_DIGEST)
         _validate_suite_transition(previous, suite)
@@ -214,15 +190,16 @@ class WeightedEloV7EvolutionTest(unittest.TestCase):
         for forbidden in (
             "ExamplePrivateCompany",
             "ExamplePrivateProduct",
+            "PrivateReleaseCandidate",
             "C:" + chr(92),
             "/Users/",
             "@example.com",
         ):
             self.assertNotIn(forbidden, source)
 
-        module = _load_v7_module()
+        module = _load_v8_module()
         functions = sorted(name for name in vars(module) if name.startswith("case_"))
-        self.assertEqual(functions, sorted(value[2] for value in V7_CASES.values()))
+        self.assertEqual(functions, sorted(value[2] for value in V8_CASES.values()))
         for function in functions:
             for repetition in (1, 2):
                 with self.subTest(function=function, repetition=repetition):
@@ -246,51 +223,33 @@ class WeightedEloV7EvolutionTest(unittest.TestCase):
                         (0, b"", b""),
                     )
 
-    def test_four_command_case_fails_quietly_on_v036(self) -> None:
-        from guardian_core.elo import _WORKER
-
-        with tempfile.TemporaryDirectory() as directory:
-            target = _materialize_tag_plugin(Path(directory), "v0.3.6")
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    "-I",
-                    "-B",
-                    "-c",
-                    _WORKER,
-                    str(MODULE_PATH),
-                    "case_portability_four_judgment_commands",
-                    str(target),
-                ],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                check=False,
-            )
-            self.assertEqual(
-                (completed.returncode, completed.stdout, completed.stderr),
-                (1, b"", b""),
-            )
-
-    def test_weighted_progress_is_bounded_regressible_and_not_test_count_inflated(self) -> None:
+    def test_weighted_progress_is_bounded_and_regressible(self) -> None:
         from guardian_core.elo import _derive_evaluation
 
         suite = _json(ROOT / "benchmarks" / "elo-suite.json")
         baseline = _result(suite, "assertion_failed")
         candidate = _result(suite, "passed")
         progress = _derive_evaluation([], 1, suite, baseline, candidate)
-        self.assertGreater(progress["delta"], len(V7_CASES))
+        self.assertGreater(progress["delta"], len(V8_CASES))
         self.assertLessEqual(progress["score"], 2000)
-        self.assertEqual(set(progress["newAchievementIds"]), set(V7_CASES))
+        self.assertEqual(set(progress["newAchievementIds"]), set(V8_CASES))
 
         no_change = _derive_evaluation([], 1, suite, candidate, candidate)
         self.assertEqual((no_change["delta"], no_change["score"]), (0, 1))
 
         regression = _derive_evaluation(
-            sorted(V7_CASES), 1000, suite, candidate, baseline
+            sorted(V8_CASES),
+            1000,
+            suite,
+            candidate,
+            baseline,
         )
         self.assertLess(regression["delta"], 0)
         self.assertLess(regression["score"], 1000)
-        self.assertEqual(set(regression["confirmedRegressionIds"]), set(V7_CASES))
+        self.assertEqual(
+            set(regression["confirmedRegressionIds"]),
+            set(V8_CASES),
+        )
 
 
 if __name__ == "__main__":

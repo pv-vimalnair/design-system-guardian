@@ -239,10 +239,72 @@ def _sorted_unique_strings(value: Any, field: str, *, allow_empty: bool = True) 
     return list(value)
 
 
+def _validate_personal_pin(run_pin: dict[str, Any]) -> None:
+    if run_pin.get("schemaVersion") == 1:
+        return
+    if run_pin.get("authorityMode") != "personal_local":
+        raise FigmaAdapterIntegrityError("Version 2 Figma pins require personal_local authority.")
+    _digest(run_pin.get("selectionDigest"), "run pin selectionDigest")
+    target = run_pin.get("targetFigmaFile")
+    if not isinstance(target, dict) or set(target) != {"fileKey", "version"}:
+        raise FigmaAdapterIntegrityError("Personal Figma target has an invalid exact contract.")
+    for field in ("fileKey", "version"):
+        _string(target.get(field), f"targetFigmaFile.{field}")
+    selected = _sorted_unique_strings(
+        run_pin.get("selectedLibraryFileKeys"),
+        "selectedLibraryFileKeys",
+        allow_empty=False,
+    )
+    excluded = _sorted_unique_strings(
+        run_pin.get("excludedLibraryFileKeys"),
+        "excludedLibraryFileKeys",
+    )
+    if set(selected) & set(excluded):
+        raise FigmaAdapterIntegrityError("Selected and excluded Figma libraries must be disjoint.")
+    decisions = run_pin.get("libraryDecisions")
+    if not isinstance(decisions, list) or not decisions:
+        raise FigmaAdapterIntegrityError("Personal Figma pin requires exact library decisions.")
+    decision_keys: list[str] = []
+    decision_versions: dict[str, str] = {}
+    for item in decisions:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"fileKey", "version", "published", "decision"}
+            or not isinstance(item.get("published"), bool)
+        ):
+            raise FigmaAdapterIntegrityError("Personal Figma library decision is malformed.")
+        file_key = _string(item.get("fileKey"), "libraryDecisions.fileKey")
+        version = _string(item.get("version"), "libraryDecisions.version")
+        decision = item.get("decision")
+        if decision not in {"use", "do_not_use"}:
+            raise FigmaAdapterIntegrityError("Personal Figma library decision is invalid.")
+        if decision == "use" and item["published"] is not True:
+            raise FigmaAdapterIntegrityError(
+                "An unpublished Figma library cannot enter a personal task pin."
+            )
+        decision_keys.append(file_key)
+        decision_versions[file_key] = version
+    if decision_keys != sorted(set(decision_keys)):
+        raise FigmaAdapterIntegrityError("Personal Figma library decisions must be sorted and unique.")
+    if set(decision_keys) != set(selected) | set(excluded):
+        raise FigmaAdapterIntegrityError("Personal Figma decisions do not partition every candidate.")
+    documents = _source_documents(run_pin["sourceCut"])
+    target_key = target["fileKey"]
+    if documents.get(target_key) != target["version"]:
+        raise FigmaAdapterIntegrityError("Personal Figma target differs from the pinned source cut.")
+    if set(documents) != set(selected) | {target_key}:
+        raise FigmaAdapterIntegrityError("Personal source cut contains an unselected Figma file.")
+    for file_key in selected:
+        if documents.get(file_key) != decision_versions[file_key]:
+            raise FigmaAdapterIntegrityError("Selected Figma source version differs from the pin.")
+    if any(file_key in documents for file_key in excluded):
+        raise FigmaAdapterIntegrityError("Excluded Figma library entered the pinned source cut.")
+
+
 def _validate_pin_and_snapshot(
     run_pin: Any, verified_snapshot: Any
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not isinstance(run_pin, dict) or run_pin.get("schemaVersion") != 1:
+    if not isinstance(run_pin, dict) or run_pin.get("schemaVersion") not in {1, 2}:
         raise FigmaAdapterIntegrityError("Figma normalization requires one verified run pin.")
     if not isinstance(verified_snapshot, dict):
         raise FigmaAdapterIntegrityError("Figma normalization requires one verified snapshot.")
@@ -254,6 +316,7 @@ def _validate_pin_and_snapshot(
         _digest(run_pin.get(field), f"run pin {field}")
     if not isinstance(run_pin.get("sourceCut"), dict):
         raise FigmaAdapterIntegrityError("Run pin sourceCut must be an object.")
+    _validate_personal_pin(run_pin)
     if run_pin.get("sourceState") not in _SOURCE_STATES:
         raise FigmaAdapterIntegrityError("Run pin sourceState is invalid.")
     try:
@@ -441,6 +504,14 @@ def build_figma_adapter_config(
         "assets": dict(sorted(assets.items())),
         "workingMode": working_mode,
     }
+    if pin["schemaVersion"] == 2:
+        unsigned.update(
+            {
+                "authorityMode": "personal_local",
+                "selectionDigest": pin["selectionDigest"],
+                "targetFigmaFile": copy.deepcopy(pin["targetFigmaFile"]),
+            }
+        )
     return {**unsigned, "configDigest": sha256_digest(unsigned)}
 
 
@@ -504,6 +575,7 @@ def _validate_document(
     value: Any,
     *,
     documents: Mapping[str, str],
+    expected_target: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     document = _exact_object(value, _DOCUMENT_KEYS, "Figma document evidence")
     file_key = _string(document.get("fileKey"), "document.fileKey")
@@ -518,6 +590,13 @@ def _validate_document(
     if documents[file_key] != source_version:
         raise FigmaAdapterSourceError(
             "stale", "Observed Figma document version differs from the pinned source cut."
+        )
+    if expected_target is not None and (
+        file_key != expected_target.get("fileKey")
+        or source_version != expected_target.get("version")
+    ):
+        raise FigmaAdapterIntegrityError(
+            "Observed Figma document differs from the exact selected target file."
         )
     return {"fileKey": file_key, "sourceVersion": source_version, "rootNodeIds": roots}
 
@@ -809,8 +888,22 @@ def normalize_figma_observation(
     _validate_source(
         raw.get("source"), status=status, pin=pin, snapshot=snapshot
     )
-    document = _validate_document(raw.get("document"), documents=config["documents"])
+    document = _validate_document(
+        raw.get("document"),
+        documents=config["documents"],
+        expected_target=(
+            pin.get("targetFigmaFile") if pin["schemaVersion"] == 2 else None
+        ),
+    )
     analysis = _validate_analysis(raw.get("analysis"), status=status)
+    if (
+        pin["schemaVersion"] == 2
+        and status == "allowed"
+        and (analysis["totalNodes"] < 1 or analysis["totalFields"] < 1)
+    ):
+        raise FigmaAdapterIntegrityError(
+            "Personal Figma assurance requires a non-empty target read-back."
+        )
 
     if not isinstance(raw.get("observations"), list):
         raise FigmaAdapterIntegrityError("Figma observations must be an array.")
@@ -839,7 +932,7 @@ def normalize_figma_observation(
             category: {"status": "unsupported", "assessedItems": 0, "totalItems": 0}
             for category in AUDIT_CATEGORIES
         }
-        return {
+        result = {
             "schemaVersion": 1,
             "adapter": "figma",
             "supported": False,
@@ -850,6 +943,9 @@ def normalize_figma_observation(
             "categories": categories,
             "diagnostics": [],
         }
+        if pin["schemaVersion"] == 2:
+            result["assuranceMode"] = "personal_local"
+        return result
 
     if len(observations) != analysis["assessedFields"]:
         raise FigmaAdapterIntegrityError(
@@ -889,12 +985,12 @@ def normalize_figma_observation(
         if diagnostic is not None:
             diagnostics.append(diagnostic)
 
+    personal_assurance = (
+        pin["schemaVersion"] == 2
+        and pin.get("authorityMode") == "personal_local"
+    )
     categories = {
         category: {
-            # v0.3.3 has no protected receipt proving that the shipped
-            # collector, rather than its caller, produced this evidence.
-            # Preserve exact diagnostics, but never turn clean caller-carried
-            # observations into an allowed coverage claim.
             "status": "not_assessed",
             "assessedItems": assessed[category],
             "totalItems": totals[category],
@@ -905,7 +1001,7 @@ def normalize_figma_observation(
     diagnostic_ids = [item["diagnosticId"] for item in diagnostics]
     if len(diagnostic_ids) != len(set(diagnostic_ids)):
         raise FigmaAdapterIntegrityError("Normalized Figma diagnostic IDs collide.")
-    return {
+    result = {
         "schemaVersion": 1,
         "adapter": "figma",
         "supported": True,
@@ -916,6 +1012,9 @@ def normalize_figma_observation(
         "categories": categories,
         "diagnostics": diagnostics,
     }
+    if personal_assurance:
+        result["assuranceMode"] = "personal_local"
+    return result
 
 
 def expected_figma_ux_target(

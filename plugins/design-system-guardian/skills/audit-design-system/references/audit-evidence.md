@@ -20,7 +20,7 @@ Before accepting final audit evidence, verify:
 - every active judgment rule has a complete raw assessment or remains not_assessed;
 - exact-run decisions identify only selected conflict findings, preserve every raw finding, and show raw and effective results separately;
 - current status proves whether each exact-run approval remains active or has an append-only revocation;
-- UX failures are evaluator-derived and not caller-authored; clean caller-carried Figma/UX evidence remains `not_assessed` until protected host attestation;
+- UX failures are evaluator-derived and not caller-authored; clean caller-carried Figma and UX evidence remains `not_assessed` until protected host attestation, including exact version 2 personal-local read-back;
 - design-system, UX/accessibility, and protected production authority lanes remain separate;
 - inaccessible approved assets are design-system gaps, not substituted fixes;
 - `not_assessed`, `unsupported`, incomplete, stale, or unavailable evidence never becomes a pass;

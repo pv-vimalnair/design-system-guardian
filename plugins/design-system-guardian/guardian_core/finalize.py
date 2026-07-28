@@ -94,6 +94,7 @@ def _plan(
         expected = _resolve_verified_snapshot_identity(
             profile_id=pin["profileId"], snapshot=snapshot,
             request=selection["request"], policy_digest=pin["policyDigest"],
+            authority_mode=pin.get("authorityMode"),
         )
         if expected.get("status") != "allowed" or selection != expected:
             raise FinalizationError("Build selection is not the exact authoritative allowed resolution.")
@@ -138,6 +139,7 @@ def _audit(
         expected = _resolve_verified_snapshot_identity(
             profile_id=pin["profileId"], snapshot=snapshot,
             request=resolution["request"], policy_digest=pin["policyDigest"],
+            authority_mode=pin.get("authorityMode"),
         )
         if resolution != expected:
             raise FinalizationError(

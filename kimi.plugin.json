@@ -1,16 +1,16 @@
 {
   "name": "design-system-guardian",
-  "version": "0.3.7",
-  "description": "Enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, permission-bound machine-rule evaluation, exact-run judgment exceptions, and fail-closed evidence.",
+  "version": "0.3.8",
+  "description": "Requires explicit per-task and per-Figma-file library selection, then enforces exact approved design-system identities with Figma read-back, UX checks, preview-only rule validation, permission-bound machine-rule evaluation, exact-run judgment exceptions, and fail-closed evidence.",
   "keywords": ["design-system", "figma", "flutter", "audit", "ux", "rules"],
   "homepage": "https://github.com/pv-vimalnair/design-system-guardian#readme",
   "license": "MIT",
   "skills": "./plugins/design-system-guardian/skills/",
-  "skillInstructions": "When a Guardian skill is explicitly invoked, use the canonical package at ./plugins/design-system-guardian. Installation alone is not an always-on route and cannot prevent raw-tool bypass. Never copy or replace its policy, CLI, schemas, adapters, or sentinels. No sealed Guardian manifest means not Guardian-approved.",
+  "skillInstructions": "When a Guardian skill is explicitly invoked, use the canonical package at ./plugins/design-system-guardian. At every new Guardian task or Figma file, ask which detected libraries to Use and Do not use; block visual work until the user confirms, never reuse an earlier selection silently, and forbid every unselected library. Preserve the optional signed enterprise route. Installation alone is not an always-on route and cannot prevent raw-tool bypass. Never copy or replace its policy, CLI, schemas, adapters, or sentinels. No sealed Guardian manifest means not Guardian-approved.",
   "interface": {
     "displayName": "Design System Guardian",
     "shortDescription": "Exact approved identities only, with fail-closed auditing.",
-    "longDescription": "Set up locally with permission, build from exact Figma-bound design-system identities, perform preview-only rule validation, authorize machine-checkable usage rules, explain subjective judgment findings before offering exact-run exceptions, audit raw and effective results separately, and expose proven gaps through conspicuous sentinels.",
+    "longDescription": "For every new Guardian task or Figma file, require an explicit Use and Do not use library selection. Then set up locally with permission, build from exact selected Figma-bound design-system identities, perform preview-only rule validation, authorize machine-checkable usage rules, explain subjective judgment findings before offering exact-run exceptions, audit raw and effective results separately, and expose proven gaps through conspicuous sentinels. Unselected libraries are forbidden; signed enterprise onboarding remains optional.",
     "developerName": "Pv Vimal Nair",
     "websiteURL": "https://github.com/pv-vimalnair/design-system-guardian"
   }

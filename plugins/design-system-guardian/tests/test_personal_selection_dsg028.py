@@ -24,7 +24,7 @@ def personal_discovery(
 ) -> dict:
     """Return synthetic, complete local Figma discovery with an exact partition."""
 
-    return {
+    result = {
         "schemaVersion": 1,
         "projectRoot": str(project_root.resolve()),
         "targetFigmaFile": {
@@ -59,6 +59,86 @@ def personal_discovery(
         "adapters": copy.deepcopy(sample_profile()["adapters"]),
         "catalog": copy.deepcopy(sample_catalog()),
     }
+    result["catalog"]["tokenProvenance"].update(
+        {"source": "figma-brand", "sourceVersion": "42"}
+    )
+    color_binding = {
+        "bindingType": "variable",
+        "fileKey": "figma-brand",
+        "sourceVersion": "42",
+        "key": "variable-key-primary",
+        "collectionKey": "collection-key-color",
+        "resolvedType": "COLOR",
+    }
+    space_binding = {
+        "bindingType": "variable",
+        "fileKey": "figma-brand",
+        "sourceVersion": "42",
+        "key": "variable-key-space-200",
+        "collectionKey": "collection-key-space",
+        "resolvedType": "FLOAT",
+    }
+    result["catalog"]["tokens"]["color"]["action"]["primary"]["$extensions"] = {
+        "guardian.figma": copy.deepcopy(color_binding)
+    }
+    result["catalog"]["tokens"]["space"]["200"]["$extensions"] = {
+        "guardian.figma": copy.deepcopy(space_binding)
+    }
+
+    from guardian_core.canonical import sha256_digest
+    from guardian_core.dtcg_resolver import materialize_resolver_tokens
+
+    resolved_tokens = materialize_resolver_tokens(
+        result["catalog"]["tokens"],
+        result["catalog"]["resolver"],
+        result["catalog"]["resolverContext"],
+    )["tokens"]
+
+    from guardian_core.personal_selection import personal_catalog_readback_digest
+
+    result["catalogReadback"] = {
+        "schemaVersion": 1,
+        "method": "figma_plugin_api_catalog_readback",
+        "complete": True,
+        "evidenceAuthority": "unprotected_caller_carried",
+        "contractDigest": personal_catalog_readback_digest(),
+        "sources": [
+            {"fileKey": "figma-brand", "version": "42", "published": True},
+            {"fileKey": "figma-product", "version": "91", "published": True},
+        ],
+        "tokens": [
+            {
+                "identity": "color.action.primary",
+                "published": True,
+                "binding": copy.deepcopy(color_binding),
+                "tokenDigest": sha256_digest(resolved_tokens["color.action.primary"]),
+            },
+            {
+                "identity": "space.200",
+                "published": True,
+                "binding": copy.deepcopy(space_binding),
+                "tokenDigest": sha256_digest(resolved_tokens["space.200"]),
+            },
+        ],
+        "assets": [
+            {
+                "kind": kind,
+                "identity": asset["identity"],
+                "sourceVersion": asset["sourceVersion"],
+                "figma": copy.deepcopy(asset["figma"]),
+                "designContractDigest": sha256_digest(
+                    {
+                        "variants": asset["variants"],
+                        "properties": asset["properties"],
+                    }
+                ),
+                "codeMappingsDigest": sha256_digest(asset["codeMappings"]),
+            }
+            for plural, kind in (("components", "component"), ("icons", "icon"))
+            for asset in result["catalog"]["registry"][plural]
+        ],
+    }
+    return result
 
 
 def permitted_selection(preview: dict, discovery: dict) -> dict:
@@ -103,6 +183,17 @@ class PersonalSelectionContractTest(unittest.TestCase):
             self.assertEqual(preview["authorityMode"], "personal_local")
             self.assertEqual(preview["runId"], "run-preview")
             self.assertEqual(preview["targetFigmaFile"], discovery["targetFigmaFile"])
+            self.assertEqual(
+                [
+                    (item["name"], item["decision"])
+                    for item in preview["libraryChoices"]
+                ],
+                [
+                    ("Brand library", "use"),
+                    ("Unrelated community kit", "do_not_use"),
+                    ("Product library", "use"),
+                ],
+            )
             self.assertEqual(
                 preview["selectedLibraryFileKeys"],
                 ["figma-brand", "figma-product"],
@@ -315,6 +406,75 @@ class PersonalSelectionContractTest(unittest.TestCase):
             )["pin"]
             self.assertEqual(loaded, pin)
 
+    def test_personal_allowed_resolution_is_visibly_unprotected_local_guidance(self) -> None:
+        from guardian_core.preflight import preflight_snapshot
+        from guardian_core.resolver import _resolve_pinned_identity_at_home
+        from tests.test_root_schemas_strict_dsg003 import validator
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "guardian-home"
+            project = root / "project"
+            project.mkdir()
+            applied = apply_selection(home, project, run_id="run-local-resolution")
+            with patch("guardian_core.preflight._utc_now", return_value=NOW):
+                preflight_snapshot(
+                    home,
+                    profile_id=applied["profileId"],
+                    run_id="run-local-resolution",
+                    policy_digest=applied["policyDigest"],
+                    project_root=project,
+                )
+
+            with patch("guardian_core.resolver._utc_now", return_value=NOW):
+                resolution = _resolve_pinned_identity_at_home(
+                    home,
+                    profile_id=applied["profileId"],
+                    run_id="run-local-resolution",
+                    request={
+                        "requestId": "personal-local-token",
+                        "kind": "token",
+                        "identity": "color.action.primary",
+                    },
+                )
+
+            self.assertEqual(resolution["status"], "allowed")
+            self.assertEqual(
+                resolution["evidence"]["authorityMode"],
+                "personal_local",
+            )
+            self.assertFalse(resolution["evidence"]["independentProvenance"])
+            self.assertFalse(resolution["evidence"]["productionReady"])
+
+            with patch("guardian_core.resolver._utc_now", return_value=NOW):
+                missing = _resolve_pinned_identity_at_home(
+                    home,
+                    profile_id=applied["profileId"],
+                    run_id="run-local-resolution",
+                    request={
+                        "requestId": "personal-local-missing",
+                        "kind": "icon",
+                        "identity": "icon.not-in-selected-catalog",
+                    },
+                )
+
+            self.assertEqual(missing["status"], "missing")
+            self.assertEqual(
+                missing["evidence"]["reason"],
+                "absent_from_complete_selected_local_catalog",
+            )
+            self.assertEqual(
+                missing["evidence"]["authorityMode"],
+                "personal_local",
+            )
+            self.assertFalse(missing["evidence"]["independentProvenance"])
+            self.assertFalse(missing["evidence"]["productionReady"])
+            self.assertEqual(missing["sentinel"]["label"], "MISSING ICON")
+            self.assertFalse(missing["sentinel"]["productionReady"])
+            resolution_validator = validator("resolution.schema.json")
+            resolution_validator.validate(resolution)
+            resolution_validator.validate(missing)
+
     def test_existing_enterprise_preflight_remains_schema_v1(self) -> None:
         from guardian_core.preflight import preflight_snapshot
 
@@ -342,6 +502,111 @@ class PersonalSelectionContractTest(unittest.TestCase):
             self.assertNotIn("authorityMode", result["pin"])
             self.assertNotIn("selectionDigest", result["pin"])
             self.assertNotIn("targetFigmaFile", result["pin"])
+
+    def test_enterprise_profile_named_personal_enterprise_keeps_ed25519_route(self) -> None:
+        from guardian_core.policy import verify_personal_profile_authority_binding
+
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "enterprise-home"
+            profile = sample_profile("personal-enterprise")
+            catalog = sample_catalog("personal-enterprise")
+
+            snapshot = ingest_test_snapshot(home, profile, catalog, now=NOW)
+
+            self.assertEqual(snapshot["profileId"], "personal-enterprise")
+            self.assertEqual(
+                snapshot["catalogEvidence"]["approvalAttestation"]["algorithm"],
+                "ed25519",
+            )
+            self.assertIsNone(
+                verify_personal_profile_authority_binding(
+                    home,
+                    "personal-enterprise",
+                    missing_ok=True,
+                )
+            )
+
+    def test_status_rejects_orphaned_dependencies_without_writing_or_repairing(self) -> None:
+        from guardian_core.paths import GuardianPaths
+        from guardian_core.personal_selection import (
+            PersonalSelectionError,
+            inspect_personal_selection,
+        )
+        from guardian_core.profile import profile_path
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for index, kind in enumerate((
+                "authority",
+                "profile",
+                "snapshot",
+                "current-pointer",
+            )):
+                home = root / f"home-{kind}"
+                project = root / f"project-{kind}"
+                project.mkdir()
+                run_id = f"run-orphan-{index}"
+                applied = apply_selection(home, project, run_id=run_id)
+                paths = GuardianPaths(home)
+                targets = {
+                    "authority": paths.personal_profile_authority(applied["profileId"]),
+                    "profile": profile_path(home, applied["profileId"]),
+                    "snapshot": paths.snapshots(applied["profileId"])
+                    / f"{applied['snapshotId']}.json",
+                    "current-pointer": paths.profile(applied["profileId"])
+                    / "current-snapshot.json",
+                }
+                targets[kind].unlink()
+                before = file_state(home)
+
+                with self.subTest(kind=kind), self.assertRaises(PersonalSelectionError):
+                    inspect_personal_selection(home, run_id=run_id)
+
+                self.assertEqual(file_state(home), before)
+                if kind == "current-pointer":
+                    self.assertFalse(targets[kind].exists())
+
+    def test_apply_recovers_an_interrupted_personal_snapshot_promotion(self) -> None:
+        from guardian_core.paths import GuardianPaths
+        from guardian_core.personal_selection import (
+            apply_personal_selection,
+            prepare_selection_preview,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "guardian-home"
+            project = root / "project"
+            project.mkdir()
+            discovery = personal_discovery(project)
+            preview = prepare_selection_preview(
+                home,
+                run_id="run-recover",
+                discovery=discovery,
+            )
+            request = permitted_selection(preview, discovery)
+
+            with patch("guardian_core.snapshot._utc_now", return_value=NOW):
+                first = apply_personal_selection(home, request)
+
+            paths = GuardianPaths(home)
+            selection_path = paths.personal_task_selection("run-recover")
+            pointer_path = paths.profile(first["profileId"]) / "current-snapshot.json"
+            selection_path.unlink()
+            pointer_path.unlink()
+            self.assertTrue(any(paths.snapshots(first["profileId"]).iterdir()))
+            self.assertFalse(pointer_path.exists())
+
+            with patch("guardian_core.snapshot._utc_now", return_value=NOW):
+                recovered = apply_personal_selection(home, request)
+
+            self.assertEqual(recovered["status"], "allowed")
+            self.assertTrue(recovered["localChangesPerformed"])
+            self.assertEqual(recovered["snapshotId"], first["snapshotId"])
+            self.assertEqual(recovered["catalogDigest"], first["catalogDigest"])
+            self.assertEqual(recovered["selectionDigest"], first["selectionDigest"])
+            self.assertTrue(pointer_path.is_file())
+            self.assertTrue(selection_path.is_file())
 
 
 if __name__ == "__main__":

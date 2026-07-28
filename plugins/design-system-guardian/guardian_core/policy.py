@@ -28,6 +28,8 @@ from .catalog_authority import (
     CATALOG_AUTHORITY_BINDING_PURPOSE,
     CatalogAuthorityError,
     catalog_authority_binding_payload,
+    is_generated_personal_profile_id,
+    personal_catalog_authority_key_id,
     read_catalog_authority_public_key,
     verify_pinned_catalog_authority,
     verify_runtime_dependency,
@@ -600,3 +602,553 @@ def verify_policy_anchor(home: Path | None = None) -> str:
         raise PolicyIntegrityError(f"Immutable policy authority is invalid: {error}") from error
     except OSError as error:
         raise PolicyIntegrityError(f"Immutable policy verification failed: {error}") from error
+
+_external_policy_anchor_verifier = verify_policy_anchor
+
+_PERSONAL_CAPABILITY_PURPOSE = "personal-local-capability:v1"
+_PERSONAL_PROFILE_AUTHORITY_PURPOSE = "personal-profile-authority:v1"
+_PERSONAL_CAPABILITY_KEYS = {
+    "schemaVersion",
+    "authorityMode",
+    "policyDigest",
+    "enrollmentOrigin",
+    "externalCatalogAuthorityKeyId",
+    "authoritySeal",
+}
+_PERSONAL_PROFILE_AUTHORITY_KEYS = {
+    "schemaVersion",
+    "authorityMode",
+    "profileId",
+    "profileDigest",
+    "selectionSetDigest",
+    "authoritySeal",
+}
+
+
+def _digest_text(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise PolicyIntegrityError(f"{label} must be one lowercase SHA-256 digest.")
+    return value
+
+
+def _personal_capability_unsigned(
+    *,
+    enrollment_origin: str,
+    external_catalog_authority_key_id: str | None,
+) -> dict[str, Any]:
+    if enrollment_origin == "fresh_personal":
+        if external_catalog_authority_key_id is not None:
+            raise PolicyIntegrityError(
+                "Fresh personal trust cannot bind an external catalog authority."
+            )
+    elif enrollment_origin == "external_hybrid":
+        _digest_text(
+            external_catalog_authority_key_id,
+            "Personal capability external catalog authority key ID",
+        )
+    else:
+        raise PolicyIntegrityError("Personal capability enrollment origin is invalid.")
+    return {
+        "schemaVersion": 1,
+        "authorityMode": "personal_local",
+        "policyDigest": EXPECTED_POLICY_SHA256,
+        "enrollmentOrigin": enrollment_origin,
+        "externalCatalogAuthorityKeyId": external_catalog_authority_key_id,
+    }
+
+
+def _personal_trust_state(paths: GuardianPaths) -> str:
+    base = (
+        paths.policy.is_file()
+        and paths.policy_seal.is_file()
+        and paths.snapshot_authority_key.is_file()
+    )
+    external_key = paths.catalog_authority_public_key.exists()
+    external_binding = paths.catalog_authority_binding.exists()
+    personal = paths.personal_capability.exists()
+    if base and external_key and external_binding:
+        return "hybrid" if personal else "external"
+    if base and not external_key and not external_binding and personal:
+        return "personal"
+    if not paths.trust.exists():
+        return "absent"
+    return "invalid"
+
+
+def verify_personal_capability(home: Path) -> dict[str, Any]:
+    """Verify the explicit, host-sealed personal catalog capability."""
+
+    normalized_home = home.expanduser().absolute()
+    paths = GuardianPaths(normalized_home)
+    target = assert_guardian_storage_path(
+        normalized_home,
+        paths.personal_capability,
+    )
+    try:
+        if not target.is_file():
+            raise PolicyIntegrityError(
+                "Personal catalog capability is missing or is not a regular file."
+            )
+        record = read_canonical_json(target)
+    except PolicyIntegrityError:
+        raise
+    except (OSError, ValueError, UnicodeError) as error:
+        raise PolicyIntegrityError(
+            f"Personal catalog capability cannot be read canonically: {error}"
+        ) from error
+    if not isinstance(record, dict) or set(record) != _PERSONAL_CAPABILITY_KEYS:
+        raise PolicyIntegrityError(
+            "Personal catalog capability has unknown or missing fields."
+        )
+    unsigned = {
+        key: value
+        for key, value in record.items()
+        if key != "authoritySeal"
+    }
+    try:
+        expected_unsigned = _personal_capability_unsigned(
+            enrollment_origin=unsigned.get("enrollmentOrigin"),
+            external_catalog_authority_key_id=unsigned.get(
+                "externalCatalogAuthorityKeyId"
+            ),
+        )
+    except PolicyIntegrityError:
+        raise
+    if unsigned != expected_unsigned:
+        raise PolicyIntegrityError(
+            "Personal catalog capability differs from the immutable policy."
+        )
+    try:
+        verify_authority_seal(
+            normalized_home,
+            _PERSONAL_CAPABILITY_PURPOSE,
+            unsigned,
+            record["authoritySeal"],
+        )
+    except AuthorityIntegrityError as error:
+        raise PolicyIntegrityError(
+            f"Personal catalog capability seal is invalid: {error}"
+        ) from error
+    if unsigned["enrollmentOrigin"] == "external_hybrid":
+        try:
+            _, current_external_key_id = verify_pinned_catalog_authority(
+                normalized_home
+            )
+        except CatalogAuthorityError as error:
+            raise PolicyIntegrityError(
+                "Hybrid personal capability lost its enrolled external catalog authority."
+            ) from error
+        if current_external_key_id != unsigned["externalCatalogAuthorityKeyId"]:
+            raise PolicyIntegrityError(
+                "Hybrid personal capability external catalog authority has drifted."
+            )
+    elif (
+        GuardianPaths(normalized_home).catalog_authority_public_key.exists()
+        or GuardianPaths(normalized_home).catalog_authority_binding.exists()
+    ):
+        raise PolicyIntegrityError(
+            "Fresh personal trust cannot silently become hybrid trust."
+        )
+    assert_guardian_storage_path(normalized_home, target)
+    return dict(record)
+
+
+def _verify_personal_only_policy_anchor(paths: GuardianPaths) -> str:
+    try:
+        value = read_canonical_json(paths.policy)
+        seal = paths.policy_seal.read_text(encoding="ascii").strip()
+    except (OSError, ValueError, UnicodeError) as error:
+        raise PolicyIntegrityError(
+            f"Immutable policy anchor cannot be read: {error}"
+        ) from error
+    if not isinstance(value, dict):
+        raise PolicyIntegrityError("Immutable policy anchor must be a JSON object.")
+    digest = sha256_digest(value)
+    if seal != EXPECTED_POLICY_SHA256 or digest != seal:
+        raise PolicyIntegrityError(
+            "Immutable policy anchor or seal was changed; execution is blocked."
+        )
+    verify_authority_key_file(paths.home)
+    verify_personal_capability(paths.home)
+    return digest
+
+
+def verify_policy_anchor(home: Path | None = None) -> str:
+    """Verify either unchanged external trust or explicit personal-local trust."""
+
+    try:
+        _verify_shipped_policy()
+        paths = _paths(home)
+        _reject_redirected_paths(paths)
+        state = _personal_trust_state(paths)
+        if state == "personal":
+            digest = _verify_personal_only_policy_anchor(paths)
+        elif state in {"external", "hybrid"}:
+            digest = _external_policy_anchor_verifier(paths.home)
+            if state == "hybrid":
+                verify_personal_capability(paths.home)
+        elif state == "absent":
+            raise PolicyIntegrityError(
+                "Immutable policy anchor is missing. Run Guardian setup once."
+            )
+        else:
+            raise PolicyIntegrityError(
+                "Immutable policy authority is partial, incompatible, or conflicting."
+            )
+        _reject_redirected_paths(paths)
+        return digest
+    except PolicyIntegrityError:
+        raise
+    except (AuthorityIntegrityError, CatalogAuthorityError, PathIntegrityError) as error:
+        raise PolicyIntegrityError(
+            f"Immutable policy authority is invalid: {error}"
+        ) from error
+    except OSError as error:
+        raise PolicyIntegrityError(
+            f"Immutable policy verification failed: {error}"
+        ) from error
+
+
+def _write_personal_trust_stage(stage: Path, policy: dict[str, Any]) -> bytes:
+    atomic_write_json(stage / "policy-v1.json", policy)
+    atomic_write_bytes(
+        stage / "policy-v1.sha256",
+        (EXPECTED_POLICY_SHA256 + "\n").encode("ascii"),
+    )
+    authority_key = os.urandom(AUTHORITY_KEY_BYTES)
+    atomic_write_bytes(stage / "snapshot-authority-v1.key", authority_key)
+    harden_authority_key_permissions(stage / "snapshot-authority-v1.key")
+    marker, genesis_head = _initial_elo_anchors(authority_key)
+    enrollment = _elo_enrollment_with_key(
+        authority_key,
+        marker["ledgerId"],
+        enrolled_from="fresh-install",
+    )
+    atomic_write_json(stage / ELO_ENROLLMENT_NAME, enrollment)
+    atomic_write_json(stage / ELO_LEDGER_MARKER_NAME, marker)
+    atomic_write_json(stage / ELO_LEDGER_HEAD_NAME, genesis_head)
+    capability = _personal_capability_unsigned(
+        enrollment_origin="fresh_personal",
+        external_catalog_authority_key_id=None,
+    )
+    atomic_write_json(
+        stage / "personal-local-capability-v1.sealed.json",
+        {
+            **capability,
+            "authoritySeal": authority_seal_with_key(
+                authority_key,
+                _PERSONAL_CAPABILITY_PURPOSE,
+                capability,
+            ),
+        },
+    )
+    return authority_key
+
+
+def _install_personal_capability_on_external(paths: GuardianPaths) -> bool:
+    from .authority import authority_seal
+
+    _external_policy_anchor_verifier(paths.home)
+    _, external_key_id = verify_pinned_catalog_authority(paths.home)
+    unsigned = _personal_capability_unsigned(
+        enrollment_origin="external_hybrid",
+        external_catalog_authority_key_id=external_key_id,
+    )
+    record = {
+        **unsigned,
+        "authoritySeal": authority_seal(
+            paths.home,
+            _PERSONAL_CAPABILITY_PURPOSE,
+            unsigned,
+        ),
+    }
+    try:
+        exclusive_write_json(paths.home, paths.personal_capability, record)
+        return True
+    except FileExistsError:
+        existing = verify_personal_capability(paths.home)
+        if existing != record:
+            raise PolicyIntegrityError(
+                "Existing personal capability conflicts with this host authority."
+            )
+        return False
+
+
+def install_personal_policy_anchor(
+    home: Path | None = None,
+) -> PolicyInstallation:
+    """Install personal-local trust without any company or Ed25519 key."""
+
+    try:
+        policy = _verify_shipped_policy()
+        paths = _paths(home)
+        _reject_redirected_paths(paths)
+        state = _personal_trust_state(paths)
+        if state == "personal":
+            digest = verify_policy_anchor(paths.home)
+            return PolicyInstallation(
+                digest,
+                created=False,
+                catalog_authority_key_id=personal_catalog_authority_key_id(
+                    paths.home
+                ),
+            )
+        if state in {"external", "hybrid"}:
+            created = (
+                _install_personal_capability_on_external(paths)
+                if state == "external"
+                else False
+            )
+            digest = verify_policy_anchor(paths.home)
+            return PolicyInstallation(
+                digest,
+                created=created,
+                catalog_authority_key_id=personal_catalog_authority_key_id(
+                    paths.home
+                ),
+            )
+        if state == "invalid":
+            raise PolicyIntegrityError(
+                "Existing trust is partial, incompatible, or conflicting; "
+                "Guardian will not repair or overwrite it automatically."
+            )
+
+        paths.home.mkdir(parents=True, exist_ok=True)
+        _reject_redirected_paths(paths)
+        stage = Path(tempfile.mkdtemp(prefix=".trust.", dir=paths.home))
+        promoted = False
+        try:
+            _write_personal_trust_stage(stage, policy)
+            try:
+                os.rename(stage, paths.trust)
+                promoted = True
+            except OSError:
+                if paths.trust.exists():
+                    shutil.rmtree(stage, ignore_errors=True)
+                    return install_personal_policy_anchor(paths.home)
+                raise
+        finally:
+            if not promoted and stage.exists():
+                shutil.rmtree(stage, ignore_errors=True)
+        digest = verify_policy_anchor(paths.home)
+        return PolicyInstallation(
+            digest,
+            created=True,
+            catalog_authority_key_id=personal_catalog_authority_key_id(
+                paths.home
+            ),
+        )
+    except PolicyIntegrityError:
+        raise
+    except (AuthorityIntegrityError, CatalogAuthorityError, PathIntegrityError) as error:
+        raise PolicyIntegrityError(
+            f"Personal policy authority is invalid: {error}"
+        ) from error
+    except OSError as error:
+        raise PolicyIntegrityError(
+            f"Personal policy anchor operation failed: {error}"
+        ) from error
+
+
+def _verify_personal_profile_scope(
+    home: Path,
+    *,
+    profile_id: str,
+    profile_digest: str,
+    selection_set_digest: str,
+) -> None:
+    """Bind a generated personal identity to its installed exact selection scope."""
+
+    from .profile import ProfileValidationError, load_profile
+
+    try:
+        profile = load_profile(home, profile_id)
+    except ProfileValidationError as error:
+        raise PolicyIntegrityError(
+            f"Personal profile authority cannot load its installed profile: {error}"
+        ) from error
+    if sha256_digest(profile) != profile_digest:
+        raise PolicyIntegrityError(
+            "Personal profile authority profileDigest differs from the installed profile."
+        )
+    figma = profile.get("figma")
+    libraries = figma.get("allowlistedLibraryFiles") if isinstance(figma, dict) else None
+    working_files = figma.get("allowlistedWorkingFiles") if isinstance(figma, dict) else None
+    if (
+        not isinstance(libraries, list)
+        or not libraries
+        or not isinstance(working_files, list)
+        or len(working_files) != 1
+    ):
+        raise PolicyIntegrityError(
+            "Personal profile authority requires selected libraries and one exact target file."
+        )
+    library_keys = sorted(item["fileKey"] for item in libraries)
+    scope = {
+        "schemaVersion": 1,
+        "selectedLibraryFileKeys": library_keys,
+        "targetFigmaFileKey": working_files[0]["fileKey"],
+        "adaptersDigest": sha256_digest(profile["adapters"]),
+    }
+    expected_selection_digest = sha256_digest(scope)
+    expected_profile_id = f"personal-{expected_selection_digest[:40]}"
+    if (
+        selection_set_digest != expected_selection_digest
+        or profile_id != expected_profile_id
+    ):
+        raise PolicyIntegrityError(
+            "Personal profile ID and selectionSetDigest do not match the installed exact selection scope."
+        )
+
+
+def create_personal_profile_authority_binding(
+    home: Path,
+    *,
+    profile_id: str,
+    profile_digest: str,
+    selection_set_digest: str,
+) -> dict[str, Any]:
+    """Create one sealed personal profile authority, idempotent only when exact."""
+
+    from .authority import authority_seal
+
+    normalized_home = home.expanduser().absolute()
+    if not is_generated_personal_profile_id(profile_id):
+        raise PolicyIntegrityError(
+            "Personal profile authority requires an exact Guardian-generated personal profileId."
+        )
+    verify_policy_anchor(normalized_home)
+    verify_personal_capability(normalized_home)
+    _digest_text(profile_digest, "profileDigest")
+    _digest_text(selection_set_digest, "selectionSetDigest")
+    _verify_personal_profile_scope(
+        normalized_home,
+        profile_id=profile_id,
+        profile_digest=profile_digest,
+        selection_set_digest=selection_set_digest,
+    )
+    paths = GuardianPaths(normalized_home)
+    try:
+        target = paths.personal_profile_authority(profile_id)
+    except (PathIntegrityError, TypeError, ValueError) as error:
+        raise PolicyIntegrityError(str(error)) from error
+    unsigned = {
+        "schemaVersion": 1,
+        "authorityMode": "personal_local",
+        "profileId": profile_id,
+        "profileDigest": profile_digest,
+        "selectionSetDigest": selection_set_digest,
+    }
+    record = {
+        **unsigned,
+        "authoritySeal": authority_seal(
+            normalized_home,
+            _PERSONAL_PROFILE_AUTHORITY_PURPOSE,
+            unsigned,
+        ),
+    }
+    try:
+        exclusive_write_json(normalized_home, target, record)
+    except FileExistsError:
+        existing = verify_personal_profile_authority_binding(
+            normalized_home,
+            profile_id,
+            missing_ok=False,
+        )
+        if existing != record:
+            raise PolicyIntegrityError(
+                "Personal profile authority already exists with different evidence."
+            )
+        return existing
+    return verify_personal_profile_authority_binding(
+        normalized_home,
+        profile_id,
+        missing_ok=False,
+    )
+
+
+def verify_personal_profile_authority_binding(
+    home: Path,
+    profile_id: str,
+    *,
+    missing_ok: bool = True,
+) -> dict[str, Any] | None:
+    """Read and verify a sealed personal profile authority without writing."""
+
+    normalized_home = home.expanduser().absolute()
+    if not is_generated_personal_profile_id(profile_id):
+        if missing_ok:
+            return None
+        raise PolicyIntegrityError(
+            "Personal profile authority requires an exact Guardian-generated personal profileId."
+        )
+    paths = GuardianPaths(normalized_home)
+    try:
+        target = paths.personal_profile_authority(profile_id)
+    except (PathIntegrityError, TypeError, ValueError) as error:
+        raise PolicyIntegrityError(str(error)) from error
+    if not target.exists():
+        if missing_ok:
+            return None
+        raise PolicyIntegrityError(
+            f"Personal profile authority is missing for {profile_id!r}."
+        )
+    verify_policy_anchor(normalized_home)
+    verify_personal_capability(normalized_home)
+    try:
+        if not target.is_file():
+            raise PolicyIntegrityError(
+                "Personal profile authority must be a regular file."
+            )
+        record = read_canonical_json(target)
+    except PolicyIntegrityError:
+        raise
+    except (OSError, ValueError, UnicodeError) as error:
+        raise PolicyIntegrityError(
+            f"Personal profile authority cannot be read canonically: {error}"
+        ) from error
+    if (
+        not isinstance(record, dict)
+        or set(record) != _PERSONAL_PROFILE_AUTHORITY_KEYS
+    ):
+        raise PolicyIntegrityError(
+            "Personal profile authority has unknown or missing fields."
+        )
+    unsigned = {
+        key: value
+        for key, value in record.items()
+        if key != "authoritySeal"
+    }
+    if (
+        unsigned.get("schemaVersion") != 1
+        or unsigned.get("authorityMode") != "personal_local"
+        or unsigned.get("profileId") != profile_id
+    ):
+        raise PolicyIntegrityError(
+            "Personal profile authority identity is invalid."
+        )
+    _digest_text(unsigned.get("profileDigest"), "profileDigest")
+    _digest_text(unsigned.get("selectionSetDigest"), "selectionSetDigest")
+    _verify_personal_profile_scope(
+        normalized_home,
+        profile_id=profile_id,
+        profile_digest=unsigned["profileDigest"],
+        selection_set_digest=unsigned["selectionSetDigest"],
+    )
+    try:
+        verify_authority_seal(
+            normalized_home,
+            _PERSONAL_PROFILE_AUTHORITY_PURPOSE,
+            unsigned,
+            record.get("authoritySeal"),
+        )
+    except AuthorityIntegrityError as error:
+        raise PolicyIntegrityError(
+            f"Personal profile authority seal is invalid: {error}"
+        ) from error
+    assert_guardian_storage_path(normalized_home, target)
+    return dict(record)

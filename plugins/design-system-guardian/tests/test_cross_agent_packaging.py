@@ -15,7 +15,7 @@ from unittest import mock
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PLUGIN_ROOT.parents[1]
-EXPECTED_VERSION = "0.3.7"
+EXPECTED_VERSION = "0.3.8"
 EXPECTED_SKILLS = {"audit-design-system", "build-with-design-system"}
 
 

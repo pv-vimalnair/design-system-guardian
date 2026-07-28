@@ -22,6 +22,10 @@ from urllib.parse import unquote, urlparse
 
 from .audit import AUDIT_CATEGORIES
 from .canonical import canonical_json_bytes, read_canonical_json, sha256_digest
+from .flutter_adapter import (
+    FlutterAdapterIntegrityError,
+    _validate_run_pin as _validate_adapter_run_pin,
+)
 from .contracts import ExitCode
 from .flutter_dependencies import (
     FlutterDependencyIntegrityError,
@@ -310,13 +314,13 @@ def _validate_config(path: Path, root: Path) -> tuple[dict[str, Any], bytes]:
 
 
 def _validate_run_pin(run_pin: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str, Any]:
-    if not isinstance(run_pin, Mapping) or run_pin.get("schemaVersion") != 1:
-        raise FlutterRunnerIntegrityError("Guardian run pin schema is invalid.")
-    for field in ("runId", "profileId", "snapshotId", "policyDigest"):
-        if not isinstance(run_pin.get(field), str) or not run_pin[field]:
-            raise FlutterRunnerIntegrityError(f"Guardian run pin {field} is invalid.")
-    if not isinstance(run_pin.get("sourceCut"), dict):
-        raise FlutterRunnerIntegrityError("Guardian run pin sourceCut is invalid.")
+    try:
+        normalized_pin = _validate_adapter_run_pin(dict(run_pin))
+    except (FlutterAdapterIntegrityError, TypeError, ValueError) as error:
+        raise FlutterRunnerIntegrityError(
+            f"Guardian run pin is invalid: {error}"
+        ) from error
+    run_pin = normalized_pin
     expected = {
         "profileId": config["profileId"],
         "snapshotId": config["snapshotId"],

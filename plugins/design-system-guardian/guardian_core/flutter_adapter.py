@@ -120,6 +120,7 @@ _CODE_CATEGORIES = {
 }
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _PROFILE_ID = re.compile(r"^[a-z][a-z0-9-]{0,62}$")
+_PERSONAL_PROFILE_ID = re.compile(r"^personal-[0-9a-f]{40}$")
 _CODE_IDENTITY = re.compile(r"^(?:dart|package):[^#\s]+#[A-Za-z_$][A-Za-z0-9_$.]*$")
 _GUARDIAN_CODE_IN_TEXT = re.compile(r"guardian_[a-z0-9_]+", re.IGNORECASE)
 _LANE_STATUSES = {"allowed", "invalid", "unsupported", "not_assessed"}
@@ -162,16 +163,98 @@ def _identity_list(value: Any, field: str, *, allow_empty: bool) -> tuple[str, .
     return tuple(value)
 
 
+
+def _sorted_strings(value: Any, field: str, *, allow_empty: bool = True) -> list[str]:
+    if not isinstance(value, list) or (not allow_empty and not value):
+        raise FlutterAdapterIntegrityError(f"{field} must be an exact string array.")
+    if any(not isinstance(item, str) or not item for item in value):
+        raise FlutterAdapterIntegrityError(f"{field} contains an invalid string.")
+    if value != sorted(set(value)):
+        raise FlutterAdapterIntegrityError(f"{field} must be sorted and unique.")
+    return list(value)
+
 def _validate_run_pin(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise FlutterAdapterIntegrityError("Flutter normalization requires one verified run pin.")
     for field in ("runId", "profileId", "snapshotId", "policyDigest"):
         _string(value.get(field), f"run pin {field}")
-    if value.get("schemaVersion") != 1 or not isinstance(value.get("sourceCut"), dict):
+    if value.get("schemaVersion") not in {1, 2} or not isinstance(value.get("sourceCut"), dict):
         raise FlutterAdapterIntegrityError("Run pin schema or sourceCut is invalid.")
     for field in ("snapshotId", "policyDigest"):
         if not _HEX_64.fullmatch(str(value[field])):
             raise FlutterAdapterIntegrityError(f"Run pin {field} must be a lowercase SHA-256 digest.")
+    if value["schemaVersion"] == 2:
+        if value.get("authorityMode") != "personal_local":
+            raise FlutterAdapterIntegrityError(
+                "Personal Flutter pins require exact personal_local authority."
+            )
+        if not _PERSONAL_PROFILE_ID.fullmatch(str(value["profileId"])):
+            raise FlutterAdapterIntegrityError(
+                "Personal Flutter pin profileId is not a generated personal identity."
+            )
+        if not _HEX_64.fullmatch(str(value.get("selectionDigest"))):
+            raise FlutterAdapterIntegrityError(
+                "Personal Flutter pin selectionDigest is invalid."
+            )
+        target = _exact_object(
+            value.get("targetFigmaFile"),
+            {"fileKey", "version"},
+            "Personal Flutter target Figma file",
+        )
+        target_file_key = _string(target.get("fileKey"), "targetFigmaFile.fileKey")
+        _string(target.get("version"), "targetFigmaFile.version")
+        selected = _sorted_strings(
+            value.get("selectedLibraryFileKeys"),
+            "selectedLibraryFileKeys",
+            allow_empty=False,
+        )
+        excluded = _sorted_strings(
+            value.get("excludedLibraryFileKeys"),
+            "excludedLibraryFileKeys",
+        )
+        if set(selected) & set(excluded) or target_file_key in set(selected) | set(excluded):
+            raise FlutterAdapterIntegrityError(
+                "Personal Flutter target, selected, and excluded files must be disjoint."
+            )
+        decisions = value.get("libraryDecisions")
+        if not isinstance(decisions, list) or not decisions:
+            raise FlutterAdapterIntegrityError(
+                "Personal Flutter pin requires exact library decisions."
+            )
+        decision_keys: list[str] = []
+        selected_decisions: list[str] = []
+        excluded_decisions: list[str] = []
+        for index, raw in enumerate(decisions):
+            item = _exact_object(
+                raw,
+                {"fileKey", "version", "published", "decision"},
+                f"libraryDecisions[{index}]",
+            )
+            file_key = _string(item.get("fileKey"), "libraryDecisions.fileKey")
+            _string(item.get("version"), "libraryDecisions.version")
+            if not isinstance(item.get("published"), bool):
+                raise FlutterAdapterIntegrityError(
+                    "Personal Flutter library published status must be boolean."
+                )
+            decision = item.get("decision")
+            if decision not in {"use", "do_not_use"}:
+                raise FlutterAdapterIntegrityError(
+                    "Personal Flutter library decision is invalid."
+                )
+            if decision == "use" and item["published"] is not True:
+                raise FlutterAdapterIntegrityError(
+                    "An unpublished Flutter design-system library cannot be selected."
+                )
+            decision_keys.append(file_key)
+            (selected_decisions if decision == "use" else excluded_decisions).append(file_key)
+        if decision_keys != sorted(set(decision_keys)):
+            raise FlutterAdapterIntegrityError(
+                "Personal Flutter library decisions must be sorted and unique."
+            )
+        if selected_decisions != selected or excluded_decisions != excluded:
+            raise FlutterAdapterIntegrityError(
+                "Personal Flutter decisions must exactly partition every candidate."
+            )
     return copy.deepcopy(value)
 
 

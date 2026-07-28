@@ -90,7 +90,7 @@ class PublicationContractTests(unittest.TestCase):
             (PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "design-system-guardian")
-        self.assertEqual(manifest["version"], "0.3.7")
+        self.assertEqual(manifest["version"], "0.3.8")
         self.assertEqual(manifest["license"], "MIT")
         self.assertNotIn("hooks", manifest)
         self.assertEqual(manifest["interface"]["brandColor"], "#3157D8")
@@ -104,7 +104,7 @@ class PublicationContractTests(unittest.TestCase):
         from guardian_core.release import RUNTIME_VERSION
         self.assertEqual(RUNTIME_VERSION, manifest["version"])
         pubspec = (PLUGIN_ROOT / "adapters/flutter/pubspec.yaml").read_text(encoding="utf-8")
-        self.assertIn("version: 0.3.7", pubspec)
+        self.assertIn("version: 0.3.8", pubspec)
         self.assertIn("sdk: '>=3.12.0 <4.0.0'", pubspec)
         self.assertIn("flutter: '>=3.44.0'", pubspec)
         self.assertIn("analyzer: 13.0.0", pubspec)
@@ -126,7 +126,7 @@ class PublicationContractTests(unittest.TestCase):
             "productionReady=false",
             "Skills are portable; automatic routing is not.",
             "Guardian cannot prevent raw-tool bypass",
-            "Clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation.",
+            "enterprise or unbound caller-carried Figma evidence and caller-carried UX evidence remain `not_assessed` until protected host attestation.",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)

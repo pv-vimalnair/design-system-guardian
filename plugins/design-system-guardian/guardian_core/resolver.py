@@ -224,6 +224,7 @@ def _resolve_verified_snapshot_identity(
     snapshot: dict[str, Any],
     request: dict[str, Any],
     policy_digest: str,
+    authority_mode: str | None = None,
 ) -> dict[str, Any]:
     """Resolve only an exact approved identity from one pinned profile snapshot."""
 
@@ -314,8 +315,20 @@ def _resolve_verified_snapshot_identity(
             snapshot_id=snapshot_id,
             request=request,
             evidence={
-                "reason": "proven_absent_from_fresh_complete_snapshot",
+                "reason": (
+                    "absent_from_complete_selected_local_catalog"
+                    if authority_mode == "personal_local"
+                    else "proven_absent_from_fresh_complete_snapshot"
+                ),
                 "productionReady": False,
+                **(
+                    {
+                        "authorityMode": "personal_local",
+                        "independentProvenance": False,
+                    }
+                    if authority_mode == "personal_local"
+                    else {}
+                ),
             },
             sentinel=sentinel,
         )
@@ -385,6 +398,15 @@ def _resolve_verified_snapshot_identity(
             "sourceState": source_state,
             "degraded": source_state == "offline_grace",
             "provenance": provenance,
+            **(
+                {
+                    "authorityMode": "personal_local",
+                    "independentProvenance": False,
+                    "productionReady": False,
+                }
+                if authority_mode == "personal_local"
+                else {}
+            ),
             **selection_evidence,
         },
     )
@@ -411,6 +433,7 @@ def _resolve_pinned_identity_at_home(
         snapshot=pinned["snapshot"],
         request=request,
         policy_digest=policy_digest,
+        authority_mode=pinned["pin"].get("authorityMode"),
     )
 
 

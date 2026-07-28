@@ -2,7 +2,7 @@
 
 ## Trust boundary
 
-Design System Guardian treats agent instructions and plugin files as replaceable. The immutable policy, authority bindings, profiles, catalog snapshots, sealed evidence, migration history, and release archive live under the canonical account-owned `~/.design-system-guardian/` root.
+Design System Guardian treats agent instructions and plugin files as replaceable. The immutable policy, authority bindings, personal task/file selections, profiles, catalog snapshots, sealed evidence, migration history, and release archive live under the canonical account-owned `~/.design-system-guardian/` root.
 
 The hard design-system rule cannot be weakened by a normal plugin update. If platform-level safety instructions conflict with it, the affected task stops; the conflict never authorizes an outside-system identity.
 
@@ -20,6 +20,18 @@ The release authority is create-once. Its private key must remain in an independ
 Replacing a designated authority is not a normal update or migration. It requires a separately reviewed trust-recovery procedure and must never be inferred from a key mismatch.
 
 Catalog approval and release authority roles must use distinct Ed25519 keys.
+
+## Personal-selection integrity
+
+Version 0.3.8 adds a separate personal-local authority mode for ordinary individual use. At every new Guardian task and target Figma file, the user must explicitly classify the complete discovered published library set as **Use** or **Do not use**. Selection preview is zero-write; apply accepts only the exact confirmed run, project binding, target file identity/version, library decisions, catalog, and adapter binding.
+
+At least one published library must be selected. Every unselected library is forbidden. A prior selection cannot authorize another task, client, project, run, duplicate, file identity, or file version. Missing, incomplete, unavailable, unpublished, changed, or unconfirmed discovery fails closed before visual work.
+
+Personal discovery must include complete one-to-one `figma_plugin_api_catalog_readback` evidence. Guardian cross-checks every canonical token's selected file/version, stable variable/style binding, and resolved content digest; every component/icon's published file/node/asset identity, design contract, and Code Connect mapping digest; and locator uniqueness before personal state is created. The evidence is marked `unprotected_caller_carried`: it detects inconsistency and ordinary drift, but it is not cryptographic proof against a same-account process that fabricates both catalog and matching read-back or bypasses Guardian. Therefore clean personal Figma coverage remains `not_assessed`.
+
+Personal selection records and derived profile/snapshot evidence are sealed by the account-local host authority. That seal detects accidental corruption and cross-run replay while retained evidence remains, but it is not external company approval or protected production authority against code running as the same account. Personal-local evidence never replaces, rotates, weakens, or silently reinterprets the optional enterprise Ed25519 catalog authority.
+
+Target and library file keys, versions, decisions, project bindings, catalogs, profiles, snapshots, and selection digests remain account-local. Candidate names may be shown only in the current local selection interaction. This evidence must never be placed in the plugin, project, Git history, public Elo fixtures, telemetry, or generated deliverables.
 
 ## Catalog high-water integrity
 
@@ -61,7 +73,7 @@ Normal downgrades, same-version replacements, unsigned manifests, wrong-key sign
 
 ## Public-source privacy gate
 
-Every public update must pass `python scripts/check_public_release.py --repository-root . --history` from a clean committed tree before push. The checker reads committed Git objects, rejects unapproved paths and object modes, runtime-state shapes including judgment decisions and reasons, absolute account homes, high-confidence secret material, and matches against local Guardian file digests and high-confidence design-system identifiers. Its output contains reason codes only; it never prints private values or local paths.
+Every public update must pass `python scripts/check_public_release.py --repository-root . --history` from a clean committed tree before push. The checker reads committed Git objects, rejects unapproved paths and object modes, runtime-state shapes including personal selections, target/library identities, judgment decisions, and reasons, absolute account homes, high-confidence secret material, and matches against local Guardian file digests and high-confidence design-system identifiers. Its output contains reason codes only; it never prints private values or local paths.
 
 CI repeats committed-tree and reachable-history checks with `--ci`. CI cannot inspect account-local Guardian data, so the local-data-aware pre-push run remains mandatory. The gate also authenticates the prior canonical public Elo suite and permits only additive benchmark evolution; absence is accepted only for the exact authenticated 0.2.0 bootstrap commit.
 
@@ -87,7 +99,7 @@ Phase-local success is never labeled production readiness. Snapshot ingestion
 reports `snapshotUsable`; preflight reports `pinCreated`. Only protected
 finalization may emit `productionReady=true`.
 
-Version 0.3.5 preserves diagnostic Figma read-back, screen/final-flow UX evaluation, and preview-only usage-rule validation, and adds Safe Activation for two compilation-unit predicate pairs. Proven violations or gaps can fail, but clean caller-carried Figma or UX evidence remains `not_assessed` until protected host attestation. These local mechanisms cannot issue `allowed` or prevent raw-tool bypass. Design-system compliance, UX/accessibility, and protected production authority stay separate, and `productionReady=false` without the protected lane.
+Version 0.3.5 preserved diagnostic Figma read-back, screen/final-flow UX evaluation, and preview-only usage-rule validation, and added Safe Activation for two compilation-unit predicate pairs. In version 0.3.8, clean schema-v2 `personal_local` Figma or Flutter coverage and caller-carried UX evidence remain `not_assessed`. No local mechanism creates protected production authority or prevents raw-tool bypass; the lanes stay separate and `productionReady=false` without the protected lane.
 
 ## Usage-rule preview boundary
 
@@ -97,4 +109,4 @@ Missing identity evidence remains `not_assessed`; invalid or incomplete inputs f
 
 ## Supported source release
 
-The current source declares version `0.3.7`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.
+The current source declares version `0.3.8`. It is a public source release candidate until every claimed target host is validated and an externally authorized canary/stable release is completed. Source presence, personal-local confirmation, unit tests, host-manifest validation, skill loading, or clean local Figma/UX evidence alone do not constitute a signed production release.

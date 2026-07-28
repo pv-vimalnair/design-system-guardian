@@ -128,7 +128,7 @@ def _identity_inputs(run_pin: Any, rule_snapshot: Any, analysis: Any, audit: Any
     snapshot = dict(_mapping(rule_snapshot, "rule_snapshot"))
     attestation = dict(_mapping(analysis, "analysis_attestation"))
     audit_result = dict(_mapping(audit, "audit_result"))
-    if pin.get("schemaVersion") != 1 or snapshot.get("schemaVersion") != 2:
+    if pin.get("schemaVersion") not in {1, 2} or snapshot.get("schemaVersion") != 2:
         raise JudgmentAssessmentIntegrityError("Run pin or rule snapshot version is invalid.")
     _text(pin.get("runId"), "run_pin.runId", 128)
     _text(pin.get("profileId"), "run_pin.profileId", 128)
